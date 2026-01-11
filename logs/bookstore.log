@@ -1,0 +1,1249 @@
+2026-01-12T00:25:24.095+07:00  INFO 17820 --- [ott-backend] [restartedMain] i.fit.ottbackend.OttBackendApplication   : Starting OttBackendApplication using Java 21.0.4 with PID 17820 (D:\DaiHoc\CongNgheMoi\project\ott-backend\target\classes started by nguye in D:\DaiHoc\CongNgheMoi\project\ott-backend)
+2026-01-12T00:25:24.098+07:00  INFO 17820 --- [ott-backend] [restartedMain] i.fit.ottbackend.OttBackendApplication   : No active profile set, falling back to 1 default profile: "default"
+2026-01-12T00:25:24.202+07:00  INFO 17820 --- [ott-backend] [restartedMain] .e.DevToolsPropertyDefaultsPostProcessor : Devtools property defaults active! Set 'spring.devtools.add-properties' to 'false' to disable
+2026-01-12T00:25:24.203+07:00  INFO 17820 --- [ott-backend] [restartedMain] .e.DevToolsPropertyDefaultsPostProcessor : For additional web related logging consider setting the 'logging.level.web' property to 'DEBUG'
+2026-01-12T00:25:27.145+07:00  INFO 17820 --- [ott-backend] [restartedMain] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-01-12T00:25:27.179+07:00  INFO 17820 --- [ott-backend] [restartedMain] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 18 ms. Found 0 JPA repository interfaces.
+2026-01-12T00:25:28.172+07:00  INFO 17820 --- [ott-backend] [restartedMain] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+2026-01-12T00:25:28.195+07:00  INFO 17820 --- [ott-backend] [restartedMain] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-01-12T00:25:28.197+07:00  INFO 17820 --- [ott-backend] [restartedMain] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.43]
+2026-01-12T00:25:28.280+07:00  INFO 17820 --- [ott-backend] [restartedMain] o.a.c.c.C.[Tomcat].[localhost].[/api]    : Initializing Spring embedded WebApplicationContext
+2026-01-12T00:25:28.280+07:00  INFO 17820 --- [ott-backend] [restartedMain] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 4075 ms
+2026-01-12T00:25:28.538+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] o.s.w.f.ServerHttpObservationFilter      : Filter 'webMvcObservationFilter' configured for use
+2026-01-12T00:25:28.971+07:00  INFO 17820 --- [ott-backend] [restartedMain] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-01-12T00:25:31.369+07:00  INFO 17820 --- [ott-backend] [restartedMain] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@478d2ca8
+2026-01-12T00:25:31.371+07:00  INFO 17820 --- [ott-backend] [restartedMain] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-01-12T00:25:31.544+07:00  INFO 17820 --- [ott-backend] [restartedMain] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://ep-hidden-mouse-a7rql89i-pooler.ap-southeast-2.aws.neon.tech:5432/neondb?sslmode=require&channel_binding=require (PostgreSQL 17.7)
+2026-01-12T00:25:33.459+07:00  INFO 17820 --- [ott-backend] [restartedMain] o.f.core.internal.command.DbValidate     : Successfully validated 1 migration (execution time 00:00.558s)
+2026-01-12T00:25:35.163+07:00  INFO 17820 --- [ott-backend] [restartedMain] o.f.core.internal.command.DbMigrate      : Current version of schema "public": 2
+2026-01-12T00:25:35.165+07:00 ERROR 17820 --- [ott-backend] [restartedMain] o.f.core.internal.command.DbMigrate      : Schema "public" has version 2, but no migration could be resolved in the configured locations !
+2026-01-12T00:25:35.305+07:00  INFO 17820 --- [ott-backend] [restartedMain] o.f.core.internal.command.DbMigrate      : Schema "public" is up to date. No migration necessary.
+2026-01-12T00:25:36.251+07:00  INFO 17820 --- [ott-backend] [restartedMain] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-01-12T00:25:36.418+07:00  INFO 17820 --- [ott-backend] [restartedMain] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.6.22.Final
+2026-01-12T00:25:36.501+07:00  INFO 17820 --- [ott-backend] [restartedMain] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-01-12T00:25:37.049+07:00  INFO 17820 --- [ott-backend] [restartedMain] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-01-12T00:25:37.442+07:00  WARN 17820 --- [ott-backend] [restartedMain] org.hibernate.orm.deprecation            : HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-01-12T00:25:37.730+07:00  INFO 17820 --- [ott-backend] [restartedMain] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-1)']
+	Database driver: undefined/unknown
+	Database version: 17.7
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-01-12T00:25:40.005+07:00  INFO 17820 --- [ott-backend] [restartedMain] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-01-12T00:25:40.954+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create table device_tokens (
+        id varchar(255) not null,
+        created_at timestamp(6),
+        device_type varchar(20) not null,
+        is_active boolean,
+        last_used_at timestamp(6),
+        token TEXT not null,
+        user_id varchar(255),
+        primary key (id)
+    )
+2026-01-12T00:25:41.124+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create table login_history (
+        id varchar(255) not null,
+        created_at timestamp(6),
+        device_type varchar(20),
+        ip_address varchar(255),
+        location varchar(255),
+        status varchar(20),
+        user_agent TEXT,
+        user_id varchar(255),
+        primary key (id)
+    )
+2026-01-12T00:25:41.257+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create table otp_codes (
+        id varchar(255) not null,
+        code varchar(6) not null,
+        created_at timestamp(6),
+        email varchar(255),
+        expires_at timestamp(6) not null,
+        is_used boolean,
+        phone varchar(20),
+        type varchar(20) not null,
+        primary key (id)
+    )
+2026-01-12T00:25:41.394+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create table permissions (
+        id varchar(255) not null,
+        action varchar(50) not null,
+        created_at timestamp(6),
+        description TEXT,
+        name varchar(100) not null,
+        resource varchar(50) not null,
+        primary key (id)
+    )
+2026-01-12T00:25:41.528+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create table qr_codes (
+        id varchar(255) not null,
+        created_at timestamp(6),
+        expires_at timestamp(6),
+        qr_data TEXT not null,
+        qr_type varchar(20) not null,
+        reference_id varchar(255),
+        user_id varchar(255),
+        primary key (id)
+    )
+2026-01-12T00:25:41.664+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create table role_permissions (
+        id varchar(255) not null,
+        created_at timestamp(6),
+        permission_id varchar(255),
+        role_id varchar(255),
+        primary key (id)
+    )
+2026-01-12T00:25:41.807+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create table roles (
+        id varchar(255) not null,
+        created_at timestamp(6),
+        description TEXT,
+        display_name varchar(100),
+        is_system_role boolean,
+        name varchar(50) not null,
+        primary key (id)
+    )
+2026-01-12T00:25:41.991+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create table two_factor_auth (
+        user_id varchar(255) not null,
+        created_at timestamp(6),
+        is_enabled boolean,
+        secret_key varchar(255),
+        primary key (user_id)
+    )
+2026-01-12T00:25:42.126+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create table two_factor_backup_codes (
+        user_id varchar(255) not null,
+        backup_code varchar(255)
+    )
+2026-01-12T00:25:42.258+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create table user_roles (
+        id varchar(255) not null,
+        assigned_at timestamp(6),
+        expires_at timestamp(6),
+        scope_id varchar(255),
+        scope_type varchar(20),
+        assigned_by varchar(255),
+        role_id varchar(255),
+        user_id varchar(255),
+        primary key (id)
+    )
+2026-01-12T00:25:42.395+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create table user_sessions (
+        id varchar(255) not null,
+        created_at timestamp(6),
+        device_id varchar(255),
+        device_type varchar(20),
+        expires_at timestamp(6) not null,
+        ip_address varchar(255),
+        last_active_at timestamp(6),
+        refresh_token varchar(500),
+        session_token varchar(500) not null,
+        user_agent TEXT,
+        user_id varchar(255),
+        primary key (id)
+    )
+2026-01-12T00:25:42.529+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create table user_settings (
+        user_id varchar(255) not null,
+        created_at timestamp(6),
+        email_notification_enabled boolean,
+        language varchar(10),
+        notification_enabled boolean,
+        push_notification_enabled boolean,
+        read_receipts_enabled boolean,
+        show_last_seen boolean,
+        show_online_status boolean,
+        theme varchar(20),
+        updated_at timestamp(6),
+        primary key (user_id)
+    )
+2026-01-12T00:25:42.662+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists users 
+       alter column avatar_url set data type varchar(500)
+2026-01-12T00:25:42.797+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists users 
+       add column bio TEXT
+2026-01-12T00:25:42.931+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists users 
+       add column cover_url varchar(500)
+2026-01-12T00:25:43.061+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists users 
+       add column date_of_birth date
+2026-01-12T00:25:43.191+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists users 
+       add column deleted_at timestamp(6)
+2026-01-12T00:25:43.320+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists users 
+       add column gender varchar(10)
+2026-01-12T00:25:43.450+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists users 
+       add column is_verified boolean
+2026-01-12T00:25:43.571+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists users 
+       add column password_hash varchar(255) not null
+2026-01-12T00:25:43.707+07:00  WARN 17820 --- [ott-backend] [restartedMain] o.h.t.s.i.ExceptionHandlerLoggedImpl     : GenerationTarget encountered exception accepting command : Error executing DDL "
+    alter table if exists users 
+       add column password_hash varchar(255) not null" via JDBC [ERROR: column "password_hash" of relation "users" contains null values]
+
+org.hibernate.tool.schema.spi.CommandAcceptanceException: Error executing DDL "
+    alter table if exists users 
+       add column password_hash varchar(255) not null" via JDBC [ERROR: column "password_hash" of relation "users" contains null values]
+	at org.hibernate.tool.schema.internal.exec.GenerationTargetToDatabase.accept(GenerationTargetToDatabase.java:94) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.applySqlString(AbstractSchemaMigrator.java:576) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.applySqlStrings(AbstractSchemaMigrator.java:516) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.migrateTable(AbstractSchemaMigrator.java:334) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.GroupedSchemaMigratorImpl.performTablesMigration(GroupedSchemaMigratorImpl.java:84) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.performMigration(AbstractSchemaMigrator.java:233) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.doMigration(AbstractSchemaMigrator.java:112) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.spi.SchemaManagementToolCoordinator.performDatabaseAction(SchemaManagementToolCoordinator.java:280) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.spi.SchemaManagementToolCoordinator.lambda$process$5(SchemaManagementToolCoordinator.java:144) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at java.base/java.util.HashMap.forEach(HashMap.java:1429) ~[na:na]
+	at org.hibernate.tool.schema.spi.SchemaManagementToolCoordinator.process(SchemaManagementToolCoordinator.java:141) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.boot.internal.SessionFactoryObserverForSchemaExport.sessionFactoryCreated(SessionFactoryObserverForSchemaExport.java:37) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.internal.SessionFactoryObserverChain.sessionFactoryCreated(SessionFactoryObserverChain.java:35) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.internal.SessionFactoryImpl.<init>(SessionFactoryImpl.java:324) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.boot.internal.SessionFactoryBuilderImpl.build(SessionFactoryBuilderImpl.java:463) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.jpa.boot.internal.EntityManagerFactoryBuilderImpl.build(EntityManagerFactoryBuilderImpl.java:1517) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.springframework.orm.jpa.vendor.SpringHibernateJpaPersistenceProvider.createContainerEntityManagerFactory(SpringHibernateJpaPersistenceProvider.java:66) ~[spring-orm-6.2.9.jar:6.2.9]
+	at org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean.createNativeEntityManagerFactory(LocalContainerEntityManagerFactoryBean.java:390) ~[spring-orm-6.2.9.jar:6.2.9]
+	at org.springframework.orm.jpa.AbstractEntityManagerFactoryBean.buildNativeEntityManagerFactory(AbstractEntityManagerFactoryBean.java:419) ~[spring-orm-6.2.9.jar:6.2.9]
+	at org.springframework.orm.jpa.AbstractEntityManagerFactoryBean.afterPropertiesSet(AbstractEntityManagerFactoryBean.java:400) ~[spring-orm-6.2.9.jar:6.2.9]
+	at org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean.afterPropertiesSet(LocalContainerEntityManagerFactoryBean.java:366) ~[spring-orm-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.invokeInitMethods(AbstractAutowireCapableBeanFactory.java:1873) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.initializeBean(AbstractAutowireCapableBeanFactory.java:1822) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.doCreateBean(AbstractAutowireCapableBeanFactory.java:607) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.createBean(AbstractAutowireCapableBeanFactory.java:529) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.lambda$doGetBean$0(AbstractBeanFactory.java:339) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.DefaultSingletonBeanRegistry.getSingleton(DefaultSingletonBeanRegistry.java:373) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.doGetBean(AbstractBeanFactory.java:337) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.getBean(AbstractBeanFactory.java:207) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.context.support.AbstractApplicationContext.finishBeanFactoryInitialization(AbstractApplicationContext.java:970) ~[spring-context-6.2.9.jar:6.2.9]
+	at org.springframework.context.support.AbstractApplicationContext.refresh(AbstractApplicationContext.java:627) ~[spring-context-6.2.9.jar:6.2.9]
+	at org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext.refresh(ServletWebServerApplicationContext.java:146) ~[spring-boot-3.5.4.jar:3.5.4]
+	at org.springframework.boot.SpringApplication.refresh(SpringApplication.java:752) ~[spring-boot-3.5.4.jar:3.5.4]
+	at org.springframework.boot.SpringApplication.refreshContext(SpringApplication.java:439) ~[spring-boot-3.5.4.jar:3.5.4]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:318) ~[spring-boot-3.5.4.jar:3.5.4]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1361) ~[spring-boot-3.5.4.jar:3.5.4]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1350) ~[spring-boot-3.5.4.jar:3.5.4]
+	at iuh.fit.ottbackend.OttBackendApplication.main(OttBackendApplication.java:10) ~[classes/:na]
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[na:na]
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[na:na]
+	at org.springframework.boot.devtools.restart.RestartLauncher.run(RestartLauncher.java:50) ~[spring-boot-devtools-3.5.4.jar:3.5.4]
+Caused by: org.postgresql.util.PSQLException: ERROR: column "password_hash" of relation "users" contains null values
+	at org.postgresql.core.v3.QueryExecutorImpl.receiveErrorResponse(QueryExecutorImpl.java:2736) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.core.v3.QueryExecutorImpl.processResults(QueryExecutorImpl.java:2421) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.core.v3.QueryExecutorImpl.execute(QueryExecutorImpl.java:372) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.executeInternal(PgStatement.java:525) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.execute(PgStatement.java:435) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.executeWithFlags(PgStatement.java:357) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.executeCachedSql(PgStatement.java:342) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.executeWithFlags(PgStatement.java:318) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.execute(PgStatement.java:313) ~[postgresql-42.7.8.jar:42.7.8]
+	at com.zaxxer.hikari.pool.ProxyStatement.execute(ProxyStatement.java:95) ~[HikariCP-6.3.1.jar:na]
+	at com.zaxxer.hikari.pool.HikariProxyStatement.execute(HikariProxyStatement.java) ~[HikariCP-6.3.1.jar:na]
+	at org.hibernate.tool.schema.internal.exec.GenerationTargetToDatabase.accept(GenerationTargetToDatabase.java:80) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	... 40 common frames omitted
+
+2026-01-12T00:25:43.723+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists users 
+       alter column phone set data type varchar(20)
+2026-01-12T00:25:43.871+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists users 
+       add column username varchar(50) not null
+2026-01-12T00:25:44.001+07:00  WARN 17820 --- [ott-backend] [restartedMain] o.h.t.s.i.ExceptionHandlerLoggedImpl     : GenerationTarget encountered exception accepting command : Error executing DDL "
+    alter table if exists users 
+       add column username varchar(50) not null" via JDBC [ERROR: column "username" of relation "users" contains null values]
+
+org.hibernate.tool.schema.spi.CommandAcceptanceException: Error executing DDL "
+    alter table if exists users 
+       add column username varchar(50) not null" via JDBC [ERROR: column "username" of relation "users" contains null values]
+	at org.hibernate.tool.schema.internal.exec.GenerationTargetToDatabase.accept(GenerationTargetToDatabase.java:94) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.applySqlString(AbstractSchemaMigrator.java:576) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.applySqlStrings(AbstractSchemaMigrator.java:516) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.migrateTable(AbstractSchemaMigrator.java:334) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.GroupedSchemaMigratorImpl.performTablesMigration(GroupedSchemaMigratorImpl.java:84) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.performMigration(AbstractSchemaMigrator.java:233) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.doMigration(AbstractSchemaMigrator.java:112) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.spi.SchemaManagementToolCoordinator.performDatabaseAction(SchemaManagementToolCoordinator.java:280) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.spi.SchemaManagementToolCoordinator.lambda$process$5(SchemaManagementToolCoordinator.java:144) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at java.base/java.util.HashMap.forEach(HashMap.java:1429) ~[na:na]
+	at org.hibernate.tool.schema.spi.SchemaManagementToolCoordinator.process(SchemaManagementToolCoordinator.java:141) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.boot.internal.SessionFactoryObserverForSchemaExport.sessionFactoryCreated(SessionFactoryObserverForSchemaExport.java:37) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.internal.SessionFactoryObserverChain.sessionFactoryCreated(SessionFactoryObserverChain.java:35) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.internal.SessionFactoryImpl.<init>(SessionFactoryImpl.java:324) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.boot.internal.SessionFactoryBuilderImpl.build(SessionFactoryBuilderImpl.java:463) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.jpa.boot.internal.EntityManagerFactoryBuilderImpl.build(EntityManagerFactoryBuilderImpl.java:1517) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.springframework.orm.jpa.vendor.SpringHibernateJpaPersistenceProvider.createContainerEntityManagerFactory(SpringHibernateJpaPersistenceProvider.java:66) ~[spring-orm-6.2.9.jar:6.2.9]
+	at org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean.createNativeEntityManagerFactory(LocalContainerEntityManagerFactoryBean.java:390) ~[spring-orm-6.2.9.jar:6.2.9]
+	at org.springframework.orm.jpa.AbstractEntityManagerFactoryBean.buildNativeEntityManagerFactory(AbstractEntityManagerFactoryBean.java:419) ~[spring-orm-6.2.9.jar:6.2.9]
+	at org.springframework.orm.jpa.AbstractEntityManagerFactoryBean.afterPropertiesSet(AbstractEntityManagerFactoryBean.java:400) ~[spring-orm-6.2.9.jar:6.2.9]
+	at org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean.afterPropertiesSet(LocalContainerEntityManagerFactoryBean.java:366) ~[spring-orm-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.invokeInitMethods(AbstractAutowireCapableBeanFactory.java:1873) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.initializeBean(AbstractAutowireCapableBeanFactory.java:1822) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.doCreateBean(AbstractAutowireCapableBeanFactory.java:607) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.createBean(AbstractAutowireCapableBeanFactory.java:529) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.lambda$doGetBean$0(AbstractBeanFactory.java:339) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.DefaultSingletonBeanRegistry.getSingleton(DefaultSingletonBeanRegistry.java:373) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.doGetBean(AbstractBeanFactory.java:337) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.getBean(AbstractBeanFactory.java:207) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.context.support.AbstractApplicationContext.finishBeanFactoryInitialization(AbstractApplicationContext.java:970) ~[spring-context-6.2.9.jar:6.2.9]
+	at org.springframework.context.support.AbstractApplicationContext.refresh(AbstractApplicationContext.java:627) ~[spring-context-6.2.9.jar:6.2.9]
+	at org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext.refresh(ServletWebServerApplicationContext.java:146) ~[spring-boot-3.5.4.jar:3.5.4]
+	at org.springframework.boot.SpringApplication.refresh(SpringApplication.java:752) ~[spring-boot-3.5.4.jar:3.5.4]
+	at org.springframework.boot.SpringApplication.refreshContext(SpringApplication.java:439) ~[spring-boot-3.5.4.jar:3.5.4]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:318) ~[spring-boot-3.5.4.jar:3.5.4]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1361) ~[spring-boot-3.5.4.jar:3.5.4]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1350) ~[spring-boot-3.5.4.jar:3.5.4]
+	at iuh.fit.ottbackend.OttBackendApplication.main(OttBackendApplication.java:10) ~[classes/:na]
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[na:na]
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[na:na]
+	at org.springframework.boot.devtools.restart.RestartLauncher.run(RestartLauncher.java:50) ~[spring-boot-devtools-3.5.4.jar:3.5.4]
+Caused by: org.postgresql.util.PSQLException: ERROR: column "username" of relation "users" contains null values
+	at org.postgresql.core.v3.QueryExecutorImpl.receiveErrorResponse(QueryExecutorImpl.java:2736) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.core.v3.QueryExecutorImpl.processResults(QueryExecutorImpl.java:2421) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.core.v3.QueryExecutorImpl.execute(QueryExecutorImpl.java:372) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.executeInternal(PgStatement.java:525) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.execute(PgStatement.java:435) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.executeWithFlags(PgStatement.java:357) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.executeCachedSql(PgStatement.java:342) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.executeWithFlags(PgStatement.java:318) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.execute(PgStatement.java:313) ~[postgresql-42.7.8.jar:42.7.8]
+	at com.zaxxer.hikari.pool.ProxyStatement.execute(ProxyStatement.java:95) ~[HikariCP-6.3.1.jar:na]
+	at com.zaxxer.hikari.pool.HikariProxyStatement.execute(HikariProxyStatement.java) ~[HikariCP-6.3.1.jar:na]
+	at org.hibernate.tool.schema.internal.exec.GenerationTargetToDatabase.accept(GenerationTargetToDatabase.java:80) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	... 40 common frames omitted
+
+2026-01-12T00:25:44.001+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create index idx_login_history_user 
+       on login_history (user_id, created_at)
+2026-01-12T00:25:44.137+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create index idx_otp_phone 
+       on otp_codes (phone, expires_at)
+2026-01-12T00:25:44.269+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create index idx_otp_email 
+       on otp_codes (email, expires_at)
+2026-01-12T00:25:44.401+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create index idx_permissions_resource 
+       on permissions (resource)
+2026-01-12T00:25:44.537+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists permissions 
+       drop constraint if exists UKpnvtwliis6p05pn6i3ndjrqt2
+2026-01-12T00:25:44.669+07:00  WARN 17820 --- [ott-backend] [restartedMain] o.h.engine.jdbc.spi.SqlExceptionHelper   : SQL Warning Code: 0, SQLState: 00000
+2026-01-12T00:25:44.669+07:00  WARN 17820 --- [ott-backend] [restartedMain] o.h.engine.jdbc.spi.SqlExceptionHelper   : constraint "ukpnvtwliis6p05pn6i3ndjrqt2" of relation "permissions" does not exist, skipping
+2026-01-12T00:25:44.671+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists permissions 
+       add constraint UKpnvtwliis6p05pn6i3ndjrqt2 unique (name)
+2026-01-12T00:25:44.801+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create index idx_qr_user 
+       on qr_codes (user_id)
+2026-01-12T00:25:44.935+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create index idx_qr_reference 
+       on qr_codes (reference_id)
+2026-01-12T00:25:45.064+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create index idx_role_permissions_role 
+       on role_permissions (role_id)
+2026-01-12T00:25:45.194+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create index idx_role_permissions_permission 
+       on role_permissions (permission_id)
+2026-01-12T00:25:45.325+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists roles 
+       drop constraint if exists UKofx66keruapi6vyqpv6f2or37
+2026-01-12T00:25:45.453+07:00  WARN 17820 --- [ott-backend] [restartedMain] o.h.engine.jdbc.spi.SqlExceptionHelper   : SQL Warning Code: 0, SQLState: 00000
+2026-01-12T00:25:45.454+07:00  WARN 17820 --- [ott-backend] [restartedMain] o.h.engine.jdbc.spi.SqlExceptionHelper   : constraint "ukofx66keruapi6vyqpv6f2or37" of relation "roles" does not exist, skipping
+2026-01-12T00:25:45.454+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists roles 
+       add constraint UKofx66keruapi6vyqpv6f2or37 unique (name)
+2026-01-12T00:25:45.587+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create index idx_user_roles_user 
+       on user_roles (user_id)
+2026-01-12T00:25:45.702+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create index idx_user_roles_role 
+       on user_roles (role_id)
+2026-01-12T00:25:45.848+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create index idx_user_roles_scope 
+       on user_roles (scope_type, scope_id)
+2026-01-12T00:25:45.974+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create index idx_sessions_user 
+       on user_sessions (user_id)
+2026-01-12T00:25:46.104+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create index idx_sessions_token 
+       on user_sessions (session_token)
+2026-01-12T00:25:46.237+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists user_sessions 
+       drop constraint if exists UKh3bafswclg0jyaj1vi6sgg7o5
+2026-01-12T00:25:46.372+07:00  WARN 17820 --- [ott-backend] [restartedMain] o.h.engine.jdbc.spi.SqlExceptionHelper   : SQL Warning Code: 0, SQLState: 00000
+2026-01-12T00:25:46.372+07:00  WARN 17820 --- [ott-backend] [restartedMain] o.h.engine.jdbc.spi.SqlExceptionHelper   : constraint "ukh3bafswclg0jyaj1vi6sgg7o5" of relation "user_sessions" does not exist, skipping
+2026-01-12T00:25:46.372+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists user_sessions 
+       add constraint UKh3bafswclg0jyaj1vi6sgg7o5 unique (session_token)
+2026-01-12T00:25:46.653+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create index idx_users_phone 
+       on users (phone)
+2026-01-12T00:25:46.784+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create index idx_users_username 
+       on users (username)
+2026-01-12T00:25:46.911+07:00  WARN 17820 --- [ott-backend] [restartedMain] o.h.t.s.i.ExceptionHandlerLoggedImpl     : GenerationTarget encountered exception accepting command : Error executing DDL "
+    create index idx_users_username 
+       on users (username)" via JDBC [ERROR: column "username" does not exist]
+
+org.hibernate.tool.schema.spi.CommandAcceptanceException: Error executing DDL "
+    create index idx_users_username 
+       on users (username)" via JDBC [ERROR: column "username" does not exist]
+	at org.hibernate.tool.schema.internal.exec.GenerationTargetToDatabase.accept(GenerationTargetToDatabase.java:94) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.applySqlString(AbstractSchemaMigrator.java:576) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.applySqlStrings(AbstractSchemaMigrator.java:516) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.applyIndexes(AbstractSchemaMigrator.java:361) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.GroupedSchemaMigratorImpl.performTablesMigration(GroupedSchemaMigratorImpl.java:96) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.performMigration(AbstractSchemaMigrator.java:233) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.doMigration(AbstractSchemaMigrator.java:112) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.spi.SchemaManagementToolCoordinator.performDatabaseAction(SchemaManagementToolCoordinator.java:280) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.spi.SchemaManagementToolCoordinator.lambda$process$5(SchemaManagementToolCoordinator.java:144) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at java.base/java.util.HashMap.forEach(HashMap.java:1429) ~[na:na]
+	at org.hibernate.tool.schema.spi.SchemaManagementToolCoordinator.process(SchemaManagementToolCoordinator.java:141) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.boot.internal.SessionFactoryObserverForSchemaExport.sessionFactoryCreated(SessionFactoryObserverForSchemaExport.java:37) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.internal.SessionFactoryObserverChain.sessionFactoryCreated(SessionFactoryObserverChain.java:35) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.internal.SessionFactoryImpl.<init>(SessionFactoryImpl.java:324) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.boot.internal.SessionFactoryBuilderImpl.build(SessionFactoryBuilderImpl.java:463) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.jpa.boot.internal.EntityManagerFactoryBuilderImpl.build(EntityManagerFactoryBuilderImpl.java:1517) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.springframework.orm.jpa.vendor.SpringHibernateJpaPersistenceProvider.createContainerEntityManagerFactory(SpringHibernateJpaPersistenceProvider.java:66) ~[spring-orm-6.2.9.jar:6.2.9]
+	at org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean.createNativeEntityManagerFactory(LocalContainerEntityManagerFactoryBean.java:390) ~[spring-orm-6.2.9.jar:6.2.9]
+	at org.springframework.orm.jpa.AbstractEntityManagerFactoryBean.buildNativeEntityManagerFactory(AbstractEntityManagerFactoryBean.java:419) ~[spring-orm-6.2.9.jar:6.2.9]
+	at org.springframework.orm.jpa.AbstractEntityManagerFactoryBean.afterPropertiesSet(AbstractEntityManagerFactoryBean.java:400) ~[spring-orm-6.2.9.jar:6.2.9]
+	at org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean.afterPropertiesSet(LocalContainerEntityManagerFactoryBean.java:366) ~[spring-orm-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.invokeInitMethods(AbstractAutowireCapableBeanFactory.java:1873) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.initializeBean(AbstractAutowireCapableBeanFactory.java:1822) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.doCreateBean(AbstractAutowireCapableBeanFactory.java:607) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.createBean(AbstractAutowireCapableBeanFactory.java:529) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.lambda$doGetBean$0(AbstractBeanFactory.java:339) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.DefaultSingletonBeanRegistry.getSingleton(DefaultSingletonBeanRegistry.java:373) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.doGetBean(AbstractBeanFactory.java:337) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.getBean(AbstractBeanFactory.java:207) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.context.support.AbstractApplicationContext.finishBeanFactoryInitialization(AbstractApplicationContext.java:970) ~[spring-context-6.2.9.jar:6.2.9]
+	at org.springframework.context.support.AbstractApplicationContext.refresh(AbstractApplicationContext.java:627) ~[spring-context-6.2.9.jar:6.2.9]
+	at org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext.refresh(ServletWebServerApplicationContext.java:146) ~[spring-boot-3.5.4.jar:3.5.4]
+	at org.springframework.boot.SpringApplication.refresh(SpringApplication.java:752) ~[spring-boot-3.5.4.jar:3.5.4]
+	at org.springframework.boot.SpringApplication.refreshContext(SpringApplication.java:439) ~[spring-boot-3.5.4.jar:3.5.4]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:318) ~[spring-boot-3.5.4.jar:3.5.4]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1361) ~[spring-boot-3.5.4.jar:3.5.4]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1350) ~[spring-boot-3.5.4.jar:3.5.4]
+	at iuh.fit.ottbackend.OttBackendApplication.main(OttBackendApplication.java:10) ~[classes/:na]
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[na:na]
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[na:na]
+	at org.springframework.boot.devtools.restart.RestartLauncher.run(RestartLauncher.java:50) ~[spring-boot-devtools-3.5.4.jar:3.5.4]
+Caused by: org.postgresql.util.PSQLException: ERROR: column "username" does not exist
+	at org.postgresql.core.v3.QueryExecutorImpl.receiveErrorResponse(QueryExecutorImpl.java:2736) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.core.v3.QueryExecutorImpl.processResults(QueryExecutorImpl.java:2421) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.core.v3.QueryExecutorImpl.execute(QueryExecutorImpl.java:372) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.executeInternal(PgStatement.java:525) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.execute(PgStatement.java:435) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.executeWithFlags(PgStatement.java:357) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.executeCachedSql(PgStatement.java:342) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.executeWithFlags(PgStatement.java:318) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.execute(PgStatement.java:313) ~[postgresql-42.7.8.jar:42.7.8]
+	at com.zaxxer.hikari.pool.ProxyStatement.execute(ProxyStatement.java:95) ~[HikariCP-6.3.1.jar:na]
+	at com.zaxxer.hikari.pool.HikariProxyStatement.execute(HikariProxyStatement.java) ~[HikariCP-6.3.1.jar:na]
+	at org.hibernate.tool.schema.internal.exec.GenerationTargetToDatabase.accept(GenerationTargetToDatabase.java:80) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	... 40 common frames omitted
+
+2026-01-12T00:25:46.914+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists users 
+       drop constraint if exists UKr43af9ap4edm43mmtq01oddj6
+2026-01-12T00:25:47.037+07:00  WARN 17820 --- [ott-backend] [restartedMain] o.h.engine.jdbc.spi.SqlExceptionHelper   : SQL Warning Code: 0, SQLState: 00000
+2026-01-12T00:25:47.037+07:00  WARN 17820 --- [ott-backend] [restartedMain] o.h.engine.jdbc.spi.SqlExceptionHelper   : constraint "ukr43af9ap4edm43mmtq01oddj6" of relation "users" does not exist, skipping
+2026-01-12T00:25:47.037+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists users 
+       add constraint UKr43af9ap4edm43mmtq01oddj6 unique (username)
+2026-01-12T00:25:47.170+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists device_tokens 
+       add constraint FKhc7d11bnr8x9gs5biohdhnx1c 
+       foreign key (user_id) 
+       references users
+2026-01-12T00:25:47.307+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists login_history 
+       add constraint FK20v0mimmdegh2afs39uixlxpm 
+       foreign key (user_id) 
+       references users
+2026-01-12T00:25:47.437+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists qr_codes 
+       add constraint FK3fuowljt7nslh9cm23fq4pfyt 
+       foreign key (user_id) 
+       references users
+2026-01-12T00:25:47.572+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists role_permissions 
+       add constraint FKegdk29eiy7mdtefy5c7eirr6e 
+       foreign key (permission_id) 
+       references permissions
+2026-01-12T00:25:47.703+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists role_permissions 
+       add constraint FKn5fotdgk8d1xvo8nav9uv3muc 
+       foreign key (role_id) 
+       references roles
+2026-01-12T00:25:47.834+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists two_factor_auth 
+       add constraint FKax3p7kk0ktwnpreejtt5661w 
+       foreign key (user_id) 
+       references users
+2026-01-12T00:25:47.965+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists two_factor_backup_codes 
+       add constraint FKc4t5dn41oovjlvrte4ph70259 
+       foreign key (user_id) 
+       references two_factor_auth
+2026-01-12T00:25:48.095+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists user_roles 
+       add constraint FKljgw07fam7v71ok817u4rvyro 
+       foreign key (assigned_by) 
+       references users
+2026-01-12T00:25:48.227+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists user_roles 
+       add constraint FKh8ciramu9cc9q3qcqiv4ue8a6 
+       foreign key (role_id) 
+       references roles
+2026-01-12T00:25:48.363+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists user_roles 
+       add constraint FKhfh9dx7w3ubf1co1vdev94g3f 
+       foreign key (user_id) 
+       references users
+2026-01-12T00:25:48.494+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists user_sessions 
+       add constraint FK8klxsgb8dcjjklmqebqp1twd5 
+       foreign key (user_id) 
+       references users
+2026-01-12T00:25:48.625+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists user_settings 
+       add constraint FK8v82nj88rmai0nyck19f873dw 
+       foreign key (user_id) 
+       references users
+2026-01-12T00:25:48.757+07:00  INFO 17820 --- [ott-backend] [restartedMain] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-01-12T00:25:49.297+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] s.w.s.m.m.a.RequestMappingHandlerMapping : 6 mappings in 'requestMappingHandlerMapping'
+2026-01-12T00:25:49.434+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] o.s.w.s.handler.SimpleUrlHandlerMapping  : Patterns [/webjars/**, /**, /swagger-ui*/*swagger-initializer.js, /swagger-ui*/**] in 'resourceHandlerMapping'
+2026-01-12T00:25:49.492+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] s.w.s.m.m.a.RequestMappingHandlerAdapter : ControllerAdvice beans: 0 @ModelAttribute, 0 @InitBinder, 1 RequestBodyAdvice, 1 ResponseBodyAdvice
+2026-01-12T00:25:49.602+07:00  WARN 17820 --- [ott-backend] [restartedMain] ion$DefaultTemplateResolverConfiguration : Cannot find template location: classpath:/templates/ (please add some templates, check your Thymeleaf configuration, or set spring.thymeleaf.check-template-location=false)
+2026-01-12T00:25:49.636+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] .m.m.a.ExceptionHandlerExceptionResolver : ControllerAdvice beans: 1 @ExceptionHandler, 1 ResponseBodyAdvice
+2026-01-12T00:25:50.140+07:00  INFO 17820 --- [ott-backend] [restartedMain] org.quartz.impl.StdSchedulerFactory      : Using default implementation for ThreadExecutor
+2026-01-12T00:25:50.175+07:00  INFO 17820 --- [ott-backend] [restartedMain] org.quartz.core.SchedulerSignalerImpl    : Initialized Scheduler Signaller of type: class org.quartz.core.SchedulerSignalerImpl
+2026-01-12T00:25:50.175+07:00  INFO 17820 --- [ott-backend] [restartedMain] org.quartz.core.QuartzScheduler          : Quartz Scheduler v2.5.0 created.
+2026-01-12T00:25:50.190+07:00  INFO 17820 --- [ott-backend] [restartedMain] org.quartz.simpl.RAMJobStore             : RAMJobStore initialized.
+2026-01-12T00:25:50.191+07:00  INFO 17820 --- [ott-backend] [restartedMain] org.quartz.core.QuartzScheduler          : Scheduler meta-data: Quartz Scheduler (v2.5.0) 'quartzScheduler' with instanceId 'NON_CLUSTERED'
+  Scheduler class: 'org.quartz.core.QuartzScheduler' - running locally.
+  NOT STARTED.
+  Currently in standby mode.
+  Number of jobs executed: 0
+  Using thread pool 'org.quartz.simpl.SimpleThreadPool' - with 10 threads.
+  Using job-store 'org.quartz.simpl.RAMJobStore' - which does not support persistence. and is not clustered.
+
+2026-01-12T00:25:50.191+07:00  INFO 17820 --- [ott-backend] [restartedMain] org.quartz.impl.StdSchedulerFactory      : Quartz scheduler 'quartzScheduler' initialized from an externally provided properties instance.
+2026-01-12T00:25:50.191+07:00  INFO 17820 --- [ott-backend] [restartedMain] org.quartz.impl.StdSchedulerFactory      : Quartz scheduler version: 2.5.0
+2026-01-12T00:25:50.191+07:00  INFO 17820 --- [ott-backend] [restartedMain] org.quartz.core.QuartzScheduler          : JobFactory set to: org.springframework.scheduling.quartz.SpringBeanJobFactory@5d1048fc
+2026-01-12T00:25:50.603+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] swordEncoderAuthenticationManagerBuilder : No authenticationProviders and no parentAuthenticationManager defined. Returning null.
+2026-01-12T00:25:50.879+07:00 DEBUG 17820 --- [ott-backend] [restartedMain] o.s.s.web.DefaultSecurityFilterChain     : Will secure any request with filters: DisableEncodeUrlFilter, WebAsyncManagerIntegrationFilter, SecurityContextHolderFilter, HeaderWriterFilter, CsrfFilter, LogoutFilter, OAuth2AuthorizationRequestRedirectFilter, OAuth2AuthorizationRequestRedirectFilter, OAuth2LoginAuthenticationFilter, DefaultResourcesFilter, DefaultLoginPageGeneratingFilter, DefaultLogoutPageGeneratingFilter, RequestCacheAwareFilter, SecurityContextHolderAwareRequestFilter, AnonymousAuthenticationFilter, OAuth2AuthorizationCodeGrantFilter, ExceptionTranslationFilter, AuthorizationFilter
+2026-01-12T00:25:50.976+07:00  INFO 17820 --- [ott-backend] [restartedMain] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 3 endpoints beneath base path '/actuator'
+2026-01-12T00:25:51.068+07:00  INFO 17820 --- [ott-backend] [restartedMain] o.s.b.d.a.OptionalLiveReloadServer       : LiveReload server is running on port 35729
+2026-01-12T00:25:51.205+07:00  INFO 17820 --- [ott-backend] [restartedMain] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/api'
+2026-01-12T00:25:51.209+07:00  INFO 17820 --- [ott-backend] [restartedMain] o.s.s.quartz.SchedulerFactoryBean        : Starting Quartz Scheduler now
+2026-01-12T00:25:51.210+07:00  INFO 17820 --- [ott-backend] [restartedMain] org.quartz.core.QuartzScheduler          : Scheduler quartzScheduler_$_NON_CLUSTERED started.
+2026-01-12T00:25:51.234+07:00  INFO 17820 --- [ott-backend] [restartedMain] i.fit.ottbackend.OttBackendApplication   : Started OttBackendApplication in 28.192 seconds (process running for 32.188)
+2026-01-12T00:26:01.802+07:00  INFO 17820 --- [ott-backend] [SpringApplicationShutdownHook] org.quartz.core.QuartzScheduler          : Scheduler quartzScheduler_$_NON_CLUSTERED paused.
+2026-01-12T00:26:01.803+07:00  INFO 17820 --- [ott-backend] [SpringApplicationShutdownHook] o.s.b.w.e.tomcat.GracefulShutdown        : Commencing graceful shutdown. Waiting for active requests to complete
+2026-01-12T00:26:01.809+07:00  INFO 17820 --- [ott-backend] [tomcat-shutdown] o.s.b.w.e.tomcat.GracefulShutdown        : Graceful shutdown complete
+2026-01-12T00:26:01.813+07:00  INFO 17820 --- [ott-backend] [SpringApplicationShutdownHook] o.s.s.quartz.SchedulerFactoryBean        : Shutting down Quartz Scheduler
+2026-01-12T00:26:01.813+07:00  INFO 17820 --- [ott-backend] [SpringApplicationShutdownHook] org.quartz.core.QuartzScheduler          : Scheduler quartzScheduler_$_NON_CLUSTERED shutting down.
+2026-01-12T00:26:01.813+07:00  INFO 17820 --- [ott-backend] [SpringApplicationShutdownHook] org.quartz.core.QuartzScheduler          : Scheduler quartzScheduler_$_NON_CLUSTERED paused.
+2026-01-12T00:26:01.813+07:00  INFO 17820 --- [ott-backend] [SpringApplicationShutdownHook] org.quartz.core.QuartzScheduler          : Scheduler quartzScheduler_$_NON_CLUSTERED shutdown complete.
+2026-01-12T00:26:01.815+07:00  INFO 17820 --- [ott-backend] [SpringApplicationShutdownHook] j.LocalContainerEntityManagerFactoryBean : Closing JPA EntityManagerFactory for persistence unit 'default'
+2026-01-12T00:26:01.817+07:00  INFO 17820 --- [ott-backend] [SpringApplicationShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...
+2026-01-12T00:26:02.573+07:00  INFO 17820 --- [ott-backend] [SpringApplicationShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.
+2026-01-12T00:26:06.784+07:00  INFO 22088 --- [ott-backend] [restartedMain] i.fit.ottbackend.OttBackendApplication   : Starting OttBackendApplication using Java 21.0.4 with PID 22088 (D:\DaiHoc\CongNgheMoi\project\ott-backend\target\classes started by nguye in D:\DaiHoc\CongNgheMoi\project\ott-backend)
+2026-01-12T00:26:06.786+07:00  INFO 22088 --- [ott-backend] [restartedMain] i.fit.ottbackend.OttBackendApplication   : No active profile set, falling back to 1 default profile: "default"
+2026-01-12T00:26:06.832+07:00  INFO 22088 --- [ott-backend] [restartedMain] .e.DevToolsPropertyDefaultsPostProcessor : Devtools property defaults active! Set 'spring.devtools.add-properties' to 'false' to disable
+2026-01-12T00:26:06.832+07:00  INFO 22088 --- [ott-backend] [restartedMain] .e.DevToolsPropertyDefaultsPostProcessor : For additional web related logging consider setting the 'logging.level.web' property to 'DEBUG'
+2026-01-12T00:26:07.804+07:00  INFO 22088 --- [ott-backend] [restartedMain] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-01-12T00:26:07.821+07:00  INFO 22088 --- [ott-backend] [restartedMain] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 9 ms. Found 0 JPA repository interfaces.
+2026-01-12T00:26:08.237+07:00  INFO 22088 --- [ott-backend] [restartedMain] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+2026-01-12T00:26:08.247+07:00  INFO 22088 --- [ott-backend] [restartedMain] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-01-12T00:26:08.248+07:00  INFO 22088 --- [ott-backend] [restartedMain] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.43]
+2026-01-12T00:26:08.287+07:00  INFO 22088 --- [ott-backend] [restartedMain] o.a.c.c.C.[Tomcat].[localhost].[/api]    : Initializing Spring embedded WebApplicationContext
+2026-01-12T00:26:08.288+07:00  INFO 22088 --- [ott-backend] [restartedMain] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 1455 ms
+2026-01-12T00:26:08.412+07:00 DEBUG 22088 --- [ott-backend] [restartedMain] o.s.w.f.ServerHttpObservationFilter      : Filter 'webMvcObservationFilter' configured for use
+2026-01-12T00:26:08.588+07:00  INFO 22088 --- [ott-backend] [restartedMain] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-01-12T00:26:09.957+07:00  INFO 22088 --- [ott-backend] [restartedMain] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@727428a1
+2026-01-12T00:26:09.959+07:00  INFO 22088 --- [ott-backend] [restartedMain] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-01-12T00:26:10.103+07:00  INFO 22088 --- [ott-backend] [restartedMain] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://ep-hidden-mouse-a7rql89i-pooler.ap-southeast-2.aws.neon.tech:5432/neondb?sslmode=require&channel_binding=require (PostgreSQL 17.7)
+2026-01-12T00:26:11.934+07:00  INFO 22088 --- [ott-backend] [restartedMain] o.f.core.internal.command.DbValidate     : Successfully validated 1 migration (execution time 00:00.532s)
+2026-01-12T00:26:13.596+07:00  INFO 22088 --- [ott-backend] [restartedMain] o.f.core.internal.command.DbMigrate      : Current version of schema "public": 2
+2026-01-12T00:26:13.597+07:00 ERROR 22088 --- [ott-backend] [restartedMain] o.f.core.internal.command.DbMigrate      : Schema "public" has version 2, but no migration could be resolved in the configured locations !
+2026-01-12T00:26:13.728+07:00  INFO 22088 --- [ott-backend] [restartedMain] o.f.core.internal.command.DbMigrate      : Schema "public" is up to date. No migration necessary.
+2026-01-12T00:26:14.556+07:00  INFO 22088 --- [ott-backend] [restartedMain] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-01-12T00:26:14.591+07:00  INFO 22088 --- [ott-backend] [restartedMain] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.6.22.Final
+2026-01-12T00:26:14.613+07:00  INFO 22088 --- [ott-backend] [restartedMain] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-01-12T00:26:14.801+07:00  INFO 22088 --- [ott-backend] [restartedMain] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-01-12T00:26:14.972+07:00  WARN 22088 --- [ott-backend] [restartedMain] org.hibernate.orm.deprecation            : HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-01-12T00:26:15.238+07:00  INFO 22088 --- [ott-backend] [restartedMain] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-1)']
+	Database driver: undefined/unknown
+	Database version: 17.7
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-01-12T00:26:16.137+07:00  INFO 22088 --- [ott-backend] [restartedMain] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-01-12T00:26:16.947+07:00 DEBUG 22088 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists users 
+       add column password_hash varchar(255) not null
+2026-01-12T00:26:17.077+07:00  WARN 22088 --- [ott-backend] [restartedMain] o.h.t.s.i.ExceptionHandlerLoggedImpl     : GenerationTarget encountered exception accepting command : Error executing DDL "
+    alter table if exists users 
+       add column password_hash varchar(255) not null" via JDBC [ERROR: column "password_hash" of relation "users" contains null values]
+
+org.hibernate.tool.schema.spi.CommandAcceptanceException: Error executing DDL "
+    alter table if exists users 
+       add column password_hash varchar(255) not null" via JDBC [ERROR: column "password_hash" of relation "users" contains null values]
+	at org.hibernate.tool.schema.internal.exec.GenerationTargetToDatabase.accept(GenerationTargetToDatabase.java:94) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.applySqlString(AbstractSchemaMigrator.java:576) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.applySqlStrings(AbstractSchemaMigrator.java:516) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.migrateTable(AbstractSchemaMigrator.java:334) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.GroupedSchemaMigratorImpl.performTablesMigration(GroupedSchemaMigratorImpl.java:84) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.performMigration(AbstractSchemaMigrator.java:233) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.doMigration(AbstractSchemaMigrator.java:112) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.spi.SchemaManagementToolCoordinator.performDatabaseAction(SchemaManagementToolCoordinator.java:280) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.spi.SchemaManagementToolCoordinator.lambda$process$5(SchemaManagementToolCoordinator.java:144) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at java.base/java.util.HashMap.forEach(HashMap.java:1429) ~[na:na]
+	at org.hibernate.tool.schema.spi.SchemaManagementToolCoordinator.process(SchemaManagementToolCoordinator.java:141) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.boot.internal.SessionFactoryObserverForSchemaExport.sessionFactoryCreated(SessionFactoryObserverForSchemaExport.java:37) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.internal.SessionFactoryObserverChain.sessionFactoryCreated(SessionFactoryObserverChain.java:35) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.internal.SessionFactoryImpl.<init>(SessionFactoryImpl.java:324) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.boot.internal.SessionFactoryBuilderImpl.build(SessionFactoryBuilderImpl.java:463) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.jpa.boot.internal.EntityManagerFactoryBuilderImpl.build(EntityManagerFactoryBuilderImpl.java:1517) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.springframework.orm.jpa.vendor.SpringHibernateJpaPersistenceProvider.createContainerEntityManagerFactory(SpringHibernateJpaPersistenceProvider.java:66) ~[spring-orm-6.2.9.jar:6.2.9]
+	at org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean.createNativeEntityManagerFactory(LocalContainerEntityManagerFactoryBean.java:390) ~[spring-orm-6.2.9.jar:6.2.9]
+	at org.springframework.orm.jpa.AbstractEntityManagerFactoryBean.buildNativeEntityManagerFactory(AbstractEntityManagerFactoryBean.java:419) ~[spring-orm-6.2.9.jar:6.2.9]
+	at org.springframework.orm.jpa.AbstractEntityManagerFactoryBean.afterPropertiesSet(AbstractEntityManagerFactoryBean.java:400) ~[spring-orm-6.2.9.jar:6.2.9]
+	at org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean.afterPropertiesSet(LocalContainerEntityManagerFactoryBean.java:366) ~[spring-orm-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.invokeInitMethods(AbstractAutowireCapableBeanFactory.java:1873) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.initializeBean(AbstractAutowireCapableBeanFactory.java:1822) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.doCreateBean(AbstractAutowireCapableBeanFactory.java:607) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.createBean(AbstractAutowireCapableBeanFactory.java:529) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.lambda$doGetBean$0(AbstractBeanFactory.java:339) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.DefaultSingletonBeanRegistry.getSingleton(DefaultSingletonBeanRegistry.java:373) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.doGetBean(AbstractBeanFactory.java:337) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.getBean(AbstractBeanFactory.java:207) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.context.support.AbstractApplicationContext.finishBeanFactoryInitialization(AbstractApplicationContext.java:970) ~[spring-context-6.2.9.jar:6.2.9]
+	at org.springframework.context.support.AbstractApplicationContext.refresh(AbstractApplicationContext.java:627) ~[spring-context-6.2.9.jar:6.2.9]
+	at org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext.refresh(ServletWebServerApplicationContext.java:146) ~[spring-boot-3.5.4.jar:3.5.4]
+	at org.springframework.boot.SpringApplication.refresh(SpringApplication.java:752) ~[spring-boot-3.5.4.jar:3.5.4]
+	at org.springframework.boot.SpringApplication.refreshContext(SpringApplication.java:439) ~[spring-boot-3.5.4.jar:3.5.4]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:318) ~[spring-boot-3.5.4.jar:3.5.4]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1361) ~[spring-boot-3.5.4.jar:3.5.4]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1350) ~[spring-boot-3.5.4.jar:3.5.4]
+	at iuh.fit.ottbackend.OttBackendApplication.main(OttBackendApplication.java:10) ~[classes/:na]
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[na:na]
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[na:na]
+	at org.springframework.boot.devtools.restart.RestartLauncher.run(RestartLauncher.java:50) ~[spring-boot-devtools-3.5.4.jar:3.5.4]
+Caused by: org.postgresql.util.PSQLException: ERROR: column "password_hash" of relation "users" contains null values
+	at org.postgresql.core.v3.QueryExecutorImpl.receiveErrorResponse(QueryExecutorImpl.java:2736) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.core.v3.QueryExecutorImpl.processResults(QueryExecutorImpl.java:2421) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.core.v3.QueryExecutorImpl.execute(QueryExecutorImpl.java:372) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.executeInternal(PgStatement.java:525) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.execute(PgStatement.java:435) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.executeWithFlags(PgStatement.java:357) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.executeCachedSql(PgStatement.java:342) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.executeWithFlags(PgStatement.java:318) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.execute(PgStatement.java:313) ~[postgresql-42.7.8.jar:42.7.8]
+	at com.zaxxer.hikari.pool.ProxyStatement.execute(ProxyStatement.java:95) ~[HikariCP-6.3.1.jar:na]
+	at com.zaxxer.hikari.pool.HikariProxyStatement.execute(HikariProxyStatement.java) ~[HikariCP-6.3.1.jar:na]
+	at org.hibernate.tool.schema.internal.exec.GenerationTargetToDatabase.accept(GenerationTargetToDatabase.java:80) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	... 40 common frames omitted
+
+2026-01-12T00:26:17.081+07:00 DEBUG 22088 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists users 
+       add column username varchar(50) not null
+2026-01-12T00:26:17.208+07:00  WARN 22088 --- [ott-backend] [restartedMain] o.h.t.s.i.ExceptionHandlerLoggedImpl     : GenerationTarget encountered exception accepting command : Error executing DDL "
+    alter table if exists users 
+       add column username varchar(50) not null" via JDBC [ERROR: column "username" of relation "users" contains null values]
+
+org.hibernate.tool.schema.spi.CommandAcceptanceException: Error executing DDL "
+    alter table if exists users 
+       add column username varchar(50) not null" via JDBC [ERROR: column "username" of relation "users" contains null values]
+	at org.hibernate.tool.schema.internal.exec.GenerationTargetToDatabase.accept(GenerationTargetToDatabase.java:94) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.applySqlString(AbstractSchemaMigrator.java:576) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.applySqlStrings(AbstractSchemaMigrator.java:516) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.migrateTable(AbstractSchemaMigrator.java:334) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.GroupedSchemaMigratorImpl.performTablesMigration(GroupedSchemaMigratorImpl.java:84) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.performMigration(AbstractSchemaMigrator.java:233) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.doMigration(AbstractSchemaMigrator.java:112) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.spi.SchemaManagementToolCoordinator.performDatabaseAction(SchemaManagementToolCoordinator.java:280) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.spi.SchemaManagementToolCoordinator.lambda$process$5(SchemaManagementToolCoordinator.java:144) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at java.base/java.util.HashMap.forEach(HashMap.java:1429) ~[na:na]
+	at org.hibernate.tool.schema.spi.SchemaManagementToolCoordinator.process(SchemaManagementToolCoordinator.java:141) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.boot.internal.SessionFactoryObserverForSchemaExport.sessionFactoryCreated(SessionFactoryObserverForSchemaExport.java:37) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.internal.SessionFactoryObserverChain.sessionFactoryCreated(SessionFactoryObserverChain.java:35) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.internal.SessionFactoryImpl.<init>(SessionFactoryImpl.java:324) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.boot.internal.SessionFactoryBuilderImpl.build(SessionFactoryBuilderImpl.java:463) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.jpa.boot.internal.EntityManagerFactoryBuilderImpl.build(EntityManagerFactoryBuilderImpl.java:1517) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.springframework.orm.jpa.vendor.SpringHibernateJpaPersistenceProvider.createContainerEntityManagerFactory(SpringHibernateJpaPersistenceProvider.java:66) ~[spring-orm-6.2.9.jar:6.2.9]
+	at org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean.createNativeEntityManagerFactory(LocalContainerEntityManagerFactoryBean.java:390) ~[spring-orm-6.2.9.jar:6.2.9]
+	at org.springframework.orm.jpa.AbstractEntityManagerFactoryBean.buildNativeEntityManagerFactory(AbstractEntityManagerFactoryBean.java:419) ~[spring-orm-6.2.9.jar:6.2.9]
+	at org.springframework.orm.jpa.AbstractEntityManagerFactoryBean.afterPropertiesSet(AbstractEntityManagerFactoryBean.java:400) ~[spring-orm-6.2.9.jar:6.2.9]
+	at org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean.afterPropertiesSet(LocalContainerEntityManagerFactoryBean.java:366) ~[spring-orm-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.invokeInitMethods(AbstractAutowireCapableBeanFactory.java:1873) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.initializeBean(AbstractAutowireCapableBeanFactory.java:1822) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.doCreateBean(AbstractAutowireCapableBeanFactory.java:607) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.createBean(AbstractAutowireCapableBeanFactory.java:529) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.lambda$doGetBean$0(AbstractBeanFactory.java:339) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.DefaultSingletonBeanRegistry.getSingleton(DefaultSingletonBeanRegistry.java:373) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.doGetBean(AbstractBeanFactory.java:337) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.getBean(AbstractBeanFactory.java:207) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.context.support.AbstractApplicationContext.finishBeanFactoryInitialization(AbstractApplicationContext.java:970) ~[spring-context-6.2.9.jar:6.2.9]
+	at org.springframework.context.support.AbstractApplicationContext.refresh(AbstractApplicationContext.java:627) ~[spring-context-6.2.9.jar:6.2.9]
+	at org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext.refresh(ServletWebServerApplicationContext.java:146) ~[spring-boot-3.5.4.jar:3.5.4]
+	at org.springframework.boot.SpringApplication.refresh(SpringApplication.java:752) ~[spring-boot-3.5.4.jar:3.5.4]
+	at org.springframework.boot.SpringApplication.refreshContext(SpringApplication.java:439) ~[spring-boot-3.5.4.jar:3.5.4]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:318) ~[spring-boot-3.5.4.jar:3.5.4]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1361) ~[spring-boot-3.5.4.jar:3.5.4]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1350) ~[spring-boot-3.5.4.jar:3.5.4]
+	at iuh.fit.ottbackend.OttBackendApplication.main(OttBackendApplication.java:10) ~[classes/:na]
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[na:na]
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[na:na]
+	at org.springframework.boot.devtools.restart.RestartLauncher.run(RestartLauncher.java:50) ~[spring-boot-devtools-3.5.4.jar:3.5.4]
+Caused by: org.postgresql.util.PSQLException: ERROR: column "username" of relation "users" contains null values
+	at org.postgresql.core.v3.QueryExecutorImpl.receiveErrorResponse(QueryExecutorImpl.java:2736) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.core.v3.QueryExecutorImpl.processResults(QueryExecutorImpl.java:2421) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.core.v3.QueryExecutorImpl.execute(QueryExecutorImpl.java:372) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.executeInternal(PgStatement.java:525) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.execute(PgStatement.java:435) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.executeWithFlags(PgStatement.java:357) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.executeCachedSql(PgStatement.java:342) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.executeWithFlags(PgStatement.java:318) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.execute(PgStatement.java:313) ~[postgresql-42.7.8.jar:42.7.8]
+	at com.zaxxer.hikari.pool.ProxyStatement.execute(ProxyStatement.java:95) ~[HikariCP-6.3.1.jar:na]
+	at com.zaxxer.hikari.pool.HikariProxyStatement.execute(HikariProxyStatement.java) ~[HikariCP-6.3.1.jar:na]
+	at org.hibernate.tool.schema.internal.exec.GenerationTargetToDatabase.accept(GenerationTargetToDatabase.java:80) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	... 40 common frames omitted
+
+2026-01-12T00:26:18.268+07:00 DEBUG 22088 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create index idx_users_username 
+       on users (username)
+2026-01-12T00:26:18.395+07:00  WARN 22088 --- [ott-backend] [restartedMain] o.h.t.s.i.ExceptionHandlerLoggedImpl     : GenerationTarget encountered exception accepting command : Error executing DDL "
+    create index idx_users_username 
+       on users (username)" via JDBC [ERROR: column "username" does not exist]
+
+org.hibernate.tool.schema.spi.CommandAcceptanceException: Error executing DDL "
+    create index idx_users_username 
+       on users (username)" via JDBC [ERROR: column "username" does not exist]
+	at org.hibernate.tool.schema.internal.exec.GenerationTargetToDatabase.accept(GenerationTargetToDatabase.java:94) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.applySqlString(AbstractSchemaMigrator.java:576) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.applySqlStrings(AbstractSchemaMigrator.java:516) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.applyIndexes(AbstractSchemaMigrator.java:361) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.GroupedSchemaMigratorImpl.performTablesMigration(GroupedSchemaMigratorImpl.java:96) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.performMigration(AbstractSchemaMigrator.java:233) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.internal.AbstractSchemaMigrator.doMigration(AbstractSchemaMigrator.java:112) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.spi.SchemaManagementToolCoordinator.performDatabaseAction(SchemaManagementToolCoordinator.java:280) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.tool.schema.spi.SchemaManagementToolCoordinator.lambda$process$5(SchemaManagementToolCoordinator.java:144) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at java.base/java.util.HashMap.forEach(HashMap.java:1429) ~[na:na]
+	at org.hibernate.tool.schema.spi.SchemaManagementToolCoordinator.process(SchemaManagementToolCoordinator.java:141) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.boot.internal.SessionFactoryObserverForSchemaExport.sessionFactoryCreated(SessionFactoryObserverForSchemaExport.java:37) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.internal.SessionFactoryObserverChain.sessionFactoryCreated(SessionFactoryObserverChain.java:35) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.internal.SessionFactoryImpl.<init>(SessionFactoryImpl.java:324) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.boot.internal.SessionFactoryBuilderImpl.build(SessionFactoryBuilderImpl.java:463) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.hibernate.jpa.boot.internal.EntityManagerFactoryBuilderImpl.build(EntityManagerFactoryBuilderImpl.java:1517) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	at org.springframework.orm.jpa.vendor.SpringHibernateJpaPersistenceProvider.createContainerEntityManagerFactory(SpringHibernateJpaPersistenceProvider.java:66) ~[spring-orm-6.2.9.jar:6.2.9]
+	at org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean.createNativeEntityManagerFactory(LocalContainerEntityManagerFactoryBean.java:390) ~[spring-orm-6.2.9.jar:6.2.9]
+	at org.springframework.orm.jpa.AbstractEntityManagerFactoryBean.buildNativeEntityManagerFactory(AbstractEntityManagerFactoryBean.java:419) ~[spring-orm-6.2.9.jar:6.2.9]
+	at org.springframework.orm.jpa.AbstractEntityManagerFactoryBean.afterPropertiesSet(AbstractEntityManagerFactoryBean.java:400) ~[spring-orm-6.2.9.jar:6.2.9]
+	at org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean.afterPropertiesSet(LocalContainerEntityManagerFactoryBean.java:366) ~[spring-orm-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.invokeInitMethods(AbstractAutowireCapableBeanFactory.java:1873) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.initializeBean(AbstractAutowireCapableBeanFactory.java:1822) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.doCreateBean(AbstractAutowireCapableBeanFactory.java:607) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.createBean(AbstractAutowireCapableBeanFactory.java:529) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.lambda$doGetBean$0(AbstractBeanFactory.java:339) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.DefaultSingletonBeanRegistry.getSingleton(DefaultSingletonBeanRegistry.java:373) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.doGetBean(AbstractBeanFactory.java:337) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.getBean(AbstractBeanFactory.java:207) ~[spring-beans-6.2.9.jar:6.2.9]
+	at org.springframework.context.support.AbstractApplicationContext.finishBeanFactoryInitialization(AbstractApplicationContext.java:970) ~[spring-context-6.2.9.jar:6.2.9]
+	at org.springframework.context.support.AbstractApplicationContext.refresh(AbstractApplicationContext.java:627) ~[spring-context-6.2.9.jar:6.2.9]
+	at org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext.refresh(ServletWebServerApplicationContext.java:146) ~[spring-boot-3.5.4.jar:3.5.4]
+	at org.springframework.boot.SpringApplication.refresh(SpringApplication.java:752) ~[spring-boot-3.5.4.jar:3.5.4]
+	at org.springframework.boot.SpringApplication.refreshContext(SpringApplication.java:439) ~[spring-boot-3.5.4.jar:3.5.4]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:318) ~[spring-boot-3.5.4.jar:3.5.4]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1361) ~[spring-boot-3.5.4.jar:3.5.4]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1350) ~[spring-boot-3.5.4.jar:3.5.4]
+	at iuh.fit.ottbackend.OttBackendApplication.main(OttBackendApplication.java:10) ~[classes/:na]
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[na:na]
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[na:na]
+	at org.springframework.boot.devtools.restart.RestartLauncher.run(RestartLauncher.java:50) ~[spring-boot-devtools-3.5.4.jar:3.5.4]
+Caused by: org.postgresql.util.PSQLException: ERROR: column "username" does not exist
+	at org.postgresql.core.v3.QueryExecutorImpl.receiveErrorResponse(QueryExecutorImpl.java:2736) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.core.v3.QueryExecutorImpl.processResults(QueryExecutorImpl.java:2421) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.core.v3.QueryExecutorImpl.execute(QueryExecutorImpl.java:372) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.executeInternal(PgStatement.java:525) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.execute(PgStatement.java:435) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.executeWithFlags(PgStatement.java:357) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.executeCachedSql(PgStatement.java:342) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.executeWithFlags(PgStatement.java:318) ~[postgresql-42.7.8.jar:42.7.8]
+	at org.postgresql.jdbc.PgStatement.execute(PgStatement.java:313) ~[postgresql-42.7.8.jar:42.7.8]
+	at com.zaxxer.hikari.pool.ProxyStatement.execute(ProxyStatement.java:95) ~[HikariCP-6.3.1.jar:na]
+	at com.zaxxer.hikari.pool.HikariProxyStatement.execute(HikariProxyStatement.java) ~[HikariCP-6.3.1.jar:na]
+	at org.hibernate.tool.schema.internal.exec.GenerationTargetToDatabase.accept(GenerationTargetToDatabase.java:80) ~[hibernate-core-6.6.22.Final.jar:6.6.22.Final]
+	... 40 common frames omitted
+
+2026-01-12T00:26:18.397+07:00 DEBUG 22088 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists users 
+       drop constraint if exists UKr43af9ap4edm43mmtq01oddj6
+2026-01-12T00:26:18.525+07:00  WARN 22088 --- [ott-backend] [restartedMain] o.h.engine.jdbc.spi.SqlExceptionHelper   : SQL Warning Code: 0, SQLState: 00000
+2026-01-12T00:26:18.525+07:00  WARN 22088 --- [ott-backend] [restartedMain] o.h.engine.jdbc.spi.SqlExceptionHelper   : constraint "ukr43af9ap4edm43mmtq01oddj6" of relation "users" does not exist, skipping
+2026-01-12T00:26:18.526+07:00 DEBUG 22088 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists users 
+       add constraint UKr43af9ap4edm43mmtq01oddj6 unique (username)
+2026-01-12T00:26:23.635+07:00  INFO 22088 --- [ott-backend] [restartedMain] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-01-12T00:26:23.863+07:00 DEBUG 22088 --- [ott-backend] [restartedMain] s.w.s.m.m.a.RequestMappingHandlerMapping : 6 mappings in 'requestMappingHandlerMapping'
+2026-01-12T00:26:23.920+07:00 DEBUG 22088 --- [ott-backend] [restartedMain] o.s.w.s.handler.SimpleUrlHandlerMapping  : Patterns [/webjars/**, /**, /swagger-ui*/*swagger-initializer.js, /swagger-ui*/**] in 'resourceHandlerMapping'
+2026-01-12T00:26:23.944+07:00 DEBUG 22088 --- [ott-backend] [restartedMain] s.w.s.m.m.a.RequestMappingHandlerAdapter : ControllerAdvice beans: 0 @ModelAttribute, 0 @InitBinder, 1 RequestBodyAdvice, 1 ResponseBodyAdvice
+2026-01-12T00:26:24.013+07:00  WARN 22088 --- [ott-backend] [restartedMain] ion$DefaultTemplateResolverConfiguration : Cannot find template location: classpath:/templates/ (please add some templates, check your Thymeleaf configuration, or set spring.thymeleaf.check-template-location=false)
+2026-01-12T00:26:24.047+07:00 DEBUG 22088 --- [ott-backend] [restartedMain] .m.m.a.ExceptionHandlerExceptionResolver : ControllerAdvice beans: 1 @ExceptionHandler, 1 ResponseBodyAdvice
+2026-01-12T00:26:24.237+07:00  INFO 22088 --- [ott-backend] [restartedMain] org.quartz.impl.StdSchedulerFactory      : Using default implementation for ThreadExecutor
+2026-01-12T00:26:24.247+07:00  INFO 22088 --- [ott-backend] [restartedMain] org.quartz.core.SchedulerSignalerImpl    : Initialized Scheduler Signaller of type: class org.quartz.core.SchedulerSignalerImpl
+2026-01-12T00:26:24.247+07:00  INFO 22088 --- [ott-backend] [restartedMain] org.quartz.core.QuartzScheduler          : Quartz Scheduler v2.5.0 created.
+2026-01-12T00:26:24.248+07:00  INFO 22088 --- [ott-backend] [restartedMain] org.quartz.simpl.RAMJobStore             : RAMJobStore initialized.
+2026-01-12T00:26:24.248+07:00  INFO 22088 --- [ott-backend] [restartedMain] org.quartz.core.QuartzScheduler          : Scheduler meta-data: Quartz Scheduler (v2.5.0) 'quartzScheduler' with instanceId 'NON_CLUSTERED'
+  Scheduler class: 'org.quartz.core.QuartzScheduler' - running locally.
+  NOT STARTED.
+  Currently in standby mode.
+  Number of jobs executed: 0
+  Using thread pool 'org.quartz.simpl.SimpleThreadPool' - with 10 threads.
+  Using job-store 'org.quartz.simpl.RAMJobStore' - which does not support persistence. and is not clustered.
+
+2026-01-12T00:26:24.248+07:00  INFO 22088 --- [ott-backend] [restartedMain] org.quartz.impl.StdSchedulerFactory      : Quartz scheduler 'quartzScheduler' initialized from an externally provided properties instance.
+2026-01-12T00:26:24.248+07:00  INFO 22088 --- [ott-backend] [restartedMain] org.quartz.impl.StdSchedulerFactory      : Quartz scheduler version: 2.5.0
+2026-01-12T00:26:24.249+07:00  INFO 22088 --- [ott-backend] [restartedMain] org.quartz.core.QuartzScheduler          : JobFactory set to: org.springframework.scheduling.quartz.SpringBeanJobFactory@6746475b
+2026-01-12T00:26:24.433+07:00 DEBUG 22088 --- [ott-backend] [restartedMain] swordEncoderAuthenticationManagerBuilder : No authenticationProviders and no parentAuthenticationManager defined. Returning null.
+2026-01-12T00:26:24.536+07:00 DEBUG 22088 --- [ott-backend] [restartedMain] o.s.s.web.DefaultSecurityFilterChain     : Will secure any request with filters: DisableEncodeUrlFilter, WebAsyncManagerIntegrationFilter, SecurityContextHolderFilter, HeaderWriterFilter, CsrfFilter, LogoutFilter, OAuth2AuthorizationRequestRedirectFilter, OAuth2AuthorizationRequestRedirectFilter, OAuth2LoginAuthenticationFilter, DefaultResourcesFilter, DefaultLoginPageGeneratingFilter, DefaultLogoutPageGeneratingFilter, RequestCacheAwareFilter, SecurityContextHolderAwareRequestFilter, AnonymousAuthenticationFilter, OAuth2AuthorizationCodeGrantFilter, ExceptionTranslationFilter, AuthorizationFilter
+2026-01-12T00:26:24.590+07:00  INFO 22088 --- [ott-backend] [restartedMain] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 3 endpoints beneath base path '/actuator'
+2026-01-12T00:26:24.635+07:00  INFO 22088 --- [ott-backend] [restartedMain] o.s.b.d.a.OptionalLiveReloadServer       : LiveReload server is running on port 35729
+2026-01-12T00:26:24.694+07:00  INFO 22088 --- [ott-backend] [restartedMain] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/api'
+2026-01-12T00:26:24.695+07:00  INFO 22088 --- [ott-backend] [restartedMain] o.s.s.quartz.SchedulerFactoryBean        : Starting Quartz Scheduler now
+2026-01-12T00:26:24.696+07:00  INFO 22088 --- [ott-backend] [restartedMain] org.quartz.core.QuartzScheduler          : Scheduler quartzScheduler_$_NON_CLUSTERED started.
+2026-01-12T00:26:24.706+07:00  INFO 22088 --- [ott-backend] [restartedMain] i.fit.ottbackend.OttBackendApplication   : Started OttBackendApplication in 18.33 seconds (process running for 19.019)
+2026-01-12T00:26:25.201+07:00  INFO 22088 --- [ott-backend] [RMI TCP Connection(2)-192.168.1.9] o.a.c.c.C.[Tomcat].[localhost].[/api]    : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-01-12T00:26:25.201+07:00  INFO 22088 --- [ott-backend] [RMI TCP Connection(2)-192.168.1.9] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-01-12T00:26:25.201+07:00 DEBUG 22088 --- [ott-backend] [RMI TCP Connection(2)-192.168.1.9] o.s.web.servlet.DispatcherServlet        : Detected StandardServletMultipartResolver
+2026-01-12T00:26:25.202+07:00 DEBUG 22088 --- [ott-backend] [RMI TCP Connection(2)-192.168.1.9] o.s.web.servlet.DispatcherServlet        : Detected AcceptHeaderLocaleResolver
+2026-01-12T00:26:25.202+07:00 DEBUG 22088 --- [ott-backend] [RMI TCP Connection(2)-192.168.1.9] o.s.web.servlet.DispatcherServlet        : Detected FixedThemeResolver
+2026-01-12T00:26:25.203+07:00 DEBUG 22088 --- [ott-backend] [RMI TCP Connection(2)-192.168.1.9] o.s.web.servlet.DispatcherServlet        : Detected org.springframework.web.servlet.view.DefaultRequestToViewNameTranslator@70097c6d
+2026-01-12T00:26:25.205+07:00 DEBUG 22088 --- [ott-backend] [RMI TCP Connection(2)-192.168.1.9] o.s.web.servlet.DispatcherServlet        : Detected org.springframework.web.servlet.support.SessionFlashMapManager@262d860a
+2026-01-12T00:26:25.205+07:00 DEBUG 22088 --- [ott-backend] [RMI TCP Connection(2)-192.168.1.9] o.s.web.servlet.DispatcherServlet        : enableLoggingRequestDetails='false': request parameters and headers will be masked to prevent unsafe logging of potentially sensitive data
+2026-01-12T00:26:25.205+07:00  INFO 22088 --- [ott-backend] [RMI TCP Connection(2)-192.168.1.9] o.s.web.servlet.DispatcherServlet        : Completed initialization in 4 ms
+2026-01-12T00:28:07.534+07:00  INFO 22088 --- [ott-backend] [SpringApplicationShutdownHook] org.quartz.core.QuartzScheduler          : Scheduler quartzScheduler_$_NON_CLUSTERED paused.
+2026-01-12T00:28:07.535+07:00  INFO 22088 --- [ott-backend] [SpringApplicationShutdownHook] o.s.b.w.e.tomcat.GracefulShutdown        : Commencing graceful shutdown. Waiting for active requests to complete
+2026-01-12T00:28:07.540+07:00  INFO 22088 --- [ott-backend] [tomcat-shutdown] o.s.b.w.e.tomcat.GracefulShutdown        : Graceful shutdown complete
+2026-01-12T00:28:07.545+07:00  INFO 22088 --- [ott-backend] [SpringApplicationShutdownHook] o.s.s.quartz.SchedulerFactoryBean        : Shutting down Quartz Scheduler
+2026-01-12T00:28:07.545+07:00  INFO 22088 --- [ott-backend] [SpringApplicationShutdownHook] org.quartz.core.QuartzScheduler          : Scheduler quartzScheduler_$_NON_CLUSTERED shutting down.
+2026-01-12T00:28:07.545+07:00  INFO 22088 --- [ott-backend] [SpringApplicationShutdownHook] org.quartz.core.QuartzScheduler          : Scheduler quartzScheduler_$_NON_CLUSTERED paused.
+2026-01-12T00:28:07.545+07:00  INFO 22088 --- [ott-backend] [SpringApplicationShutdownHook] org.quartz.core.QuartzScheduler          : Scheduler quartzScheduler_$_NON_CLUSTERED shutdown complete.
+2026-01-12T00:28:07.546+07:00  INFO 22088 --- [ott-backend] [SpringApplicationShutdownHook] j.LocalContainerEntityManagerFactoryBean : Closing JPA EntityManagerFactory for persistence unit 'default'
+2026-01-12T00:28:07.549+07:00  INFO 22088 --- [ott-backend] [SpringApplicationShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...
+2026-01-12T00:28:08.306+07:00  INFO 22088 --- [ott-backend] [SpringApplicationShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.
+2026-01-12T00:29:38.840+07:00  INFO 20376 --- [ott-backend] [restartedMain] i.fit.ottbackend.OttBackendApplication   : Starting OttBackendApplication using Java 21.0.4 with PID 20376 (D:\DaiHoc\CongNgheMoi\project\ott-backend\target\classes started by nguye in D:\DaiHoc\CongNgheMoi\project\ott-backend)
+2026-01-12T00:29:38.841+07:00  INFO 20376 --- [ott-backend] [restartedMain] i.fit.ottbackend.OttBackendApplication   : No active profile set, falling back to 1 default profile: "default"
+2026-01-12T00:29:38.875+07:00  INFO 20376 --- [ott-backend] [restartedMain] .e.DevToolsPropertyDefaultsPostProcessor : Devtools property defaults active! Set 'spring.devtools.add-properties' to 'false' to disable
+2026-01-12T00:29:38.875+07:00  INFO 20376 --- [ott-backend] [restartedMain] .e.DevToolsPropertyDefaultsPostProcessor : For additional web related logging consider setting the 'logging.level.web' property to 'DEBUG'
+2026-01-12T00:29:39.832+07:00  INFO 20376 --- [ott-backend] [restartedMain] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-01-12T00:29:39.849+07:00  INFO 20376 --- [ott-backend] [restartedMain] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 10 ms. Found 0 JPA repository interfaces.
+2026-01-12T00:29:40.255+07:00  INFO 20376 --- [ott-backend] [restartedMain] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+2026-01-12T00:29:40.268+07:00  INFO 20376 --- [ott-backend] [restartedMain] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-01-12T00:29:40.268+07:00  INFO 20376 --- [ott-backend] [restartedMain] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.43]
+2026-01-12T00:29:40.315+07:00  INFO 20376 --- [ott-backend] [restartedMain] o.a.c.c.C.[Tomcat].[localhost].[/api]    : Initializing Spring embedded WebApplicationContext
+2026-01-12T00:29:40.316+07:00  INFO 20376 --- [ott-backend] [restartedMain] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 1440 ms
+2026-01-12T00:29:40.453+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] o.s.w.f.ServerHttpObservationFilter      : Filter 'webMvcObservationFilter' configured for use
+2026-01-12T00:29:40.682+07:00  INFO 20376 --- [ott-backend] [restartedMain] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-01-12T00:29:42.153+07:00  INFO 20376 --- [ott-backend] [restartedMain] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@50f80b2a
+2026-01-12T00:29:42.154+07:00  INFO 20376 --- [ott-backend] [restartedMain] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-01-12T00:29:42.310+07:00  INFO 20376 --- [ott-backend] [restartedMain] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://ep-hidden-mouse-a7rql89i-pooler.ap-southeast-2.aws.neon.tech:5432/neondb?sslmode=require&channel_binding=require (PostgreSQL 17.7)
+2026-01-12T00:29:44.338+07:00  INFO 20376 --- [ott-backend] [restartedMain] o.f.core.internal.command.DbValidate     : Successfully validated 1 migration (execution time 00:00.584s)
+2026-01-12T00:29:46.105+07:00  INFO 20376 --- [ott-backend] [restartedMain] o.f.core.internal.command.DbMigrate      : Current version of schema "public": 2
+2026-01-12T00:29:46.106+07:00 ERROR 20376 --- [ott-backend] [restartedMain] o.f.core.internal.command.DbMigrate      : Schema "public" has version 2, but no migration could be resolved in the configured locations !
+2026-01-12T00:29:46.247+07:00  INFO 20376 --- [ott-backend] [restartedMain] o.f.core.internal.command.DbMigrate      : Schema "public" is up to date. No migration necessary.
+2026-01-12T00:29:47.101+07:00  INFO 20376 --- [ott-backend] [restartedMain] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-01-12T00:29:47.140+07:00  INFO 20376 --- [ott-backend] [restartedMain] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.6.22.Final
+2026-01-12T00:29:47.161+07:00  INFO 20376 --- [ott-backend] [restartedMain] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-01-12T00:29:47.350+07:00  INFO 20376 --- [ott-backend] [restartedMain] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-01-12T00:29:47.534+07:00  WARN 20376 --- [ott-backend] [restartedMain] org.hibernate.orm.deprecation            : HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-01-12T00:29:47.821+07:00  INFO 20376 --- [ott-backend] [restartedMain] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-1)']
+	Database driver: undefined/unknown
+	Database version: 17.7
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-01-12T00:29:48.720+07:00  INFO 20376 --- [ott-backend] [restartedMain] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-01-12T00:29:48.730+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    set client_min_messages = WARNING
+2026-01-12T00:29:49.010+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists device_tokens 
+       drop constraint if exists FKhc7d11bnr8x9gs5biohdhnx1c
+2026-01-12T00:29:49.148+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists login_history 
+       drop constraint if exists FK20v0mimmdegh2afs39uixlxpm
+2026-01-12T00:29:49.288+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists qr_codes 
+       drop constraint if exists FK3fuowljt7nslh9cm23fq4pfyt
+2026-01-12T00:29:49.429+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists role_permissions 
+       drop constraint if exists FKegdk29eiy7mdtefy5c7eirr6e
+2026-01-12T00:29:49.569+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists role_permissions 
+       drop constraint if exists FKn5fotdgk8d1xvo8nav9uv3muc
+2026-01-12T00:29:49.709+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists two_factor_auth 
+       drop constraint if exists FKax3p7kk0ktwnpreejtt5661w
+2026-01-12T00:29:49.856+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists two_factor_backup_codes 
+       drop constraint if exists FKc4t5dn41oovjlvrte4ph70259
+2026-01-12T00:29:49.996+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists user_roles 
+       drop constraint if exists FKljgw07fam7v71ok817u4rvyro
+2026-01-12T00:29:50.141+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists user_roles 
+       drop constraint if exists FKh8ciramu9cc9q3qcqiv4ue8a6
+2026-01-12T00:29:50.281+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists user_roles 
+       drop constraint if exists FKhfh9dx7w3ubf1co1vdev94g3f
+2026-01-12T00:29:50.422+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists user_sessions 
+       drop constraint if exists FK8klxsgb8dcjjklmqebqp1twd5
+2026-01-12T00:29:50.563+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists user_settings 
+       drop constraint if exists FK8v82nj88rmai0nyck19f873dw
+2026-01-12T00:29:50.704+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    drop table if exists device_tokens cascade
+2026-01-12T00:29:50.845+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    drop table if exists login_history cascade
+2026-01-12T00:29:50.988+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    drop table if exists otp_codes cascade
+2026-01-12T00:29:51.127+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    drop table if exists permissions cascade
+2026-01-12T00:29:51.276+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    drop table if exists qr_codes cascade
+2026-01-12T00:29:51.417+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    drop table if exists role_permissions cascade
+2026-01-12T00:29:51.559+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    drop table if exists roles cascade
+2026-01-12T00:29:51.699+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    drop table if exists two_factor_auth cascade
+2026-01-12T00:29:51.840+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    drop table if exists two_factor_backup_codes cascade
+2026-01-12T00:29:51.979+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    drop table if exists user_roles cascade
+2026-01-12T00:29:52.120+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    drop table if exists user_sessions cascade
+2026-01-12T00:29:52.261+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    drop table if exists user_settings cascade
+2026-01-12T00:29:52.401+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    drop table if exists users cascade
+2026-01-12T00:29:52.552+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create table device_tokens (
+        is_active boolean,
+        created_at timestamp(6),
+        last_used_at timestamp(6),
+        device_type varchar(20) not null,
+        id varchar(255) not null,
+        token TEXT not null,
+        user_id varchar(255),
+        primary key (id)
+    )
+2026-01-12T00:29:52.695+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create table login_history (
+        created_at timestamp(6),
+        device_type varchar(20),
+        status varchar(20),
+        id varchar(255) not null,
+        ip_address varchar(255),
+        location varchar(255),
+        user_agent TEXT,
+        user_id varchar(255),
+        primary key (id)
+    )
+2026-01-12T00:29:52.840+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create table otp_codes (
+        is_used boolean,
+        code varchar(6) not null,
+        created_at timestamp(6),
+        expires_at timestamp(6) not null,
+        phone varchar(20),
+        type varchar(20) not null,
+        email varchar(255),
+        id varchar(255) not null,
+        primary key (id)
+    )
+2026-01-12T00:29:52.985+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create table permissions (
+        created_at timestamp(6),
+        action varchar(50) not null,
+        resource varchar(50) not null,
+        name varchar(100) not null unique,
+        description TEXT,
+        id varchar(255) not null,
+        primary key (id)
+    )
+2026-01-12T00:29:53.131+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create table qr_codes (
+        created_at timestamp(6),
+        expires_at timestamp(6),
+        qr_type varchar(20) not null,
+        id varchar(255) not null,
+        qr_data TEXT not null,
+        reference_id varchar(255),
+        user_id varchar(255),
+        primary key (id)
+    )
+2026-01-12T00:29:53.275+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create table role_permissions (
+        created_at timestamp(6),
+        id varchar(255) not null,
+        permission_id varchar(255),
+        role_id varchar(255),
+        primary key (id)
+    )
+2026-01-12T00:29:53.422+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create table roles (
+        is_system_role boolean,
+        created_at timestamp(6),
+        name varchar(50) not null unique,
+        display_name varchar(100),
+        description TEXT,
+        id varchar(255) not null,
+        primary key (id)
+    )
+2026-01-12T00:29:53.567+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create table two_factor_auth (
+        is_enabled boolean,
+        created_at timestamp(6),
+        secret_key varchar(255),
+        user_id varchar(255) not null,
+        primary key (user_id)
+    )
+2026-01-12T00:29:53.712+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create table two_factor_backup_codes (
+        backup_code varchar(255),
+        user_id varchar(255) not null
+    )
+2026-01-12T00:29:53.854+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create table user_roles (
+        assigned_at timestamp(6),
+        expires_at timestamp(6),
+        scope_type varchar(20),
+        assigned_by varchar(255),
+        id varchar(255) not null,
+        role_id varchar(255),
+        scope_id varchar(255),
+        user_id varchar(255),
+        primary key (id)
+    )
+2026-01-12T00:29:53.998+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create table user_sessions (
+        created_at timestamp(6),
+        expires_at timestamp(6) not null,
+        last_active_at timestamp(6),
+        device_type varchar(20),
+        refresh_token varchar(500),
+        session_token varchar(500) not null unique,
+        device_id varchar(255),
+        id varchar(255) not null,
+        ip_address varchar(255),
+        user_agent TEXT,
+        user_id varchar(255),
+        primary key (id)
+    )
+2026-01-12T00:29:54.145+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create table user_settings (
+        email_notification_enabled boolean,
+        notification_enabled boolean,
+        push_notification_enabled boolean,
+        read_receipts_enabled boolean,
+        show_last_seen boolean,
+        show_online_status boolean,
+        created_at timestamp(6),
+        updated_at timestamp(6),
+        language varchar(10),
+        theme varchar(20),
+        user_id varchar(255) not null,
+        primary key (user_id)
+    )
+2026-01-12T00:29:54.287+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create table users (
+        date_of_birth date,
+        is_active boolean,
+        is_verified boolean,
+        created_at timestamp(6),
+        deleted_at timestamp(6),
+        updated_at timestamp(6),
+        gender varchar(10),
+        phone varchar(20) not null unique,
+        username varchar(50) not null unique,
+        avatar_url varchar(500),
+        cover_url varchar(500),
+        bio TEXT,
+        email varchar(255) unique,
+        full_name varchar(255),
+        id varchar(255) not null,
+        password_hash varchar(255) not null,
+        primary key (id)
+    )
+2026-01-12T00:29:54.434+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create index idx_login_history_user 
+       on login_history (user_id, created_at)
+2026-01-12T00:29:54.578+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create index idx_otp_phone 
+       on otp_codes (phone, expires_at)
+2026-01-12T00:29:54.718+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create index idx_otp_email 
+       on otp_codes (email, expires_at)
+2026-01-12T00:29:54.858+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create index idx_permissions_resource 
+       on permissions (resource)
+2026-01-12T00:29:55.002+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create index idx_qr_user 
+       on qr_codes (user_id)
+2026-01-12T00:29:55.142+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create index idx_qr_reference 
+       on qr_codes (reference_id)
+2026-01-12T00:29:55.281+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create index idx_role_permissions_role 
+       on role_permissions (role_id)
+2026-01-12T00:29:55.423+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create index idx_role_permissions_permission 
+       on role_permissions (permission_id)
+2026-01-12T00:29:55.563+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create index idx_user_roles_user 
+       on user_roles (user_id)
+2026-01-12T00:29:55.704+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create index idx_user_roles_role 
+       on user_roles (role_id)
+2026-01-12T00:29:55.846+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create index idx_user_roles_scope 
+       on user_roles (scope_type, scope_id)
+2026-01-12T00:29:55.986+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create index idx_sessions_user 
+       on user_sessions (user_id)
+2026-01-12T00:29:56.129+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create index idx_sessions_token 
+       on user_sessions (session_token)
+2026-01-12T00:29:56.269+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create index idx_users_phone 
+       on users (phone)
+2026-01-12T00:29:56.412+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create index idx_users_username 
+       on users (username)
+2026-01-12T00:29:56.551+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    create index idx_users_email 
+       on users (email)
+2026-01-12T00:29:56.694+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists device_tokens 
+       add constraint FKhc7d11bnr8x9gs5biohdhnx1c 
+       foreign key (user_id) 
+       references users
+2026-01-12T00:29:56.835+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists login_history 
+       add constraint FK20v0mimmdegh2afs39uixlxpm 
+       foreign key (user_id) 
+       references users
+2026-01-12T00:29:56.975+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists qr_codes 
+       add constraint FK3fuowljt7nslh9cm23fq4pfyt 
+       foreign key (user_id) 
+       references users
+2026-01-12T00:29:57.116+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists role_permissions 
+       add constraint FKegdk29eiy7mdtefy5c7eirr6e 
+       foreign key (permission_id) 
+       references permissions
+2026-01-12T00:29:57.257+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists role_permissions 
+       add constraint FKn5fotdgk8d1xvo8nav9uv3muc 
+       foreign key (role_id) 
+       references roles
+2026-01-12T00:29:57.400+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists two_factor_auth 
+       add constraint FKax3p7kk0ktwnpreejtt5661w 
+       foreign key (user_id) 
+       references users
+2026-01-12T00:29:57.541+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists two_factor_backup_codes 
+       add constraint FKc4t5dn41oovjlvrte4ph70259 
+       foreign key (user_id) 
+       references two_factor_auth
+2026-01-12T00:29:57.681+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists user_roles 
+       add constraint FKljgw07fam7v71ok817u4rvyro 
+       foreign key (assigned_by) 
+       references users
+2026-01-12T00:29:57.822+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists user_roles 
+       add constraint FKh8ciramu9cc9q3qcqiv4ue8a6 
+       foreign key (role_id) 
+       references roles
+2026-01-12T00:29:57.962+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists user_roles 
+       add constraint FKhfh9dx7w3ubf1co1vdev94g3f 
+       foreign key (user_id) 
+       references users
+2026-01-12T00:29:58.103+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists user_sessions 
+       add constraint FK8klxsgb8dcjjklmqebqp1twd5 
+       foreign key (user_id) 
+       references users
+2026-01-12T00:29:58.243+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] org.hibernate.SQL                        : 
+    alter table if exists user_settings 
+       add constraint FK8v82nj88rmai0nyck19f873dw 
+       foreign key (user_id) 
+       references users
+2026-01-12T00:29:58.386+07:00  INFO 20376 --- [ott-backend] [restartedMain] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-01-12T00:29:58.599+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] s.w.s.m.m.a.RequestMappingHandlerMapping : 6 mappings in 'requestMappingHandlerMapping'
+2026-01-12T00:29:58.654+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] o.s.w.s.handler.SimpleUrlHandlerMapping  : Patterns [/webjars/**, /**, /swagger-ui*/*swagger-initializer.js, /swagger-ui*/**] in 'resourceHandlerMapping'
+2026-01-12T00:29:58.678+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] s.w.s.m.m.a.RequestMappingHandlerAdapter : ControllerAdvice beans: 0 @ModelAttribute, 0 @InitBinder, 1 RequestBodyAdvice, 1 ResponseBodyAdvice
+2026-01-12T00:29:58.719+07:00  WARN 20376 --- [ott-backend] [restartedMain] ion$DefaultTemplateResolverConfiguration : Cannot find template location: classpath:/templates/ (please add some templates, check your Thymeleaf configuration, or set spring.thymeleaf.check-template-location=false)
+2026-01-12T00:29:58.738+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] .m.m.a.ExceptionHandlerExceptionResolver : ControllerAdvice beans: 1 @ExceptionHandler, 1 ResponseBodyAdvice
+2026-01-12T00:29:58.942+07:00  INFO 20376 --- [ott-backend] [restartedMain] org.quartz.impl.StdSchedulerFactory      : Using default implementation for ThreadExecutor
+2026-01-12T00:29:58.952+07:00  INFO 20376 --- [ott-backend] [restartedMain] org.quartz.core.SchedulerSignalerImpl    : Initialized Scheduler Signaller of type: class org.quartz.core.SchedulerSignalerImpl
+2026-01-12T00:29:58.953+07:00  INFO 20376 --- [ott-backend] [restartedMain] org.quartz.core.QuartzScheduler          : Quartz Scheduler v2.5.0 created.
+2026-01-12T00:29:58.953+07:00  INFO 20376 --- [ott-backend] [restartedMain] org.quartz.simpl.RAMJobStore             : RAMJobStore initialized.
+2026-01-12T00:29:58.954+07:00  INFO 20376 --- [ott-backend] [restartedMain] org.quartz.core.QuartzScheduler          : Scheduler meta-data: Quartz Scheduler (v2.5.0) 'quartzScheduler' with instanceId 'NON_CLUSTERED'
+  Scheduler class: 'org.quartz.core.QuartzScheduler' - running locally.
+  NOT STARTED.
+  Currently in standby mode.
+  Number of jobs executed: 0
+  Using thread pool 'org.quartz.simpl.SimpleThreadPool' - with 10 threads.
+  Using job-store 'org.quartz.simpl.RAMJobStore' - which does not support persistence. and is not clustered.
+
+2026-01-12T00:29:58.954+07:00  INFO 20376 --- [ott-backend] [restartedMain] org.quartz.impl.StdSchedulerFactory      : Quartz scheduler 'quartzScheduler' initialized from an externally provided properties instance.
+2026-01-12T00:29:58.954+07:00  INFO 20376 --- [ott-backend] [restartedMain] org.quartz.impl.StdSchedulerFactory      : Quartz scheduler version: 2.5.0
+2026-01-12T00:29:58.954+07:00  INFO 20376 --- [ott-backend] [restartedMain] org.quartz.core.QuartzScheduler          : JobFactory set to: org.springframework.scheduling.quartz.SpringBeanJobFactory@c90280e
+2026-01-12T00:29:59.100+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] swordEncoderAuthenticationManagerBuilder : No authenticationProviders and no parentAuthenticationManager defined. Returning null.
+2026-01-12T00:29:59.249+07:00 DEBUG 20376 --- [ott-backend] [restartedMain] o.s.s.web.DefaultSecurityFilterChain     : Will secure any request with filters: DisableEncodeUrlFilter, WebAsyncManagerIntegrationFilter, SecurityContextHolderFilter, HeaderWriterFilter, CsrfFilter, LogoutFilter, OAuth2AuthorizationRequestRedirectFilter, OAuth2AuthorizationRequestRedirectFilter, OAuth2LoginAuthenticationFilter, DefaultResourcesFilter, DefaultLoginPageGeneratingFilter, DefaultLogoutPageGeneratingFilter, RequestCacheAwareFilter, SecurityContextHolderAwareRequestFilter, AnonymousAuthenticationFilter, OAuth2AuthorizationCodeGrantFilter, ExceptionTranslationFilter, AuthorizationFilter
+2026-01-12T00:29:59.299+07:00  INFO 20376 --- [ott-backend] [restartedMain] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 3 endpoints beneath base path '/actuator'
+2026-01-12T00:29:59.340+07:00  INFO 20376 --- [ott-backend] [restartedMain] o.s.b.d.a.OptionalLiveReloadServer       : LiveReload server is running on port 35729
+2026-01-12T00:29:59.397+07:00  INFO 20376 --- [ott-backend] [restartedMain] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/api'
+2026-01-12T00:29:59.398+07:00  INFO 20376 --- [ott-backend] [restartedMain] o.s.s.quartz.SchedulerFactoryBean        : Starting Quartz Scheduler now
+2026-01-12T00:29:59.398+07:00  INFO 20376 --- [ott-backend] [restartedMain] org.quartz.core.QuartzScheduler          : Scheduler quartzScheduler_$_NON_CLUSTERED started.
+2026-01-12T00:29:59.407+07:00  INFO 20376 --- [ott-backend] [restartedMain] i.fit.ottbackend.OttBackendApplication   : Started OttBackendApplication in 20.927 seconds (process running for 21.498)
+2026-01-12T00:29:59.828+07:00  INFO 20376 --- [ott-backend] [RMI TCP Connection(2)-192.168.1.9] o.a.c.c.C.[Tomcat].[localhost].[/api]    : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-01-12T00:29:59.828+07:00  INFO 20376 --- [ott-backend] [RMI TCP Connection(2)-192.168.1.9] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-01-12T00:29:59.828+07:00 DEBUG 20376 --- [ott-backend] [RMI TCP Connection(2)-192.168.1.9] o.s.web.servlet.DispatcherServlet        : Detected StandardServletMultipartResolver
+2026-01-12T00:29:59.828+07:00 DEBUG 20376 --- [ott-backend] [RMI TCP Connection(2)-192.168.1.9] o.s.web.servlet.DispatcherServlet        : Detected AcceptHeaderLocaleResolver
+2026-01-12T00:29:59.828+07:00 DEBUG 20376 --- [ott-backend] [RMI TCP Connection(2)-192.168.1.9] o.s.web.servlet.DispatcherServlet        : Detected FixedThemeResolver
+2026-01-12T00:29:59.829+07:00 DEBUG 20376 --- [ott-backend] [RMI TCP Connection(2)-192.168.1.9] o.s.web.servlet.DispatcherServlet        : Detected org.springframework.web.servlet.view.DefaultRequestToViewNameTranslator@487aaddd
+2026-01-12T00:29:59.830+07:00 DEBUG 20376 --- [ott-backend] [RMI TCP Connection(2)-192.168.1.9] o.s.web.servlet.DispatcherServlet        : Detected org.springframework.web.servlet.support.SessionFlashMapManager@17fcf02e
+2026-01-12T00:29:59.830+07:00 DEBUG 20376 --- [ott-backend] [RMI TCP Connection(2)-192.168.1.9] o.s.web.servlet.DispatcherServlet        : enableLoggingRequestDetails='false': request parameters and headers will be masked to prevent unsafe logging of potentially sensitive data
+2026-01-12T00:29:59.830+07:00  INFO 20376 --- [ott-backend] [RMI TCP Connection(2)-192.168.1.9] o.s.web.servlet.DispatcherServlet        : Completed initialization in 2 ms
+2026-01-12T00:31:53.861+07:00  INFO 20376 --- [ott-backend] [SpringApplicationShutdownHook] org.quartz.core.QuartzScheduler          : Scheduler quartzScheduler_$_NON_CLUSTERED paused.
+2026-01-12T00:31:53.862+07:00  INFO 20376 --- [ott-backend] [SpringApplicationShutdownHook] o.s.b.w.e.tomcat.GracefulShutdown        : Commencing graceful shutdown. Waiting for active requests to complete
+2026-01-12T00:31:53.868+07:00  INFO 20376 --- [ott-backend] [tomcat-shutdown] o.s.b.w.e.tomcat.GracefulShutdown        : Graceful shutdown complete
+2026-01-12T00:31:53.873+07:00  INFO 20376 --- [ott-backend] [SpringApplicationShutdownHook] o.s.s.quartz.SchedulerFactoryBean        : Shutting down Quartz Scheduler
+2026-01-12T00:31:53.873+07:00  INFO 20376 --- [ott-backend] [SpringApplicationShutdownHook] org.quartz.core.QuartzScheduler          : Scheduler quartzScheduler_$_NON_CLUSTERED shutting down.
+2026-01-12T00:31:53.874+07:00  INFO 20376 --- [ott-backend] [SpringApplicationShutdownHook] org.quartz.core.QuartzScheduler          : Scheduler quartzScheduler_$_NON_CLUSTERED paused.
+2026-01-12T00:31:53.874+07:00  INFO 20376 --- [ott-backend] [SpringApplicationShutdownHook] org.quartz.core.QuartzScheduler          : Scheduler quartzScheduler_$_NON_CLUSTERED shutdown complete.
+2026-01-12T00:31:53.874+07:00  INFO 20376 --- [ott-backend] [SpringApplicationShutdownHook] j.LocalContainerEntityManagerFactoryBean : Closing JPA EntityManagerFactory for persistence unit 'default'
+2026-01-12T00:31:53.877+07:00  INFO 20376 --- [ott-backend] [SpringApplicationShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...
+2026-01-12T00:31:54.636+07:00  INFO 20376 --- [ott-backend] [SpringApplicationShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.
