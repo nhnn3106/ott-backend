@@ -1,5 +1,8 @@
 package iuh.fit.ottbackend.entity;
 
+import iuh.fit.ottbackend.entity.enums.DeviceType;
+import iuh.fit.ottbackend.entity.enums.QrCodeStatus;
+import iuh.fit.ottbackend.entity.enums.QrCodeType;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -8,7 +11,8 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "qr_codes", indexes = {
         @Index(name = "idx_qr_user", columnList = "user_id"),
-        @Index(name = "idx_qr_reference", columnList = "reference_id")
+        @Index(name = "idx_qr_status", columnList = "status, expires_at"),
+        @Index(name = "idx_qr_data", columnList = "qr_data")
 })
 @Getter
 @Setter
@@ -20,22 +24,70 @@ public class QrCode {
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private User user;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "qr_type", nullable = false, length = 20)
-    private String qrType;
+    private QrCodeType qrType = QrCodeType.LOGIN;
 
-    @Column(name = "reference_id")
-    private String referenceId;
-
-    @Column(name = "qr_data", nullable = false, columnDefinition = "TEXT")
+    @Column(name = "qr_data", nullable = false, unique = true, columnDefinition = "TEXT")
     private String qrData;
 
-    @Column(name = "expires_at")
+    @Column(name = "device_id", length = 255)
+    private String deviceId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "device_type", length = 20)
+    private DeviceType deviceType;
+
+    @Column(name = "device_info", columnDefinition = "TEXT")
+    private String deviceInfo;
+
+    @Column(name = "ip_address", length = 45)
+    private String ipAddress;
+
+    @Column(name = "scanned_device_id", length = 255)
+    private String scannedDeviceId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "scanned_device_type", length = 20)
+    private DeviceType scannedDeviceType;
+
+    @Column(name = "scanned_device_info", columnDefinition = "TEXT")
+    private String scannedDeviceInfo;
+
+    @Column(name = "scanned_ip_address", length = 45)
+    private String scannedIpAddress;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    private QrCodeStatus status = QrCodeStatus.PENDING;
+
+    @Column(name = "scanned_at")
+    private LocalDateTime scannedAt;
+
+    @Column(name = "confirmed_at")
+    private LocalDateTime confirmedAt;
+
+    @Column(name = "expires_at", nullable = false)
     private LocalDateTime expiresAt;
 
-    @Column(name = "created_at")
+    @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt = LocalDateTime.now();
+
+    @Column(name = "location", length = 255)
+    private String location;
+
+    @Column(name = "failed_attempts")
+    private Integer failedAttempts = 0;
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = LocalDateTime.now();
+    }
 }

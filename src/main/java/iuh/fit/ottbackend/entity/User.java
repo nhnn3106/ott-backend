@@ -1,5 +1,7 @@
 package iuh.fit.ottbackend.entity;
 
+import iuh.fit.ottbackend.entity.enums.AccountType;
+import iuh.fit.ottbackend.entity.enums.Gender;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -7,11 +9,18 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "users", indexes = {
-        @Index(name = "idx_users_phone", columnList = "phone"),
-        @Index(name = "idx_users_username", columnList = "username"),
-        @Index(name = "idx_users_email", columnList = "email")
-})
+@Table(name = "users",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_user_phone", columnNames = "phone"),
+                @UniqueConstraint(name = "uk_user_email", columnNames = "email")
+        },
+        indexes = {
+                @Index(name = "idx_users_phone", columnList = "phone"),
+                @Index(name = "idx_users_email", columnList = "email"),
+                @Index(name = "idx_users_account_type", columnList = "account_type"),
+                @Index(name = "idx_users_is_active", columnList = "is_active")
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -28,13 +37,13 @@ public class User {
     @Column(unique = true)
     private String email;
 
-    @Column(nullable = false, unique = true, length = 50)
-    private String username;
+    @Column(name = "google_id", unique = true, length = 100)
+    private String googleId;
 
-    @Column(name = "password_hash", nullable = false)
+    @Column(name = "password_hash")
     private String passwordHash;
 
-    @Column(name = "full_name")
+    @Column(name = "full_name", nullable = false)
     private String fullName;
 
     @Column(name = "avatar_url", length = 500)
@@ -49,21 +58,52 @@ public class User {
     @Column(name = "date_of_birth")
     private LocalDate dateOfBirth;
 
+    @Enumerated(EnumType.STRING)
     @Column(length = 10)
-    private String gender;
+    private Gender gender;
 
-    @Column(name = "is_verified")
-    private Boolean isVerified = false;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "account_type", nullable = false, length = 20)
+    private AccountType accountType = AccountType.USER;
+
+    @Column(name = "is_phone_verified")
+    private Boolean isPhoneVerified = false;
+
+    @Column(name = "is_email_verified")
+    private Boolean isEmailVerified = false;
+
+    @Column(name = "phone_verified_at")
+    private LocalDateTime phoneVerifiedAt;
+
+    @Column(name = "email_verified_at")
+    private LocalDateTime emailVerifiedAt;
 
     @Column(name = "is_active")
     private Boolean isActive = true;
 
-    @Column(name = "created_at")
+    @Column(name = "is_blocked")
+    private Boolean isBlocked = false;
+
+    @Column(name = "blocked_until")
+    private LocalDateTime blockedUntil;
+
+    @Column(name = "blocked_reason", columnDefinition = "TEXT")
+    private String blockedReason;
+
+    @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
-    @Column(name = "updated_at")
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt = LocalDateTime.now();
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
+
+    @Column(name = "last_login_at")
+    private LocalDateTime lastLoginAt;
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = LocalDateTime.now();
+    }
 }

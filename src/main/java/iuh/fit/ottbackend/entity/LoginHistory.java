@@ -1,5 +1,8 @@
 package iuh.fit.ottbackend.entity;
 
+import iuh.fit.ottbackend.entity.enums.DeviceType;
+import iuh.fit.ottbackend.entity.enums.LoginMethod;
+import iuh.fit.ottbackend.entity.enums.LoginStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -7,7 +10,9 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "login_history", indexes = {
-        @Index(name = "idx_login_history_user", columnList = "user_id, created_at")
+        @Index(name = "idx_login_history_user", columnList = "user_id, created_at"),
+        @Index(name = "idx_login_status", columnList = "status"),
+        @Index(name = "idx_login_method", columnList = "login_method")
 })
 @Getter
 @Setter
@@ -19,25 +24,40 @@ public class LoginHistory {
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private User user;
 
-    @Column(name = "ip_address")
+    @Column(name = "ip_address", length = 45)
     private String ipAddress;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "device_type", length = 20)
-    private String deviceType;
+    private DeviceType deviceType;
+
+    @Column(name = "device_id", length = 255)
+    private String deviceId;
 
     @Column(name = "user_agent", columnDefinition = "TEXT")
     private String userAgent;
 
-    @Column(length = 20)
-    private String status;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "login_method", length = 20, nullable = false)
+    private LoginMethod loginMethod;
 
-    @Column
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private LoginStatus status;
+
+    @Column(length = 255)
     private String location;
 
-    @Column(name = "created_at")
+    @Column(name = "qr_code_id")
+    private String qrCodeId;
+
+    @Column(name = "failure_reason", columnDefinition = "TEXT")
+    private String failureReason;
+
+    @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 }
