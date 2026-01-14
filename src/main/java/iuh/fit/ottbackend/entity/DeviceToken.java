@@ -3,6 +3,8 @@ package iuh.fit.ottbackend.entity;
 import iuh.fit.ottbackend.entity.enums.DeviceType;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 
@@ -42,24 +44,21 @@ public class DeviceToken {
     @Column(name = "device_name", length = 255)
     private String deviceName;
 
-    // FCM token cho push notification
     @Column(nullable = false, columnDefinition = "TEXT")
     private String token;
 
     @Column(name = "is_active")
+    @Builder.Default
     private Boolean isActive = true;
 
-    @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt = LocalDateTime.now();
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
 
+    @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt = LocalDateTime.now();
+    private LocalDateTime updatedAt;
 
     @Column(name = "last_used_at")
     private LocalDateTime lastUsedAt;
-
-    @PreUpdate
-    protected void onUpdate() {
-        this.updatedAt = LocalDateTime.now();
-    }
 }

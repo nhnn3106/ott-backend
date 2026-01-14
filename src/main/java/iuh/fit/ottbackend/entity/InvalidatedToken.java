@@ -3,6 +3,7 @@ package iuh.fit.ottbackend.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
+import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 
@@ -31,8 +32,9 @@ public class InvalidatedToken {
     @Column(name = "token_type", length = 20)
     String tokenType;
 
-    @Column(name = "invalidated_at", nullable = false)
-    LocalDateTime invalidatedAt = LocalDateTime.now();
+    @CreationTimestamp
+    @Column(name = "invalidated_at", nullable = false, updatable = false)
+    LocalDateTime invalidatedAt;
 
     @Column(name = "reason", columnDefinition = "TEXT")
     String reason;

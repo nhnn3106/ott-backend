@@ -4,6 +4,7 @@ import iuh.fit.ottbackend.entity.enums.DeviceType;
 import iuh.fit.ottbackend.entity.enums.LoginMethod;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 
@@ -56,6 +57,7 @@ public class UserSession {
     private LoginMethod loginMethod;
 
     @Column(name = "is_active")
+    @Builder.Default
     private Boolean isActive = true;
 
     @Column(name = "expires_at", nullable = false)
@@ -64,11 +66,12 @@ public class UserSession {
     @Column(name = "refresh_expires_at")
     private LocalDateTime refreshExpiresAt;
 
-    @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt = LocalDateTime.now();
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
 
-    @Column(name = "last_active_at", nullable = false)
-    private LocalDateTime lastActiveAt = LocalDateTime.now();
+    @Column(name = "last_active_at")
+    private LocalDateTime lastActiveAt;
 
     @Column(name = "revoked_at")
     private LocalDateTime revokedAt;
@@ -76,18 +79,23 @@ public class UserSession {
     @Column(name = "revoked_reason", columnDefinition = "TEXT")
     private String revokedReason;
 
-    // Check session có hợp lệ không
-    public boolean isValid() {
-        return isActive && !isExpired() && revokedAt == null;
-    }
-
-    // Check session đã hết hạn chưa
-    public boolean isExpired() {
-        return LocalDateTime.now().isAfter(expiresAt);
+    @PrePersist
+    protected void onCreate() {
+        if (lastActiveAt == null) {
+            lastActiveAt = LocalDateTime.now();
+        }
     }
 
     @PreUpdate
     protected void onUpdate() {
         this.lastActiveAt = LocalDateTime.now();
+    }
+
+    public boolean isValid() {
+        return isActive && !isExpired() && revokedAt == null;
+    }
+
+    public boolean isExpired() {
+        return LocalDateTime.now().isAfter(expiresAt);
     }
 }

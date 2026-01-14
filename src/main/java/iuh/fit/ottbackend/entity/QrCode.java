@@ -5,6 +5,8 @@ import iuh.fit.ottbackend.entity.enums.QrCodeStatus;
 import iuh.fit.ottbackend.entity.enums.QrCodeType;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 
@@ -21,7 +23,6 @@ import java.time.LocalDateTime;
 @Builder
 public class QrCode {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -30,6 +31,7 @@ public class QrCode {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "qr_type", nullable = false, length = 20)
+    @Builder.Default
     private QrCodeType qrType = QrCodeType.LOGIN;
 
     @Column(name = "qr_data", nullable = false, unique = true, columnDefinition = "TEXT")
@@ -63,6 +65,7 @@ public class QrCode {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
+    @Builder.Default
     private QrCodeStatus status = QrCodeStatus.PENDING;
 
     @Column(name = "scanned_at")
@@ -74,20 +77,18 @@ public class QrCode {
     @Column(name = "expires_at", nullable = false)
     private LocalDateTime expiresAt;
 
-    @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt = LocalDateTime.now();
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
 
+    @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt = LocalDateTime.now();
+    private LocalDateTime updatedAt;
 
     @Column(name = "location", length = 255)
     private String location;
 
     @Column(name = "failed_attempts")
+    @Builder.Default
     private Integer failedAttempts = 0;
-
-    @PreUpdate
-    protected void onUpdate() {
-        this.updatedAt = LocalDateTime.now();
-    }
 }

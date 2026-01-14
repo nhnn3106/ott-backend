@@ -4,6 +4,8 @@ import iuh.fit.ottbackend.entity.enums.AccountType;
 import iuh.fit.ottbackend.entity.enums.Gender;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -64,12 +66,15 @@ public class User {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "account_type", nullable = false, length = 20)
+    @Builder.Default
     private AccountType accountType = AccountType.USER;
 
     @Column(name = "is_phone_verified")
+    @Builder.Default
     private Boolean isPhoneVerified = false;
 
     @Column(name = "is_email_verified")
+    @Builder.Default
     private Boolean isEmailVerified = false;
 
     @Column(name = "phone_verified_at")
@@ -79,9 +84,11 @@ public class User {
     private LocalDateTime emailVerifiedAt;
 
     @Column(name = "is_active")
+    @Builder.Default
     private Boolean isActive = true;
 
     @Column(name = "is_blocked")
+    @Builder.Default
     private Boolean isBlocked = false;
 
     @Column(name = "blocked_until")
@@ -90,11 +97,13 @@ public class User {
     @Column(name = "blocked_reason", columnDefinition = "TEXT")
     private String blockedReason;
 
-    @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt = LocalDateTime.now();
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
 
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt = LocalDateTime.now();
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
@@ -102,8 +111,4 @@ public class User {
     @Column(name = "last_login_at")
     private LocalDateTime lastLoginAt;
 
-    @PreUpdate
-    protected void onUpdate() {
-        this.updatedAt = LocalDateTime.now();
-    }
 }
