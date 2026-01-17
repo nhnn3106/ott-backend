@@ -16,9 +16,14 @@ import lombok.*;
 public class Tag {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
+    private String id;
+
+    @Column(name = "name")
+    private String name;
 
     @ManyToOne
     @JoinColumn(name = "post_id")
     private Post post;
+}
 
 

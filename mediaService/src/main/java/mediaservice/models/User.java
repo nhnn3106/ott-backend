@@ -1,5 +1,6 @@
 package mediaservice.models;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -26,5 +27,6 @@ public class User {
 //    user này sở hữu bao nhiêu official account
     @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
     @ToString.Exclude
+    @JsonIgnore
     private Set<OfficialAccount> officialAccounts;
 }

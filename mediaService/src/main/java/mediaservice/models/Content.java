@@ -1,5 +1,6 @@
 package mediaservice.models;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import mediaservice.models.enums.VisibilityType;
@@ -30,6 +31,7 @@ public abstract class Content {
 
 //    chủ bài đăng
     @ManyToOne
+    @JsonIgnore
     private User user;
 
     @ManyToMany
@@ -37,6 +39,7 @@ public abstract class Content {
             joinColumns = @JoinColumn(name = "content_id"),
             inverseJoinColumns = @JoinColumn(name = "user_id")
     )
+    @JsonIgnore
     private Set<User> mentionedUsers;
 
 
@@ -51,12 +54,14 @@ public abstract class Content {
     private int totalReactionsCount;
 
     @OneToMany(mappedBy = "content", cascade = CascadeType.ALL)
+    @JsonIgnore
     private Set<Reaction> reactions;
 
     @Column(name = "comments_count")
     private int commentsCount;
 
     @OneToMany(mappedBy = "content")
+    @JsonIgnore
     private Set<Comment> comments;
 
 

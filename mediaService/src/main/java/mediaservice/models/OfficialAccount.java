@@ -1,5 +1,6 @@
 package mediaservice.models;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -23,6 +24,7 @@ public class OfficialAccount {
 //    Chủ sở hữu
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
+    @JsonIgnore
     private User user;
 
 
@@ -42,6 +44,7 @@ public class OfficialAccount {
     private int followersCount;
 
     @OneToMany(mappedBy = "oa", cascade = CascadeType.ALL)
+    @JsonIgnore
     private Set<OAFollower> OAFollowers;
 
 
@@ -68,10 +71,12 @@ class OAFollower {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "oa_id", nullable = false)
+    @JsonIgnore
     private OfficialAccount oa;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
+    @JsonIgnore
     private User user;
 
     @CreationTimestamp

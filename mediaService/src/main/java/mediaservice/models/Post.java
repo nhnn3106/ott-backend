@@ -1,5 +1,6 @@
 package mediaservice.models;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -13,6 +14,7 @@ import java.util.Set;
 @NoArgsConstructor
 @Setter
 @Getter
+@Builder
 @ToString(callSuper = true)
 @EqualsAndHashCode(callSuper = true)
 public class Post extends Content {
@@ -21,5 +23,6 @@ public class Post extends Content {
     private String content;
 
     @OneToMany(mappedBy = "post")
+    @JsonIgnore
     private Set<Tag> tags;
 }
