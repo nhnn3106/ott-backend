@@ -3,7 +3,7 @@ const ParticipantService = require("../services/participantService");
 
 exports.createConversation = async (req, res) => {
   try {
-    const { creatorId, type } = req.body;
+    const { creatorId, type, memberIds } = req.body;
     let role = "user";
     const conversation = await ConversationService.createConversation({
       creatorId,

@@ -29,5 +29,5 @@ exports.updateUserStatus = async (user_id, isOnline) => {
 };
 
 exports.getAllUsers = async () => {
-  return await User.find().sort({ last_active_at: -1 });
+  return await User.find();
 };
