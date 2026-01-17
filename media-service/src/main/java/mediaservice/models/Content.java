@@ -21,8 +21,7 @@ import java.util.Set;
 @Entity
 @AllArgsConstructor
 @NoArgsConstructor
-@Setter
-@Getter
+@Builder
 @Data
 public abstract class Content {
     @Id

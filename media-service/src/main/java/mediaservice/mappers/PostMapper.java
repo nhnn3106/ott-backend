@@ -2,6 +2,7 @@ package mediaservice.mappers;
 
 import mediaservice.dtos.requests.PostRequest;
 import mediaservice.dtos.responses.PostResponse;
+import mediaservice.models.Content;
 import mediaservice.models.Post;
 import mediaservice.models.User;
 import mediaservice.models.enums.VisibilityType;
@@ -12,23 +13,17 @@ public class PostMapper {
 
     public Post toEntity(PostRequest request) {
         Post post = new Post();
+
         post.setContent(request.getContent());
 
-        // Set user if userId is provided
-        if (request.getUserId() != null) {
-            User user = new User();
-            user.setId(request.getUserId());
-            post.setUser(user);
-        }
+        User user = new User();
+        user.setId(request.getUserId());
 
-        // Set visibility
-        if (request.getVisibility() != null) {
-            post.setVisibility(VisibilityType.valueOf(request.getVisibility().toUpperCase()));
-        }
+        post.setUser(user);
 
-        if(request.getMetadata() != null) {
-            post.setMetadata(request.getMetadata());
-        }
+        post.setVisibility(VisibilityType.valueOf(request.getVisibility()));
+
+        post.setMetadata(request.getMetadata());
 
         return post;
     }

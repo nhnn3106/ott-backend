@@ -10,9 +10,4 @@ import org.springframework.stereotype.Service;
 public class ContentServiceImpl {
     private ContentRepository contentRepository;
 
-    public Content findByID(String id) {
-        return contentRepository.findById(id).orElse(null);
-    }
-
-
 }

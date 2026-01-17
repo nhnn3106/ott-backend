@@ -12,11 +12,10 @@ import java.util.Set;
 @Entity
 @AllArgsConstructor
 @NoArgsConstructor
-@Setter
-@Getter
 @Builder
 @ToString(callSuper = true)
 @EqualsAndHashCode(callSuper = true)
+@Data
 public class Post extends Content {
 
     @Column(name = "content", columnDefinition = "TEXT")
