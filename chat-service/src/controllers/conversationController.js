@@ -20,6 +20,26 @@ exports.createConversation = async (req, res) => {
       role: role,
     });
 
+    if (memberIds && Array.isArray(memberIds) && memberIds.length > 0) {
+      await Promise.all(
+        memberIds.map(async (userId) => {
+          const member = await ParticipantService.addParticipant({
+            conversationId: conversation._id,
+            userId: userId,
+            role: "user",
+          });
+
+          req.io.to(conversation._id).emit("them_nguoi_moi", member);
+
+          console.log(
+            `${userId} da duoc them vao phong ${conversation._id} o database`,
+          );
+
+          return member;
+        }),
+      );
+    }
+
     req.io.emit("tao_phong_moi", conversation);
     console.log(`Phong ${conversation._id} moi duoc tao ra o database`);
 
