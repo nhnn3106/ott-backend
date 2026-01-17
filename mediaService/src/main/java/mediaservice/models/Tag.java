@@ -6,6 +6,7 @@ import lombok.*;
 @Table(name = "tags")
 
 
+
 @Entity
 @AllArgsConstructor
 @NoArgsConstructor
@@ -15,11 +16,9 @@ import lombok.*;
 public class Tag {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    private String id;
-    private String name;
 
     @ManyToOne
     @JoinColumn(name = "post_id")
     private Post post;
 
-}
+
