@@ -2,11 +2,9 @@ package iuh.fit.ottbackend.dto.response;
 
 import iuh.fit.ottbackend.entity.enums.AccountType;
 import iuh.fit.ottbackend.entity.enums.Gender;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -21,18 +19,15 @@ public class UserProfileResponse {
     private String avatarUrl;
     private String coverUrl;
     private String bio;
+    private LocalDate dateOfBirth;
     private Gender gender;
-    private LocalDateTime dateOfBirth;
     private AccountType accountType;
-    private Boolean isActive;
-    private Boolean isBlocked;
-    private String blockedReason;
-    private LocalDateTime blockedUntil;
-    private Boolean isEmailVerified;
     private Boolean isPhoneVerified;
-    private LocalDateTime emailVerifiedAt;
+    private Boolean isEmailVerified;
+    private Boolean hasPassword;
+    private Boolean hasGoogleLinked;
     private LocalDateTime phoneVerifiedAt;
+    private LocalDateTime emailVerifiedAt;
     private LocalDateTime lastLoginAt;
     private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
 }

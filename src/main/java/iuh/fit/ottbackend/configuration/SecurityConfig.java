@@ -26,9 +26,8 @@ public class SecurityConfig {
     @Autowired
     private CustomJwtDecoder customJwtDecoder;
 
-
     private final String[] PUBLIC_ENDPOINTS = {
-            // Auth endpoints - Login/Register/Refresh
+            // Auth endpoints
             "/auth/login",
             "/auth/register",
             "/auth/refresh",
@@ -39,31 +38,46 @@ public class SecurityConfig {
             "/auth/google",
             "/auth/google/link",
 
-            // QR Code - Generate và Check status (public)
+            // QR Code
             "/auth/qr/generate",
             "/auth/qr/status/**",
             "/auth/qr/cancel/**",
 
+            // Email OTP Login
+            "/auth/otp/email/request",
+            "/auth/otp/email/verify",
+
+            // User registration and password reset
+            "/users/register",
+            "/users/forgot-password/request",
+            "/users/forgot-password/verify",
+
+            // OTP requests (public)
+            "/otp/register/phone",
+            "/otp/link/phone",
+            "/otp/link/email"
     };
 
-
     private final String[] AUTHENTICATED_ENDPOINTS = {
-
+            // QR Code scan/confirm
             "/auth/qr/scan",
             "/auth/qr/confirm",
 
-
+            // User profile and settings
             "/users/me",
-            "/users/profile/**"
+            "/users/me/**",
+            "/users/profile/**",
+            "/users/link-phone",
+            "/users/link-email",
+            "/users/set-password",
+            "/users/change-password"
     };
-
 
     private final String[] OA_ENDPOINTS = {
             "/oa/**",
             "/content/manage/**",
             "/posts/**"
     };
-
 
     private final String[] ADMIN_ENDPOINTS = {
             "/admin/**",
@@ -89,9 +103,7 @@ public class SecurityConfig {
                         .authenticationEntryPoint(new JwtAuthenticationEntryPoint())
                 )
 
-
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-
 
                 .csrf(AbstractHttpConfigurer::disable);
 
@@ -103,15 +115,11 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
 
         configuration.setAllowedOriginPatterns(Arrays.asList(
-
                 "http://localhost:*",
                 "http://127.0.0.1:*",
-
-
                 "http://192.168.*.*:*",
                 "http://10.*.*.*:*",
                 "http://172.16.*.*:*"
-
         ));
 
         configuration.setAllowedMethods(Arrays.asList(
@@ -141,7 +149,6 @@ public class SecurityConfig {
 
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
         converter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
-
         converter.setPrincipalClaimName("userId");
 
         return converter;

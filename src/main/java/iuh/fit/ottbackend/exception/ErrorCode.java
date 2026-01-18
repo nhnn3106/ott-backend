@@ -192,7 +192,89 @@ public enum ErrorCode {
     INVALID_STATE_TRANSITION(1251, "Invalid state transition", HttpStatus.BAD_REQUEST),
     RESOURCE_LOCKED(1252, "Resource is locked", HttpStatus.LOCKED),
     DEPENDENCY_NOT_MET(1253, "Required dependency not met", HttpStatus.BAD_REQUEST),
-    CONFLICT(1254, "Resource conflict", HttpStatus.CONFLICT);
+    CONFLICT(1254, "Resource conflict", HttpStatus.CONFLICT),
+
+    // Email errors
+    EMAIL_SEND_FAILED(1340, "Failed to send email", HttpStatus.INTERNAL_SERVER_ERROR),
+    INVALID_EMAIL_FORMAT(1341, "Invalid email format", HttpStatus.BAD_REQUEST),
+    EMAIL_ALREADY_VERIFIED(1342, "Email already verified", HttpStatus.BAD_REQUEST),
+
+    // OTP errors
+    INVALID_OTP_CODE(1352, "Invalid OTP code", HttpStatus.BAD_REQUEST),
+    OTP_MAX_ATTEMPTS_EXCEEDED(1353, "Maximum OTP attempts exceeded", HttpStatus.TOO_MANY_REQUESTS),
+    OTP_RATE_LIMIT_EXCEEDED(1354, "Too many OTP requests. Please try again later", HttpStatus.TOO_MANY_REQUESTS),
+
+    // User related
+    USER_NOT_FOUND(1001, "User not found", HttpStatus.NOT_FOUND),
+    PHONE_ALREADY_EXISTS(1002, "Phone number already exists", HttpStatus.BAD_REQUEST),
+    EMAIL_ALREADY_EXISTS(1003, "Email already exists", HttpStatus.BAD_REQUEST),
+    PHONE_ALREADY_LINKED(1004, "Phone number already linked", HttpStatus.BAD_REQUEST),
+    EMAIL_ALREADY_LINKED(1005, "Email already linked", HttpStatus.BAD_REQUEST),
+    PASSWORD_NOT_SET(1006, "Password not set", HttpStatus.BAD_REQUEST),
+    PASSWORD_ALREADY_SET(1007, "Password already set", HttpStatus.BAD_REQUEST),
+    INCORRECT_PASSWORD(1008, "Incorrect password", HttpStatus.BAD_REQUEST),
+    PASSWORD_NOT_MATCH(1009, "Password does not match", HttpStatus.BAD_REQUEST),
+
+
+    OTP_RATE_LIMIT(2006, "Too many OTP requests. Please try again later", HttpStatus.TOO_MANY_REQUESTS),
+
+
+
+
+    FORBIDDEN(4002, "Forbidden", HttpStatus.FORBIDDEN),
+
+    // General
+    INVALID_REQUEST(5001, "Invalid request", HttpStatus.BAD_REQUEST),
+    INTERNAL_SERVER_ERROR(5002, "Internal server error", HttpStatus.INTERNAL_SERVER_ERROR),
+    SERVICE_UNAVAILABLE(5003, "Service unavailable", HttpStatus.SERVICE_UNAVAILABLE),
+
+    INVALID_PHONE_FORMAT(4027, "Invalid phone number format. Use format: 0XXXXXXXXX", HttpStatus.BAD_REQUEST),
+
+
+    // ==================== OAUTH/GOOGLE AUTH ERRORS (1160-1169) ====================
+    EMAIL_ALREADY_LINKED_TO_ANOTHER_GOOGLE(1165, "This email is already linked to another Google account", HttpStatus.BAD_REQUEST),
+    GOOGLE_ALREADY_LINKED(1166, "User already has a Google account linked", HttpStatus.BAD_REQUEST),
+    INVALID_GOOGLE_EMAIL(1167, "Invalid email from Google account", HttpStatus.BAD_REQUEST),
+
+    ACCOUNT_DELETED(4035, "This account has been deleted", HttpStatus.FORBIDDEN),
+    ACCOUNT_ALREADY_DELETED(4036, "Account is already deleted", HttpStatus.BAD_REQUEST),
+
+    // Email errors
+
+    EMAIL_REQUIRED(1026, "Email is required", HttpStatus.BAD_REQUEST),
+    EMAIL_REQUIRED_FOR_PASSWORD_RESET(1027, "Email is required for password reset. Please contact support.", HttpStatus.BAD_REQUEST),
+    EMAIL_MISMATCH(1028, "Provided email does not match user's registered email", HttpStatus.BAD_REQUEST),
+
+
+    INVALID_DEVICE_ID(1156, "Invalid device ID", HttpStatus.BAD_REQUEST),
+
+    TOO_MANY_PENDING_QR_LOGINS(4033, "Too many pending QR login requests. Please cancel some first.", HttpStatus.TOO_MANY_REQUESTS),
+
+    INVALID_PASSWORD_FORMAT(4021, "Password must be at least 8 characters with uppercase, lowercase, and number", HttpStatus.BAD_REQUEST),
+
+    NEW_PASSWORD_SAME_AS_OLD(4022, "New password must be different from old password", HttpStatus.BAD_REQUEST),
+
+    PASSWORD_REQUIRED(4020, "Password is required", HttpStatus.BAD_REQUEST),
+
+    FULL_NAME_REQUIRED(4040, "Full name is required", HttpStatus.BAD_REQUEST),
+    INVALID_FULL_NAME(4041, "Full name is invalid or too long (max 100 characters)", HttpStatus.BAD_REQUEST),
+    BIO_TOO_LONG(4042, "Bio is too long (max 500 characters)", HttpStatus.BAD_REQUEST),
+    // INVALID_DATE_OF_BIRTH - Already exists at line 1012, keep it
+    INVALID_AVATAR_URL(4044, "Invalid avatar URL", HttpStatus.BAD_REQUEST),
+    INVALID_COVER_URL(4045, "Invalid cover URL", HttpStatus.BAD_REQUEST),
+
+    // 2FA errors
+    TWO_FACTOR_AUTH_REQUIRED(1160, "Two-factor authentication required", HttpStatus.UNAUTHORIZED),
+    TWO_FACTOR_AUTH_INVALID(1161, "Invalid 2FA code", HttpStatus.BAD_REQUEST),
+    TWO_FACTOR_AUTH_NOT_ENABLED(1162, "Two-factor authentication is not enabled", HttpStatus.BAD_REQUEST),
+    TWO_FACTOR_AUTH_ALREADY_ENABLED(1163, "Two-factor authentication is already enabled", HttpStatus.BAD_REQUEST),
+
+    // Google linking
+    GOOGLE_LINK_PHONE_REQUIRED(1164, "Phone number required to link Google account", HttpStatus.BAD_REQUEST),
+    GOOGLE_LINK_OTP_REQUIRED(1165, "OTP verification required to link Google account", HttpStatus.BAD_REQUEST),
+    ;
+
+
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {
         this.code = code;

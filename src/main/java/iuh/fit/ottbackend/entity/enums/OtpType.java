@@ -4,13 +4,15 @@ import lombok.Getter;
 
 @Getter
 public enum OtpType {
-    LOGIN("login"),
-    REGISTER("register"),
+    LOGIN_OTP_EMAIL("login_otp_email"),
+    EMAIL_VERIFICATION("email_verification"),
     RESET_PASSWORD("reset_password"),
-    VERIFY_PHONE("verify_phone"),
-    VERIFY_EMAIL("verify_email"),
-    CHANGE_PHONE("change_phone"),
-    LINK_ACCOUNT("link_account")
+    CHANGE_EMAIL("change_email"),
+    LINK_GOOGLE_ACCOUNT("link_google_account"),
+    TWO_FACTOR_AUTH("two_factor_auth"),
+    LINK_PHONE("link_phone"),
+    LINK_EMAIL("link_email"),
+    REGISTER("register")
     ;
 
     private final String value;

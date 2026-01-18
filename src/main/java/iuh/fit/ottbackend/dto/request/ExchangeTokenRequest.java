@@ -1,29 +1,30 @@
+// dto/request/ExchangeTokenRequest.java
 package iuh.fit.ottbackend.dto.request;
 
-import com.fasterxml.jackson.databind.PropertyNamingStrategies;
-import com.fasterxml.jackson.databind.annotation.JsonNaming;
-import lombok.*;
-import lombok.experimental.FieldDefaults;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
-@FieldDefaults(level = AccessLevel.PRIVATE)
-@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class ExchangeTokenRequest {
+
+    @JsonProperty("code")
     private String code;
+
+    @JsonProperty("client_id")
     private String clientId;
+
+    @JsonProperty("client_secret")
     private String clientSecret;
+
+    @JsonProperty("redirect_uri")
     private String redirectUri;
+
+    @JsonProperty("grant_type")
     private String grantType;
-
-    public String toFormData() {
-        return "code=" + code +
-                "&client_id=" + clientId +
-                "&client_secret=" + clientSecret +
-                "&redirect_uri=" + redirectUri +
-                "&grant_type=" + grantType;
-    }
 }
-

@@ -3,6 +3,7 @@ package iuh.fit.ottbackend.configuration;
 import com.nimbusds.jose.JOSEException;
 import iuh.fit.ottbackend.dto.request.IntrospectRequest;
 import iuh.fit.ottbackend.service.AuthService;
+import iuh.fit.ottbackend.service.JwtService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,14 +25,14 @@ public class CustomJwtDecoder implements JwtDecoder {
     private String signerKey;
 
     @Autowired
-    private AuthService authService;
+    private JwtService jwtService;
 
     private NimbusJwtDecoder nimbusJwtDecoder = null;
 
     @Override
     public Jwt decode(String token) throws JwtException {
         try {
-            var response = authService.introspect(
+            var response = jwtService.introspect(
                     IntrospectRequest.builder().token(token).build());
 
             if (!response.isValid()) throw new JwtException("Token invalid");

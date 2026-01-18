@@ -111,4 +111,10 @@ public class User {
     @Column(name = "last_login_at")
     private LocalDateTime lastLoginAt;
 
+    @Column(name = "is_first_login")
+    @Builder.Default
+    private Boolean isFirstLogin = true;
+
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private TwoFactorAuth twoFactorAuth;
 }

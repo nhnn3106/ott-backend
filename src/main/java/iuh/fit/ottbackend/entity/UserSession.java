@@ -14,8 +14,12 @@ import java.time.LocalDateTime;
         @Index(name = "idx_sessions_token", columnList = "session_token"),
         @Index(name = "idx_sessions_refresh", columnList = "refresh_token"),
         @Index(name = "idx_sessions_device", columnList = "device_id"),
-        @Index(name = "idx_sessions_expires", columnList = "expires_at")
-})
+        @Index(name = "idx_sessions_expires", columnList = "expires_at"),
+},
+        uniqueConstraints = @UniqueConstraint(
+                columnNames = {"device_id", "user_id", "is_active"}
+        )
+)
 @Getter
 @Setter
 @NoArgsConstructor

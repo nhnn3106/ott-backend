@@ -2,6 +2,7 @@ package iuh.fit.ottbackend.repository;
 
 import iuh.fit.ottbackend.entity.QrCode;
 import iuh.fit.ottbackend.entity.User;
+import iuh.fit.ottbackend.entity.enums.QrCodeStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -36,4 +37,6 @@ public interface QrCodeRepository extends JpaRepository<QrCode, String> {
     // Đếm số lượng failed attempts theo device
     @Query("SELECT SUM(q.failedAttempts) FROM QrCode q WHERE q.deviceId = :deviceId AND q.createdAt > :since")
     Integer countFailedAttemptsByDevice(@Param("deviceId") String deviceId, @Param("since") LocalDateTime since);
+
+    long countByUserAndStatus(User user, QrCodeStatus status);
 }

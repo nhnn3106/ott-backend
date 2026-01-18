@@ -10,7 +10,7 @@ import lombok.*;
 @Builder
 public class GoogleAuthRequest {
     private String code;
-
+    private String redirectUri;
     private String deviceId;
     private DeviceType deviceType;
     private String deviceName;
