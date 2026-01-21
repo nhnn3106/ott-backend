@@ -44,7 +44,7 @@ exports.updateLastRead = async (conversationId, userId, msgId) => {
 exports.updateConversationCategory = async (conversationId, userId, categoryId) => {
   return await Participant.findOneAndUpdate(
     { conversation_id: conversationId, user_id: userId },
-    { category_id: categoryId },
+    { "settings.category_id": categoryId },
     { new: true }
   );
 };
