@@ -5,23 +5,31 @@ exports.getConversationsByUserId = async (req, res) => {
     const { userId } = req.params;
 
     const participants = await ParticipantService.getConversationsByUserId(userId);
-    
-    // Map dữ liệu để frontend dễ sử dụng
-    const conversations = participants.map(participant => {
+    // Trả về đầy đủ participant data + conversation data
+    const result = participants.map(participant => {
       const conversation = participant.conversation_id;
       
       // Nếu conversation không tồn tại, bỏ qua
       if (!conversation) return null;
       
       return {
-        ...conversation.toObject(),
-        // Giữ lại settings của participant
-        is_pinned: participant.settings?.is_pinned || false,
-        is_muted: participant.settings?.notification_status === 'mute',
+        conversation: conversation.toObject(),
+        participant: {
+          _id: participant._id,
+          user_id: participant.user_id,
+          conversation_id: participant.conversation_id._id,
+          settings: participant.settings,
+          last_read_message_id: participant.last_read_message_id,
+          last_read_at: participant.last_read_at,
+          deleted_msg_id: participant.deleted_msg_id,
+          nickname: participant.nickname,
+          joined_at: participant.joined_at,
+          roles: participant.roles,
+        }
       };
-    }).filter(conv => conv !== null); // Loại bỏ null
+    }).filter(item => item !== null);
 
-    res.status(200).json(conversations);
+    res.status(200).json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
