@@ -4,7 +4,7 @@ const { PutObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const { s3Client, bucketName } = require("../config/s3");
 
-const crypto = require("crypto"); 
+const crypto = require("crypto");
 
 exports.generatePresignedUrl = async (fileName, fileType) => {
   const now = new Date();
@@ -33,7 +33,13 @@ exports.generatePresignedUrl = async (fileName, fileType) => {
   return { uploadUrl, fileCategory, key };
 };
 
-exports.sendMessage = async ({ conversationId, senderId, content, type, size }) => {
+exports.sendMessage = async ({
+  conversationId,
+  senderId,
+  content,
+  type,
+  size,
+}) => {
   const newMessage = new Message({
     conversation_id: conversationId,
     sender_id: senderId,

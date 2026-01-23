@@ -8,6 +8,7 @@ const ParticipantController = require("../controllers/participantController");
 const UserCategoryController = require("../controllers/userCategoryController");
 
 router.post("/users/sync", UserController.syncUser);
+router.get("/users/:userId", UserController.getUser);
 router.get("/users", UserController.getAllUsers);
 
 router.post("/conversations", ConversationController.createConversation);
