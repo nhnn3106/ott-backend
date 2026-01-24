@@ -1,44 +1,56 @@
 package mediaservice.models;
 
+
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
-import mediaservice.models.enums.OfficialAccountStatusType;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
+import java.util.Set;
 
-@Table(name = "official_acounts")
+@Table(name = "user_accounts")
 
 @Entity
 @AllArgsConstructor
 @NoArgsConstructor
 @Data
-public class OfficialAccount {
+public class UserAccount {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
 
-    @ToString.Exclude
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "owner_user_id")
-    private UserAccount ownerUser;
-
     private String username;
     private String displayName;
+
+    private String email;
 
     private String avatarUrl;
     private String coverUrl;
 
     private String bio;
 
-    @Enumerated(EnumType.STRING)
-    private OfficialAccountStatusType status;
+    private boolean isCreator;
 
-    private boolean isVerified;
+    @ToString.Exclude
+    @OneToOne(mappedBy = "user")
+    private CreatorProfile creatorProfile;
+
+    @ToString.Exclude
+    @OneToMany(mappedBy = "follower", fetch = FetchType.LAZY)
+    private Set<Follow> followings;
+
+    @OneToMany(mappedBy = "ownerUser", fetch = FetchType.LAZY)
+    private Set<OfficialAccount> officialAccounts;
+
+    @OneToMany(mappedBy = "requester", fetch = FetchType.LAZY)
+    private Set<Relationship> requestedRelationship;
+
+    @OneToMany(mappedBy = "receiver", fetch = FetchType.LAZY)
+    private Set<Relationship> receivedRelationship;
 
     @CreationTimestamp
     @Column(updatable = false)
@@ -46,4 +58,7 @@ public class OfficialAccount {
 
     @UpdateTimestamp
     private LocalDateTime updatedAt;
+
+
+
 }

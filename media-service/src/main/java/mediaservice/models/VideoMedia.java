@@ -9,18 +9,18 @@ import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 
-@Table(name = "posts")
+@Table(name = "video_medias")
 
 @Entity
 @AllArgsConstructor
 @NoArgsConstructor
 @Data
 @EqualsAndHashCode(callSuper = false)
+@DiscriminatorValue("VIDEO_MEDIA")
 @ToString(callSuper = true)
-@DiscriminatorValue("POST")
+public class VideoMedia extends Media{
+    private String thumbnailUrl;
+    private Long duration;
 
-public class Post extends Content{
-    private String caption;
-
-
+    private boolean hasAudio;
 }

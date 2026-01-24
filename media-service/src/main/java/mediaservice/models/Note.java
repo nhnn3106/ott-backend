@@ -1,25 +1,29 @@
 package mediaservice.models;
 
-import jakarta.persistence.Column;
 import jakarta.persistence.DiscriminatorValue;
 import jakarta.persistence.Entity;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
 
-import java.time.LocalDateTime;
+import java.util.Set;
 
-@Table(name = "notes")
-@DiscriminatorValue("NOTE")
+@Table(name = "stories")
 
 @Entity
 @AllArgsConstructor
 @NoArgsConstructor
-@Setter
-@Getter
+@Data
+@EqualsAndHashCode(callSuper = false)
+@DiscriminatorValue("NOTE")
 @ToString(callSuper = true)
-@EqualsAndHashCode(callSuper = true)
 public class Note extends Content {
+    private String text;
 
-    @Column(name = "expire_at")
-    private LocalDateTime expireAt;
+    @OneToMany(mappedBy = "note")
+    private Set<NoteMusic> noteMusics;
 }

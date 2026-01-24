@@ -1,5 +1,6 @@
 package mediaservice.models;
 
+
 import jakarta.persistence.DiscriminatorValue;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
@@ -7,20 +8,19 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
-import lombok.ToString;
 
-@Table(name = "posts")
+@Table(name = "video_items")
 
 @Entity
 @AllArgsConstructor
 @NoArgsConstructor
 @Data
 @EqualsAndHashCode(callSuper = false)
-@ToString(callSuper = true)
-@DiscriminatorValue("POST")
-
-public class Post extends Content{
-    private String caption;
-
-
+@DiscriminatorValue("VIDEO_ITEM")
+public class VideoItem extends StoryItem{
+    private String url;
+    private String thumbnailUrl;
+    private Long duration;
+    private int width;
+    private int height;
 }

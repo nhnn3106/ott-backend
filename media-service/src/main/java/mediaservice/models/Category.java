@@ -6,41 +6,46 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 import java.util.Set;
 
-@Table(name = "comments")
+@Table(name = "categories")
 
 @Entity
 @AllArgsConstructor
 @NoArgsConstructor
 @Data
-public class Comment {
-    @Id
+public class Category {
     @GeneratedValue(strategy = GenerationType.UUID)
+    @Id
     private String id;
-    private String text;
+    private String name;
+    private String description;
+
+    private boolean isActive;
 
     @ToString.Exclude
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id")
-    private Comment parentComment;
+    private Category parentCategory;
 
-    @OneToMany(mappedBy = "parentComment")
-    private Set<Comment> childCommentSet;
+    @ToString.Exclude
+    @OneToMany(mappedBy = "parentCategory", fetch = FetchType.LAZY)
+    private Set<Category> childCategories;
 
-    private boolean isEdited;
 
-    private boolean isDeleted;
+    @ToString.Exclude
+    @OneToMany(mappedBy = "category", fetch = FetchType.LAZY)
+    private Set<CategoryLink> categoryLink;
 
-    private int depth;
+
 
     @CreationTimestamp
     @Column(updatable = false)
     private LocalDateTime createdAt;
 
-    @UpdateTimestamp
-    private LocalDateTime updatedAt;
+    private LocalDateTime approvedAt;
+
+
 }

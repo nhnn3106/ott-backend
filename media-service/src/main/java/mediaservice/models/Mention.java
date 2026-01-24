@@ -4,41 +4,35 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import mediaservice.models.enums.ReactionTargetType;
-import mediaservice.models.enums.ReactionType;
+import mediaservice.models.enums.MentionTargetType;
 import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 
-@Table(name = "reactions")
+@Table(name = "mentions")
 
 @Entity
 @AllArgsConstructor
 @NoArgsConstructor
 @Data
-
-public class Reaction {
+public class Mention {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
 
-    @ManyToOne
-    @JoinColumn(name = "user_id")
-    private UserAccount user;
-
+    @Enumerated(EnumType.STRING)
+    private MentionTargetType targetType;
     private String targetId;
 
-    @Enumerated(EnumType.STRING)
-    private ReactionTargetType targetType;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tagged_user_id")
+    private UserAccount taggedUser;
 
-    @Enumerated(EnumType.STRING)
-    private ReactionType reactionType;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tagged_by_user_id")
+    private UserAccount taggedByUser;
 
     @CreationTimestamp
     @Column(updatable = false)
     private LocalDateTime createdAt;
-
-    @UpdateTimestamp
-    private LocalDateTime updatedAt;
 }

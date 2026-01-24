@@ -5,42 +5,36 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
+import mediaservice.models.enums.FollowTargetType;
 import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
-import java.util.Set;
 
-@Table(name = "comments")
+@Table(name = "follows")
+
+
 
 @Entity
 @AllArgsConstructor
 @NoArgsConstructor
 @Data
-public class Comment {
+public class Follow {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
-    private String text;
 
     @ToString.Exclude
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "parent_id")
-    private Comment parentComment;
+    @JoinColumn(name = "follower_id")
+    private UserAccount follower;
 
-    @OneToMany(mappedBy = "parentComment")
-    private Set<Comment> childCommentSet;
+    @Enumerated(EnumType.STRING)
+    private FollowTargetType targetType;
 
-    private boolean isEdited;
+    private String targetId;
 
-    private boolean isDeleted;
-
-    private int depth;
 
     @CreationTimestamp
     @Column(updatable = false)
     private LocalDateTime createdAt;
-
-    @UpdateTimestamp
-    private LocalDateTime updatedAt;
 }

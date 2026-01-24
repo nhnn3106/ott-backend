@@ -1,41 +1,31 @@
 package mediaservice.models;
 
+
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.ToString;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 import java.util.Set;
 
-@Table(name = "comments")
+@Table(name = "medias")
 
 @Entity
 @AllArgsConstructor
 @NoArgsConstructor
 @Data
-public class Comment {
+@Inheritance(strategy = InheritanceType.JOINED)
+@DiscriminatorColumn(name = "type", discriminatorType = DiscriminatorType.STRING)
+public abstract class Media {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
-    private String text;
-
-    @ToString.Exclude
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "parent_id")
-    private Comment parentComment;
-
-    @OneToMany(mappedBy = "parentComment")
-    private Set<Comment> childCommentSet;
-
-    private boolean isEdited;
-
-    private boolean isDeleted;
-
-    private int depth;
+    private String url;
+    private String caption;
+    private int orderIndex;
 
     @CreationTimestamp
     @Column(updatable = false)
@@ -43,4 +33,7 @@ public class Comment {
 
     @UpdateTimestamp
     private LocalDateTime updatedAt;
+
+    @OneToMany(mappedBy = "media")
+    private Set<MediaMusic> mediaMusics;
 }

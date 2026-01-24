@@ -5,42 +5,35 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
+import mediaservice.models.enums.CreatorProfileStatusType;
 import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
-import java.util.Set;
 
-@Table(name = "comments")
+@Table(name = "create_profiles")
 
 @Entity
 @AllArgsConstructor
 @NoArgsConstructor
 @Data
-public class Comment {
+public class CreatorProfile {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
-    private String text;
 
     @ToString.Exclude
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "parent_id")
-    private Comment parentComment;
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", unique = true)
+    private UserAccount user;
 
-    @OneToMany(mappedBy = "parentComment")
-    private Set<Comment> childCommentSet;
+    @Enumerated(EnumType.STRING)
+    private CreatorProfileStatusType status;
 
-    private boolean isEdited;
-
-    private boolean isDeleted;
-
-    private int depth;
+    private boolean isVerified;
 
     @CreationTimestamp
     @Column(updatable = false)
     private LocalDateTime createdAt;
 
-    @UpdateTimestamp
-    private LocalDateTime updatedAt;
+    private LocalDateTime approvedAt;
 }

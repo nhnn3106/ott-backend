@@ -5,42 +5,33 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
+import mediaservice.models.enums.CategoryLinkTargetType;
 import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
-import java.util.Set;
 
-@Table(name = "comments")
+@Table(name = "category_links")
 
 @Entity
 @AllArgsConstructor
 @NoArgsConstructor
 @Data
-public class Comment {
-    @Id
+public class CategoryLink {
     @GeneratedValue(strategy = GenerationType.UUID)
+    @Id
     private String id;
-    private String text;
 
     @ToString.Exclude
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "parent_id")
-    private Comment parentComment;
+    @JoinColumn(name = "category_id")
+    private Category category;
 
-    @OneToMany(mappedBy = "parentComment")
-    private Set<Comment> childCommentSet;
+    private String targetId;
 
-    private boolean isEdited;
-
-    private boolean isDeleted;
-
-    private int depth;
+    @Enumerated(EnumType.STRING)
+    private CategoryLinkTargetType targetType;
 
     @CreationTimestamp
     @Column(updatable = false)
     private LocalDateTime createdAt;
-
-    @UpdateTimestamp
-    private LocalDateTime updatedAt;
 }

@@ -4,21 +4,17 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import mediaservice.models.enums.ReactionTargetType;
-import mediaservice.models.enums.ReactionType;
+import mediaservice.models.enums.RuleType;
 import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 
-@Table(name = "reactions")
 
 @Entity
 @AllArgsConstructor
 @NoArgsConstructor
 @Data
-
-public class Reaction {
+public class ContentAccessControl {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
@@ -27,18 +23,14 @@ public class Reaction {
     @JoinColumn(name = "user_id")
     private UserAccount user;
 
-    private String targetId;
+    @ManyToOne
+    @JoinColumn(name = "content_id")
+    private Content content;
 
     @Enumerated(EnumType.STRING)
-    private ReactionTargetType targetType;
-
-    @Enumerated(EnumType.STRING)
-    private ReactionType reactionType;
+    private RuleType ruleType;
 
     @CreationTimestamp
     @Column(updatable = false)
     private LocalDateTime createdAt;
-
-    @UpdateTimestamp
-    private LocalDateTime updatedAt;
 }
