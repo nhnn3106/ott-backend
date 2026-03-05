@@ -16,6 +16,8 @@ public interface CommentMapper {
     @Mapping(target = "accountAvatarUrl",    source = "account.avatarUrl")
     @Mapping(target = "parentCommentId",     source = "parentComment.id")
     @Mapping(target = "totalReplies",        expression = "java(comment.getChildCommentSet() != null ? comment.getChildCommentSet().size() : 0)")
+    @Mapping(target = "edited",              source = "edited")
+    @Mapping(target = "deleted",             source = "deleted")
     @Mapping(target = "totalReactions",      ignore = true)
     CommentResponse toResponse(Comment comment);
 

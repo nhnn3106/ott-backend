@@ -1,5 +1,7 @@
 package mediaservice.services.impl;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import mediaservice.dtos.requests.PostRequest;
@@ -8,6 +10,7 @@ import mediaservice.mappers.PostMapper;
 import mediaservice.models.ImageMedia;
 import mediaservice.models.Post;
 import mediaservice.models.UserAccount;
+import mediaservice.models.VideoMedia;
 import mediaservice.models.enums.ReactionTargetType;
 import mediaservice.models.enums.VisibilityType;
 import mediaservice.repositories.CommentRepository;
@@ -40,6 +43,9 @@ public class PostServiceImpl implements PostService {
     private final MediaRepository mediaRepository;
     private final S3Service s3Service;
 
+    @PersistenceContext
+    private EntityManager entityManager;
+
     /* ─── helper: fill totalReactions / totalComments from DB ─ */
     private PostResponse enrichCounts(PostResponse response, String postId) {
         response.setTotalReactions(
@@ -63,7 +69,9 @@ public class PostServiceImpl implements PostService {
     @Transactional
     @CacheEvict(value = {"allPosts", "userPosts"}, allEntries = true)
     public PostResponse createPost(String accountId, String caption,
-                                   VisibilityType visibility, List<MultipartFile> files) {
+                                   VisibilityType visibility,
+                                   List<MultipartFile> files,
+                                   List<String> captions) {
         // 1. Resolve author
         UserAccount account = userAccountRepository.findById(accountId)
                 .orElseThrow(() -> new RuntimeException("User not found: " + accountId));
@@ -75,24 +83,48 @@ public class PostServiceImpl implements PostService {
         post.setVisibility(visibility != null ? visibility : VisibilityType.PUBLIC);
         Post savedPost = postRepository.save(post);
 
-        // 3. Upload each media file → S3 → ImageMedia row
+        // 3. Upload each media file → S3 → save Media row (với caption per-file)
         if (files != null) {
             for (int i = 0; i < files.size(); i++) {
                 MultipartFile file = files.get(i);
                 if (file == null || file.isEmpty()) continue;
+                // Lấy caption tương ứng với file này (nếu có)
+                String mediaCaption = (captions != null && i < captions.size())
+                        ? (captions.get(i).isBlank() ? null : captions.get(i)) : null;
                 try {
-                    String s3Url = s3Service.uploadFile(file, "social/posts");
-                    ImageMedia media = new ImageMedia();
-                    media.setUrl(s3Url);
-                    media.setOrderIndex(i);
-                    media.setContent(savedPost);
-                    mediaRepository.save(media);
+                    String contentType = file.getContentType() != null ? file.getContentType() : "";
+                    boolean isVideo = contentType.startsWith("video/");
+                    String folder = isVideo ? "social/videos" : "social/posts";
+                    String s3Key = s3Service.uploadFile(file, folder);
+
+                    if (isVideo) {
+                        VideoMedia media = new VideoMedia();
+                        media.setUrl(s3Key);
+                        media.setOrderIndex(i);
+                        media.setCaption(mediaCaption);
+                        media.setContent(savedPost);
+                        mediaRepository.save(media);
+                    } else {
+                        ImageMedia media = new ImageMedia();
+                        media.setUrl(s3Key);
+                        media.setOrderIndex(i);
+                        media.setCaption(mediaCaption);
+                        media.setContent(savedPost);
+                        mediaRepository.save(media);
+                    }
+                    log.info("[createPost] Saved media #{} caption='{}' -> {}", i, mediaCaption, s3Key);
                 } catch (Exception e) {
-                    log.warn("[createPost] S3 upload failed for file {} – skipping. Cause: {}",
-                            file.getOriginalFilename(), e.getMessage());
+                    log.error("[createPost] S3 upload FAILED for file '{}': {}",
+                            file.getOriginalFilename(), e.getMessage(), e);
+                    throw new RuntimeException("Failed to upload media: " + file.getOriginalFilename(), e);
                 }
             }
         }
+
+        // 4. Flush và refresh để lấy medias list mới nhất từ DB vào entity
+        //    (tránh trả về Hibernate cache cũ không có media)
+        entityManager.flush();
+        entityManager.refresh(savedPost);
 
         return enrichCounts(postMapper.toResponse(savedPost), savedPost.getId());
     }

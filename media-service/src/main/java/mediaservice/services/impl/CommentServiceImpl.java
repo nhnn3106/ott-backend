@@ -113,5 +113,27 @@ public class CommentServiceImpl implements CommentService {
         List<Comment> comments = commentRepository.findByParentCommentId(parentId);
         return commentMapper.toResponseList(comments);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<CommentResponse> getRootCommentsByContentId(String contentId, Pageable pageable) {
+        return commentRepository
+                .findByContent_IdAndParentCommentIsNullAndIsDeletedFalse(contentId, pageable)
+                .map(commentMapper::toResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<CommentResponse> getRepliesByParentId(String parentId, Pageable pageable) {
+        return commentRepository
+                .findByParentComment_IdAndIsDeletedFalse(parentId, pageable)
+                .map(commentMapper::toResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countByContentId(String contentId) {
+        return commentRepository.countByContent_IdAndIsDeletedFalse(contentId);
+    }
 }
 

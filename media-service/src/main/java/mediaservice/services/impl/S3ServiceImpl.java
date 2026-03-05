@@ -3,7 +3,9 @@ package mediaservice.services.impl;
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.HttpMethod;
 import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.model.*;
+import com.amazonaws.services.s3.model.GeneratePresignedUrlRequest;
+import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.amazonaws.services.s3.model.PutObjectRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import mediaservice.services.S3Service;
@@ -37,8 +39,9 @@ public class S3ServiceImpl implements S3Service {
             String originalFilename = file.getOriginalFilename();
             String contentType = file.getContentType();
             InputStream inputStream = file.getInputStream();
+            long fileSize = file.getSize();
 
-            return uploadFile(inputStream, originalFilename, contentType, folder);
+            return uploadFile(inputStream, originalFilename, contentType, folder, fileSize);
         } catch (IOException e) {
             log.error("Error reading file: {}", e.getMessage(), e);
             throw new RuntimeException("Failed to read file", e);
@@ -47,6 +50,15 @@ public class S3ServiceImpl implements S3Service {
 
     @Override
     public String uploadFile(InputStream inputStream, String fileName, String contentType, String folder) {
+        return uploadFile(inputStream, fileName, contentType, folder, -1);
+    }
+
+    /**
+     * Internal upload with optional content length for efficient streaming.
+     * Pass fileSize = -1 when size is unknown.
+     */
+    private String uploadFile(InputStream inputStream, String fileName, String contentType,
+                              String folder, long fileSize) {
         try {
             // Generate unique filename
             String fileExtension = getFileExtension(fileName);
@@ -56,8 +68,13 @@ public class S3ServiceImpl implements S3Service {
             // Set metadata
             ObjectMetadata metadata = new ObjectMetadata();
             metadata.setContentType(contentType);
+            if (fileSize > 0) {
+                metadata.setContentLength(fileSize); // avoids SDK in-memory buffering
+            }
 
-            // Upload to S3
+            // Upload to S3 – do NOT set PublicRead ACL; use bucket policy for access control
+            // Setting CannedAccessControlList.PublicRead will fail when bucket has
+            // "Block Public ACLs" enabled (AWS default since 2023).
             PutObjectRequest putObjectRequest = new PutObjectRequest(
                     bucketName,
                     fileKey,
@@ -65,15 +82,10 @@ public class S3ServiceImpl implements S3Service {
                     metadata
             );
 
-            // Make file publicly readable (optional - remove if you want private files)
-            putObjectRequest.setCannedAcl(CannedAccessControlList.PublicRead);
-
             amazonS3.putObject(putObjectRequest);
 
-            // Return only the relative path (folder/filename) instead of full URL
             log.info("File uploaded successfully: {}", fileKey);
-
-            return fileKey;  // Return "folder/uuid.ext" instead of full URL
+            return fileKey;  // Return relative key; PostMapper converts to full URL
 
         } catch (AmazonServiceException e) {
             log.error("Error uploading file to S3: {}", e.getMessage(), e);

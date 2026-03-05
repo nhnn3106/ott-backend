@@ -37,9 +37,10 @@ public class PostController {
             @RequestParam("accountId") String accountId,
             @RequestParam("caption") String caption,
             @RequestParam(value = "visibility", defaultValue = "PUBLIC") String visibility,
-            @RequestParam(value = "files", required = false) List<MultipartFile> files) {
+            @RequestParam(value = "files", required = false) List<MultipartFile> files,
+            @RequestParam(value = "captions", required = false) List<String> captions) {
         VisibilityType vis = VisibilityType.valueOf(visibility.toUpperCase());
-        return ResponseEntity.ok(postService.createPost(accountId, caption, vis, files));
+        return ResponseEntity.ok(postService.createPost(accountId, caption, vis, files, captions));
     }
 
     /** GET /posts  – tất cả bài post */
@@ -111,12 +112,50 @@ public class PostController {
         return ResponseEntity.ok(reactionService.getReactionsByTargetId(postId));
     }
 
+    /** GET /posts/reactions/by-account?accountId=xxx – toàn bộ reactions của một user */
+    @GetMapping("/reactions/by-account")
+    public ResponseEntity<List<ReactionResponse>> getReactionsByAccount(
+            @RequestParam String accountId) {
+        return ResponseEntity.ok(reactionService.getReactionsByAccountId(accountId));
+    }
+
     /* ─── Comment endpoints ─── */
 
-    /** GET /posts/{postId}/comments – lấy tất cả comments của bài post */
+    /** GET /posts/{postId}/comments – lấy tất cả comments của bài post (legacy) */
     @GetMapping("/{postId}/comments")
     public ResponseEntity<List<CommentResponse>> getPostComments(@PathVariable String postId) {
         return ResponseEntity.ok(commentService.getCommentsByContentId(postId));
+    }
+
+    /**
+     * GET /posts/{postId}/comments/root?page=0&size=20
+     * Lấy root comments (không có cha) có phân trang, sort theo createdAt ASC.
+     */
+    @GetMapping("/{postId}/comments/root")
+    public ResponseEntity<Page<CommentResponse>> getRootComments(
+            @PathVariable String postId,
+            @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
+        return ResponseEntity.ok(commentService.getRootCommentsByContentId(postId, pageable));
+    }
+
+    /**
+     * GET /posts/comments/{commentId}/replies?page=0&size=10
+     * Lấy replies của một comment cha, có phân trang.
+     */
+    @GetMapping("/comments/{commentId}/replies")
+    public ResponseEntity<Page<CommentResponse>> getReplies(
+            @PathVariable String commentId,
+            @PageableDefault(size = 10, sort = "createdAt") Pageable pageable) {
+        return ResponseEntity.ok(commentService.getRepliesByParentId(commentId, pageable));
+    }
+
+    /**
+     * GET /posts/{postId}/comments/count
+     * Tổng số comment (bao gồm replies) chưa xoá của bài post.
+     */
+    @GetMapping("/{postId}/comments/count")
+    public ResponseEntity<Map<String, Long>> getCommentCount(@PathVariable String postId) {
+        return ResponseEntity.ok(Map.of("total", commentService.countByContentId(postId)));
     }
 
     /** POST /posts/{postId}/comments – thêm comment vào bài post */
