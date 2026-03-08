@@ -1,4 +1,4 @@
-package iuh.fit.notificationservice.dto.enums;
+package iuh.fit.notificationservice.entity.enums;
 
 import lombok.Getter;
 

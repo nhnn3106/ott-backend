@@ -1,7 +1,7 @@
-package iuh.fit.notificationservice.dto;
+package iuh.fit.notificationservice.entity;
 
-import iuh.fit.notificationservice.dto.enums.EmailStatus;
-import iuh.fit.notificationservice.dto.enums.EmailType;
+import iuh.fit.notificationservice.entity.enums.EmailStatus;
+import iuh.fit.notificationservice.entity.enums.EmailType;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;

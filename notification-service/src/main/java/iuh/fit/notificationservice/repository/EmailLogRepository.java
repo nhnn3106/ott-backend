@@ -1,8 +1,8 @@
 package iuh.fit.notificationservice.repository;
 
-import iuh.fit.notificationservice.dto.EmailLog;
-import iuh.fit.notificationservice.dto.enums.EmailStatus;
-import iuh.fit.notificationservice.dto.enums.EmailType;
+import iuh.fit.notificationservice.entity.EmailLog;
+import iuh.fit.notificationservice.entity.enums.EmailStatus;
+import iuh.fit.notificationservice.entity.enums.EmailType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
