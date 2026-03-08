@@ -6,7 +6,6 @@ import iuh.fit.ottbackend.dto.response.ApiResponse;
 import iuh.fit.ottbackend.dto.response.AuthenticationResponse;
 import iuh.fit.ottbackend.dto.response.IntrospectResponse;
 import iuh.fit.ottbackend.dto.response.OtpResponse;
-import iuh.fit.ottbackend.entity.enums.DeviceType;
 import iuh.fit.ottbackend.service.AuthService;
 import iuh.fit.ottbackend.service.JwtService;
 import iuh.fit.ottbackend.utils.ControllerUtils;
@@ -21,6 +20,7 @@ import java.text.ParseException;
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
+@Slf4j
 public class AuthController {
 
     private final AuthService authService;
@@ -190,4 +190,6 @@ public class AuthController {
                 .message("Login successful")
                 .build();
     }
+
+
 }

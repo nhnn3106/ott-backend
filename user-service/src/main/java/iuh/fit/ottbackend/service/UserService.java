@@ -13,18 +13,22 @@ import iuh.fit.ottbackend.exception.ErrorCode;
 import iuh.fit.ottbackend.mapper.UserMapper;
 import iuh.fit.ottbackend.repository.UserRepository;
 import iuh.fit.ottbackend.utils.ValidationUtils;
+import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+@Slf4j
 public class UserService {
 
     UserRepository userRepository;
@@ -33,6 +37,7 @@ public class UserService {
     OtpService otpService;
     EmailService emailService;
     ValidationUtils validationUtils;
+    EntityManager entityManager;
 
     @Transactional
     public OtpResponse requestRegisterOtp(RequestRegisterOtpRequest request) {
@@ -53,12 +58,21 @@ public class UserService {
             throw new AppException(ErrorCode.INVALID_FULL_NAME);
         }
 
-        if (userRepository.existsByPhone(request.getPhone())) {
+        if (userRepository.existsByPhoneAndDeletedAtIsNull(request.getPhone())) {
             throw new AppException(ErrorCode.PHONE_ALREADY_EXISTS);
         }
 
-        if (userRepository.existsByEmail(request.getEmail())) {
+        if (userRepository.existsByEmailAndDeletedAtIsNull(request.getEmail())) {
             throw new AppException(ErrorCode.EMAIL_ALREADY_EXISTS);
+        }
+
+        long deletedCount = userRepository.countDeletedAccountsByPhoneOrEmail(
+                request.getPhone(),
+                request.getEmail()
+        );
+        if (deletedCount > 0) {
+            log.info("📊 User has {} previously deleted accounts (phone: {}, email: {})",
+                    deletedCount, request.getPhone(), request.getEmail());
         }
 
         OtpCode otpCode = otpService.generateOtp(
@@ -67,7 +81,6 @@ public class UserService {
                 OtpType.REGISTER,
                 request.getIpAddress()
         );
-
 
         emailService.sendOtpEmail(
                 request.getEmail(),
@@ -85,7 +98,6 @@ public class UserService {
                 .message("OTP has been sent to your email")
                 .build();
     }
-
 
     @Transactional
     public UserResponse register(RegisterRequest request) {
@@ -111,14 +123,34 @@ public class UserService {
             throw new AppException(ErrorCode.INVALID_FULL_NAME);
         }
 
-        if (userRepository.existsByPhone(request.getPhone())) {
+        if (userRepository.existsByPhoneAndDeletedAtIsNull(request.getPhone())) {
             throw new AppException(ErrorCode.PHONE_ALREADY_EXISTS);
         }
 
-        if (userRepository.existsByEmail(request.getEmail())) {
+        if (userRepository.existsByEmailAndDeletedAtIsNull(request.getEmail())) {
             throw new AppException(ErrorCode.EMAIL_ALREADY_EXISTS);
         }
 
+        Optional<User> deletedUserByPhone = userRepository.findByPhone(request.getPhone());
+
+        if (deletedUserByPhone.isPresent() && deletedUserByPhone.get().getDeletedAt() != null) {
+            User deletedUser = deletedUserByPhone.get();
+            LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);
+
+            if (deletedUser.getDeletedAt().isAfter(thirtyDaysAgo)) {
+                // Còn restore được → Báo lỗi
+                throw new AppException(ErrorCode.ACCOUNT_CAN_BE_RESTORED,
+                        "Your account was recently deleted and can still be restored. " +
+                                "Please login to restore your account instead of creating a new one.");
+            } else {
+                // Quá 30 ngày → Hard delete
+                log.info("🗑️ Hard deleting old account to release phone: {}", deletedUser.getId());
+                userRepository.delete(deletedUser);
+                entityManager.flush();
+            }
+        }
+
+        // Validate OTP
         OtpCode otpCode = otpService.validateOtp(
                 request.getPhone(),
                 request.getEmail(),
@@ -141,10 +173,10 @@ public class UserService {
                 .isBlocked(false)
                 .isFirstLogin(true)
                 .welcomeEmailSent(false)
+                .deletedAt(null)
                 .build();
 
         user = userRepository.save(user);
-
         otpService.markOtpAsUsed(otpCode);
 
         return userMapper.toUserResponse(user);

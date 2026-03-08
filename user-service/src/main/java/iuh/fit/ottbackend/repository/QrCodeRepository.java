@@ -4,6 +4,7 @@ import iuh.fit.ottbackend.entity.QrCode;
 import iuh.fit.ottbackend.entity.User;
 import iuh.fit.ottbackend.entity.enums.QrCodeStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -39,4 +40,13 @@ public interface QrCodeRepository extends JpaRepository<QrCode, String> {
     Integer countFailedAttemptsByDevice(@Param("deviceId") String deviceId, @Param("since") LocalDateTime since);
 
     long countByUserAndStatus(User user, QrCodeStatus status);
+
+    @Modifying
+    @Query(value = """
+    DELETE FROM qr_login_sessions 
+    WHERE qr_code_id IN (
+        SELECT id FROM qr_codes WHERE created_at < :dateTime
+    )
+    """, nativeQuery = true)
+    void deleteOrphanQrLoginSessionsBefore(@Param("dateTime") LocalDateTime dateTime);
 }

@@ -35,13 +35,13 @@ public class User {
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
 
-    @Column(nullable = false, unique = true, length = 20)
+    @Column(nullable = false, unique = true, length = 50)
     private String phone;
 
     @Column(nullable = false, unique = true)
     private String email;
 
-    @Column(name = "google_id", unique = true, length = 100)
+    @Column(name = "google_id", unique = true, length = 150)
     private String googleId;
 
     @Column(name = "password_hash")

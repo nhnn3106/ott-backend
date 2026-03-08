@@ -179,10 +179,12 @@ public class QrLoginService {
         return response;
     }
 
+    @Transactional
     public QrStatusResponse checkQrStatus(String qrId) {
         QrCode qrCode = qrCodeRepository.findById(qrId)
                 .orElseThrow(() -> new AppException(ErrorCode.QR_CODE_NOT_FOUND));
 
+        // Auto-expire nếu quá hạn
         if (qrCode.getExpiresAt().isBefore(LocalDateTime.now())) {
             if (qrCode.getStatus() != QrCodeStatus.EXPIRED &&
                     qrCode.getStatus() != QrCodeStatus.CONFIRMED) {
@@ -194,8 +196,16 @@ public class QrLoginService {
         QrStatusResponse response = qrCodeMapper.toQrStatusResponse(qrCode);
 
         if (qrCode.getStatus() == QrCodeStatus.CONFIRMED) {
-            UserSession session = sessionService.findActiveSessionByDeviceAndUser(
-                    qrCode.getDeviceId(), qrCode.getUser());
+            // Lấy token từ QrLoginSession thay vì query lại UserSession
+            // Tránh race condition và FK bug khi session cũ vừa bị xóa
+            QrLoginSession loginSession = qrLoginSessionRepository.findByQrCode(qrCode)
+                    .orElseThrow(() -> new AppException(ErrorCode.SESSION_NOT_FOUND));
+
+            UserSession session = loginSession.getSession();
+            if (session == null) {
+                // Session bị null (bị xóa bởi logic khác) - báo lỗi rõ ràng
+                throw new AppException(ErrorCode.SESSION_NOT_FOUND);
+            }
 
             response.setSessionToken(session.getSessionToken());
             response.setRefreshToken(session.getRefreshToken());

@@ -42,7 +42,6 @@ public class TwoFactorAuthService {
     public OtpResponse request2FAEnable(String userId, Request2FAEnableOtpRequest request) {
         User user = userValidationUtil.getUserById(userId);
 
-        // ✅ BẮT BUỘC PHẢI CÓ PASSWORD MỚI BẬT ĐƯỢC 2FA
         if (user.getPasswordHash() == null) {
             throw new AppException(ErrorCode.PASSWORD_REQUIRED_FOR_2FA);
         }
@@ -137,10 +136,8 @@ public class TwoFactorAuthService {
     public OtpResponse request2FADisable(String userId, Request2FADisableOtpRequest request) {
         User user = userValidationUtil.getUserById(userId);
 
-        // ✅ BẮT BUỘC PHẢI CÓ PASSWORD
         userValidationUtil.requirePassword(user);
 
-        // ✅ VERIFY PASSWORD TRƯỚC KHI GỬI OTP
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
             throw new AppException(ErrorCode.INCORRECT_PASSWORD);
         }
@@ -181,7 +178,6 @@ public class TwoFactorAuthService {
         User user = userValidationUtil.getUserById(userId);
         userValidationUtil.requirePassword(user);
 
-        // ✅ VERIFY PASSWORD LẦN NỮA KHI DISABLE
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
             throw new AppException(ErrorCode.INCORRECT_PASSWORD);
         }

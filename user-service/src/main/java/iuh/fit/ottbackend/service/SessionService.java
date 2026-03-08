@@ -9,6 +9,7 @@ import iuh.fit.ottbackend.entity.enums.DeviceType;
 import iuh.fit.ottbackend.entity.enums.LoginMethod;
 import iuh.fit.ottbackend.exception.AppException;
 import iuh.fit.ottbackend.exception.ErrorCode;
+import iuh.fit.ottbackend.repository.QrLoginSessionRepository;
 import iuh.fit.ottbackend.repository.UserSessionRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
@@ -28,6 +29,7 @@ import java.util.stream.Collectors;
 public class SessionService {
 
     private final UserSessionRepository userSessionRepository;
+    private final QrLoginSessionRepository qrLoginSessionRepository;
     private final JwtService jwtService;
     private final EntityManager entityManager;
 
@@ -37,7 +39,6 @@ public class SessionService {
                                          String sessionToken, String refreshToken,
                                          LoginMethod loginMethod) {
 
-        // CRITICAL FIX: DELETE old session instead of UPDATE to avoid duplicate key error
         if (deviceId != null && user != null) {
             Optional<UserSession> existingSession = userSessionRepository
                     .findByDeviceIdAndUserAndIsActive(deviceId, user, true);
@@ -45,15 +46,18 @@ public class SessionService {
             if (existingSession.isPresent()) {
                 UserSession oldSession = existingSession.get();
 
-                // DELETE instead of marking as inactive to avoid unique constraint violation
+                // Null reference trong qr_login_sessions trước khi xóa
+                // để tránh FK constraint violation
+                qrLoginSessionRepository.nullifySessionReference(oldSession);
+                entityManager.flush();
+
                 userSessionRepository.delete(oldSession);
-                entityManager.flush(); // Force delete to DB immediately
+                entityManager.flush();
 
                 log.info("Deleted old session for deviceId: {}, userId: {}", deviceId, user.getId());
             }
         }
 
-        // Now create new session - old one is deleted from DB
         UserSession session = UserSession.builder()
                 .user(user)
                 .sessionToken(sessionToken)
@@ -103,7 +107,6 @@ public class SessionService {
             return;
         }
 
-        // Mark as inactive and save
         session.revoke("Revoked by user");
         userSessionRepository.save(session);
 
@@ -126,8 +129,12 @@ public class SessionService {
         if (sessionOpt.isPresent()) {
             UserSession session = sessionOpt.get();
 
-            // DELETE instead of marking inactive to avoid duplicate key issues
             invalidateSessionTokens(session);
+
+            // Null reference trong qr_login_sessions trước khi xóa
+            qrLoginSessionRepository.nullifySessionReference(session);
+            entityManager.flush();
+
             userSessionRepository.delete(session);
             entityManager.flush();
 

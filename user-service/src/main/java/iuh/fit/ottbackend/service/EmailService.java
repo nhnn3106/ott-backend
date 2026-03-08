@@ -105,13 +105,13 @@ public class EmailService {
             helper.setText(htmlContent, true);
 
             mailSender.send(message);
-            log.info("✅ Email sent successfully to: {}", to);
+            log.info(" Email sent successfully to: {}", to);
 
         } catch (MessagingException e) {
-            log.error("❌ MessagingException when sending email to {}: {}", to, e.getMessage());
+            log.error(" MessagingException when sending email to {}: {}", to, e.getMessage());
             throw new AppException(ErrorCode.EMAIL_SEND_FAILED);
         } catch (Exception e) {
-            log.error("❌ Unexpected error when sending email to {}: ", to, e);
+            log.error(" Unexpected error when sending email to {}: ", to, e);
             throw new AppException(ErrorCode.EMAIL_SEND_FAILED);
         }
     }
@@ -120,7 +120,7 @@ public class EmailService {
         return switch (otpType) {
             case REGISTER -> "Verify Your Registration - " + appName;
             case TWO_FACTOR_AUTH -> "Your Login Verification Code - " + appName;
-            case LOGIN_OTP_EMAIL -> "Your Login OTP Code - " + appName; // ✅ FIX
+            case LOGIN_OTP_EMAIL -> "Your Login OTP Code - " + appName;
             case EMAIL_VERIFICATION -> "Verify Your Email - " + appName;
             case RESET_PASSWORD -> "Reset Your Password - " + appName;
             case CHANGE_PASSWORD -> "Change Your Password - " + appName;

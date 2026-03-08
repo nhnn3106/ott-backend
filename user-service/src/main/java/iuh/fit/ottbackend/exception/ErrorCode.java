@@ -100,8 +100,15 @@ public enum ErrorCode {
     PHONE_AND_EMAIL_REQUIRED(1070, "Both phone number and email are required", HttpStatus.BAD_REQUEST),
     PHONE_MISMATCH(1071, "Phone number does not match the account", HttpStatus.BAD_REQUEST),
 
-    PASSWORD_REQUIRED_FOR_2FA(2322, "dsfs", HttpStatus.BAD_REQUEST)
+    PASSWORD_REQUIRED_FOR_2FA(2322, "dsfs", HttpStatus.BAD_REQUEST),
 
+    // ErrorCode.java
+    ACCOUNT_PERMANENTLY_DELETED(4099, "Account has been permanently deleted and cannot be restored", HttpStatus.BAD_REQUEST),
+
+    GOOGLE_ACCOUNT_ALREADY_LINKED(5099, "GOOGLE_ACCOUNT_ALREADY_LINKED", HttpStatus.BAD_REQUEST),
+
+    ACCOUNT_CAN_BE_RESTORED(6099, "ACCOUNT_CAN_BE_RESTORED", HttpStatus.BAD_REQUEST),
+    PHONE_BELONGS_TO_DIFFERENT_ACCOUNT(1068, "This phone number is associated with a different deleted account. Please use a different phone number or contact support.", HttpStatus.BAD_REQUEST),
     ;
 
 

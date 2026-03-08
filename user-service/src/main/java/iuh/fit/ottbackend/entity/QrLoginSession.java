@@ -4,6 +4,8 @@ import iuh.fit.ottbackend.entity.enums.QrLoginSessionStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
@@ -33,7 +35,8 @@ public class QrLoginSession {
     private User user;
 
     @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "session_id")
+    @JoinColumn(name = "session_id", nullable = true)
+    @OnDelete(action = OnDeleteAction.SET_NULL)
     private UserSession session;
 
     @Enumerated(EnumType.STRING)

@@ -11,6 +11,7 @@ import iuh.fit.ottbackend.repository.LoginHistoryRepository;
 import iuh.fit.ottbackend.repository.UserRepository;
 import iuh.fit.ottbackend.repository.httpclient.GoogleUserClient;
 import iuh.fit.ottbackend.utils.ValidationUtils;
+import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.*;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -27,9 +29,8 @@ import org.springframework.web.client.RestTemplate;
 
 import java.text.ParseException;
 import java.time.LocalDateTime;
-import java.util.Comparator;
-import java.util.Date;
-import java.util.List;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -48,6 +49,8 @@ public class AuthService {
     ValidationUtils validationUtils;
     RestTemplate restTemplate;
 
+    EntityManager entityManager;
+
     @NonFinal
     @Value("${spring.security.oauth2.client.registration.google.client-id}")
     String CLIENT_ID;
@@ -63,13 +66,78 @@ public class AuthService {
     private static final String GRANT_TYPE = "authorization_code";
     private static final String GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 
+
+    @Transactional
+    public AuthenticationResponse googleAuthWithToken(GoogleTokenAuthRequest request) {
+        try {
+            GoogleUserInfo userInfo;
+
+            if (request.getIdToken() != null) {
+                // Verify idToken với Google
+                ResponseEntity<Map> res = restTemplate.getForEntity(
+                        "https://oauth2.googleapis.com/tokeninfo?id_token=" + request.getIdToken(),
+                        Map.class
+                );
+                Map<String, Object> claims = res.getBody();
+
+                if (claims == null || !CLIENT_ID.equals(claims.get("aud"))) {
+                    throw new AppException(ErrorCode.GOOGLE_AUTH_FAILED);
+                }
+
+                userInfo = GoogleUserInfo.builder()
+                        .googleId((String) claims.get("sub"))
+                        .email((String) claims.get("email"))
+                        .name((String) claims.get("name"))
+                        .picture((String) claims.get("picture"))
+                        .build();
+            } else {
+                // Dùng accessToken gọi Google userinfo
+                userInfo = googleUserClient.getUserInfo("json", request.getAccessToken());
+            }
+
+            // Tìm hoặc tạo user
+            User user = userRepository.findByGoogleIdAndDeletedAtIsNull(userInfo.getGoogleId())
+                    .orElse(null);
+
+            if (user == null) {
+                user = userRepository.findByEmailAndDeletedAtIsNull(userInfo.getEmail())
+                        .orElse(null);
+            }
+
+            if (user == null) {
+                String tempToken = jwtService.generateGoogleTempToken(userInfo);
+                return AuthenticationResponse.builder()
+                        .authenticated(false)
+                        .requires2FA(false)
+                        .requiresPhoneSetup(true)
+                        .tempToken(tempToken)
+                        .googleUserInfo(GoogleUserInfo.builder()
+                                .googleId(userInfo.getGoogleId())
+                                .email(userInfo.getEmail())
+                                .name(userInfo.getName())
+                                .picture(userInfo.getPicture())
+                                .build())
+                        .build();
+            }
+
+            validateUserStatus(user, request.getIpAddress(), request.getDeviceInfo());
+            return createAuthResponse(user, request, LoginMethod.GOOGLE);
+
+        } catch (AppException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Error in googleAuthWithToken", e);
+            throw new AppException(ErrorCode.GOOGLE_AUTH_FAILED);
+        }
+    }
+
     @Transactional
     public AuthenticationResponse localLogin(LocalLoginRequest request) {
         if (!validationUtils.isValidPhone(request.getPhone())) {
             throw new AppException(ErrorCode.INVALID_PHONE_FORMAT);
         }
 
-        User user = userRepository.findByPhone(request.getPhone())
+        User user = userRepository.findByPhoneAndDeletedAtIsNull(request.getPhone())
                 .orElseThrow(() -> new AppException(ErrorCode.INVALID_CREDENTIALS));
 
         if (user.getPasswordHash() == null) {
@@ -110,6 +178,7 @@ public class AuthService {
         return createAuthResponse(user, request, LoginMethod.LOCAL);
     }
 
+
     @Transactional
     public AuthenticationResponse googleAuth(GoogleAuthRequest request) {
         String redirectUri = request.getRedirectUri() != null
@@ -128,7 +197,6 @@ public class AuthService {
             params.add("grant_type", GRANT_TYPE);
 
             log.info("Google Auth Request - redirectUri: {}", redirectUri);
-            log.info("Google Auth Request - code: {}...", request.getCode().substring(0, 20));
 
             HttpEntity<MultiValueMap<String, String>> requestEntity = new HttpEntity<>(params, headers);
 
@@ -156,12 +224,13 @@ public class AuthService {
                 throw new AppException(ErrorCode.INVALID_GOOGLE_EMAIL);
             }
 
-            User user = findUserByGoogleId(userInfo.getGoogleId());
+            User user = userRepository.findByGoogleIdAndDeletedAtIsNull(userInfo.getGoogleId())
+                    .orElse(null);
 
             if (user == null) {
-                log.info("Finding user by email: {}", userInfo.getEmail());
-                user = userRepository.findByEmail(userInfo.getEmail()).orElse(null);
-                log.info("User found by email: {}", user != null ? user.getId() : "null");
+                log.info("User not found by googleId, trying email: {}", userInfo.getEmail());
+                user = userRepository.findByEmailAndDeletedAtIsNull(userInfo.getEmail())
+                        .orElse(null);
             }
 
             if (user == null) {
@@ -182,27 +251,54 @@ public class AuthService {
                         .build();
             }
 
+            boolean needUpdate = false;
+
             if (user.getGoogleId() == null) {
-                log.info("Linking Google account to existing user: {}", user.getId());
+                log.info("Linking Google ID to existing user: {}", user.getId());
                 user.setGoogleId(userInfo.getGoogleId());
+                needUpdate = true;
+            }
 
-                if (user.getEmail() == null) {
-                    user.setEmail(userInfo.getEmail());
-                    user.setIsEmailVerified(true);
-                    user.setEmailVerifiedAt(LocalDateTime.now());
+            if (!userInfo.getEmail().equalsIgnoreCase(user.getEmail())) {
+                log.info("Syncing email from Google: {} -> {}", user.getEmail(), userInfo.getEmail());
+
+                if (userRepository.existsByEmailAndDeletedAtIsNullAndIdNot(
+                        userInfo.getEmail(), user.getId())) {
+                    log.warn("Cannot sync email - already used by another user: {}", userInfo.getEmail());
+                    throw new AppException(ErrorCode.EMAIL_ALREADY_EXISTS,
+                            "Your Google email is already used by another account in our system.");
                 }
 
-                if (user.getAvatarUrl() == null && userInfo.getPicture() != null) {
-                    user.setAvatarUrl(userInfo.getPicture());
-                }
+                user.setEmail(userInfo.getEmail());
+                user.setEmailChangedAt(LocalDateTime.now());
+                needUpdate = true;
+            }
 
+            if (!user.getIsEmailVerified()) {
+                user.setIsEmailVerified(true);
+                user.setEmailVerifiedAt(LocalDateTime.now());
+                needUpdate = true;
+            }
+
+            if (userInfo.getPicture() != null && !userInfo.getPicture().equals(user.getAvatarUrl())) {
+                log.info("Updating avatar from Google");
+                user.setAvatarUrl(userInfo.getPicture());
+                needUpdate = true;
+            }
+
+            if (user.getFullName() == null && userInfo.getName() != null) {
+                user.setFullName(userInfo.getName());
+                needUpdate = true;
+            }
+
+            if (needUpdate) {
                 user = userRepository.save(user);
-                log.info("Google account linked successfully");
+                log.info("Google account info synced successfully");
             }
 
             validateUserStatus(user, request.getIpAddress(), request.getDeviceInfo());
 
-            log.info("Creating auth response for Google login (no 2FA required)");
+            log.info("Creating auth response for Google login");
             return createAuthResponse(user, request, LoginMethod.GOOGLE);
 
         } catch (AppException e) {
@@ -214,38 +310,6 @@ public class AuthService {
         }
     }
 
-    private User findUserByGoogleId(String googleId) {
-        try {
-            log.info("Finding user by googleId: {}", googleId);
-            User user = userRepository.findByGoogleId(googleId).orElse(null);
-            log.info("User found by googleId: {}", user != null ? user.getId() : "null");
-            return user;
-        } catch (org.springframework.dao.IncorrectResultSizeDataAccessException e) {
-            log.warn("Multiple users found with googleId: {}, fetching all and taking the most recent", googleId);
-            List<User> users = userRepository.findAllByGoogleId(googleId);
-
-            if (users.isEmpty()) {
-                return null;
-            }
-
-            User mostRecent = users.stream()
-                    .max(Comparator.comparing(User::getCreatedAt))
-                    .orElse(null);
-
-            log.info("Selected most recent user: {} (created at: {})",
-                    mostRecent.getId(), mostRecent.getCreatedAt());
-
-            users.stream()
-                    .filter(u -> !u.getId().equals(mostRecent.getId()))
-                    .forEach(oldUser -> {
-                        log.info("Deleting duplicate user: {}", oldUser.getId());
-                        userRepository.delete(oldUser);
-                    });
-
-            return mostRecent;
-        }
-    }
-
     @Transactional
     public AuthenticationResponse completeGoogleRegistration(CompleteGoogleRegistrationRequest request) {
         var googleInfo = jwtService.verifyGoogleTempToken(request.getTempToken());
@@ -254,12 +318,16 @@ public class AuthService {
             throw new AppException(ErrorCode.INVALID_PHONE_FORMAT);
         }
 
-        if (userRepository.existsByPhone(request.getPhone())) {
+        if (userRepository.existsByPhoneAndDeletedAtIsNull(request.getPhone())) {
             throw new AppException(ErrorCode.PHONE_ALREADY_EXISTS);
         }
 
-        if (userRepository.existsByEmail(googleInfo.getEmail())) {
+        if (userRepository.existsByEmailAndDeletedAtIsNull(googleInfo.getEmail())) {
             throw new AppException(ErrorCode.EMAIL_ALREADY_EXISTS);
+        }
+
+        if (userRepository.existsByGoogleIdAndDeletedAtIsNull(googleInfo.getGoogleId())) {
+            throw new AppException(ErrorCode.GOOGLE_ACCOUNT_ALREADY_LINKED);
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -279,9 +347,17 @@ public class AuthService {
                 .isBlocked(false)
                 .isFirstLogin(true)
                 .welcomeEmailSent(false)
+                .deletedAt(null)
                 .build();
 
-        user = userRepository.save(user);
+        try {
+            user = userRepository.save(user);
+            log.info(" Created new Google account: {}", user.getId());
+        } catch (DataIntegrityViolationException e) {
+            log.error("Failed to create account - possible duplicate", e);
+            throw new AppException(ErrorCode.PHONE_ALREADY_EXISTS);
+        }
+
         return createAuthResponse(user, request, LoginMethod.GOOGLE);
     }
 
@@ -338,7 +414,7 @@ public class AuthService {
             throw new AppException(ErrorCode.INVALID_PHONE_FORMAT);
         }
 
-        User user = userRepository.findByPhone(request.getPhone())
+        User user = userRepository.findByPhoneAndDeletedAtIsNull(request.getPhone())
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
         validateUserStatus(user, request.getIpAddress(), null);
@@ -380,51 +456,56 @@ public class AuthService {
 
     @Transactional
     public AuthenticationResponse refreshToken(RefreshRequest request) throws ParseException, JOSEException {
-        var signJWT = jwtService.verifyToken(request.getToken(), true);
+        try {
+            var signJWT = jwtService.verifyToken(request.getToken(), true);
 
-        var jit = signJWT.getJWTClaimsSet().getJWTID();
-        var expiryTime = signJWT.getJWTClaimsSet().getExpirationTime();
-        var userId = signJWT.getJWTClaimsSet().getStringClaim("userId");
+            var jit = signJWT.getJWTClaimsSet().getJWTID();
+            var expiryTime = signJWT.getJWTClaimsSet().getExpirationTime();
+            var userId = signJWT.getJWTClaimsSet().getStringClaim("userId");
 
-        jwtService.invalidateToken(
-                jit,
-                LocalDateTime.ofInstant(expiryTime.toInstant(), java.time.ZoneId.systemDefault()),
-                null,
-                "REFRESH",
-                "Token refreshed"
-        );
+            jwtService.invalidateToken(
+                    jit,
+                    LocalDateTime.ofInstant(expiryTime.toInstant(), java.time.ZoneId.systemDefault()),
+                    null,
+                    "REFRESH",
+                    "Token refreshed"
+            );
 
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new AppException(ErrorCode.UNAUTHENTICATED));
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new AppException(ErrorCode.UNAUTHENTICATED));
 
-        if (!user.getIsActive() || user.getDeletedAt() != null) {
-            throw new AppException(ErrorCode.USER_NOT_ACTIVE);
-        }
-
-        if (user.getIsBlocked()) {
-            if (user.getBlockedUntil() != null && user.getBlockedUntil().isAfter(LocalDateTime.now())) {
-                throw new AppException(ErrorCode.USER_BLOCKED);
+            if (!user.getIsActive() || user.getDeletedAt() != null) {
+                throw new AppException(ErrorCode.USER_NOT_ACTIVE);
             }
-            user.setIsBlocked(false);
-            user.setBlockedUntil(null);
-            user.setBlockedReason(null);
-            userRepository.save(user);
+
+            if (user.getIsBlocked()) {
+                if (user.getBlockedUntil() != null && user.getBlockedUntil().isAfter(LocalDateTime.now())) {
+                    throw new AppException(ErrorCode.USER_BLOCKED);
+                }
+                user.setIsBlocked(false);
+                user.setBlockedUntil(null);
+                user.setBlockedReason(null);
+                userRepository.save(user);
+            }
+
+            String token = jwtService.generateToken(user);
+            String refreshToken = jwtService.generateRefreshToken();
+
+            if (request.getDeviceId() != null) {
+                sessionService.updateSessionTokens(request.getDeviceId(), user, token, refreshToken);
+            }
+
+            return AuthenticationResponse.builder()
+                    .token(token)
+                    .refreshToken(refreshToken)
+                    .authenticated(true)
+                    .requires2FA(false)
+                    .requiresPhoneSetup(false)
+                    .build();
+
+        } catch (ParseException | JOSEException e) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
         }
-
-        String token = jwtService.generateToken(user);
-        String refreshToken = jwtService.generateRefreshToken();
-
-        if (request.getDeviceId() != null) {
-            sessionService.updateSessionTokens(request.getDeviceId(), user, token, refreshToken);
-        }
-
-        return AuthenticationResponse.builder()
-                .token(token)
-                .refreshToken(refreshToken)
-                .authenticated(true)
-                .requires2FA(false)
-                .requiresPhoneSetup(false)
-                .build();
     }
 
     private boolean is2FAEnabled(User user) {
@@ -581,7 +662,7 @@ public class AuthService {
             throw new AppException(ErrorCode.INVALID_EMAIL_FORMAT);
         }
 
-        User user = userRepository.findByEmail(request.getEmail())
+        User user = userRepository.findByEmailAndDeletedAtIsNull(request.getEmail())
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
         validateUserStatus(user, request.getIpAddress(), request.getDeviceInfo());
@@ -623,7 +704,7 @@ public class AuthService {
                 OtpType.LOGIN_OTP_EMAIL
         );
 
-        User user = userRepository.findByEmail(request.getEmail())
+        User user = userRepository.findByEmailAndDeletedAtIsNull(request.getEmail())
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
         otpService.markOtpAsUsed(otpCode);

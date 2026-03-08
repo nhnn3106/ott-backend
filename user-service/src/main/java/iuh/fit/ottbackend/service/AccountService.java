@@ -11,6 +11,7 @@ import iuh.fit.ottbackend.utils.UserValidationUtil;
 import iuh.fit.ottbackend.utils.ValidationUtils;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -18,6 +19,7 @@ import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AccountService {
 
     private final PasswordEncoder passwordEncoder;
@@ -197,7 +199,7 @@ public class AccountService {
             throw new AppException(ErrorCode.SAME_EMAIL);
         }
 
-        if (userValidationUtil.userRepository.existsByEmail(request.getNewEmail())) {
+        if (userValidationUtil.userRepository.existsByEmailAndDeletedAtIsNull(request.getNewEmail())) {
             throw new AppException(ErrorCode.EMAIL_ALREADY_EXISTS);
         }
 
@@ -238,7 +240,7 @@ public class AccountService {
             throw new AppException(ErrorCode.SAME_EMAIL);
         }
 
-        if (userValidationUtil.userRepository.existsByEmail(request.getNewEmail())) {
+        if (userValidationUtil.userRepository.existsByEmailAndDeletedAtIsNull(request.getNewEmail())) {
             throw new AppException(ErrorCode.EMAIL_ALREADY_EXISTS);
         }
 
@@ -250,19 +252,37 @@ public class AccountService {
         );
 
         String oldEmail = user.getEmail();
+
         user.setEmail(request.getNewEmail());
         user.setEmailChangedAt(LocalDateTime.now());
-        userValidationUtil.userRepository.save(user);
+
+        boolean googleUnlinked = false;
+        if (user.getGoogleId() != null) {
+            log.warn("⚠ Email changed from {} to {}. Unlinking Google account (googleId: {})",
+                    oldEmail, request.getNewEmail(), user.getGoogleId());
+
+            user.setGoogleId(null);
+            googleUnlinked = true;
+
+            log.info(" Google account unlinked. User must re-link if needed.");
+        }
+
+        user = userValidationUtil.userRepository.save(user);
 
         otpService.markOtpAsUsed(otpCode);
 
         int revokedCount = sessionService.revokeAllUserSessions(user.getId(), "Email changed");
 
+        String message = "Email changed successfully. Please login again with new email.";
+        if (googleUnlinked) {
+            message += " Your Google account has been unlinked. You can re-link it in settings.";
+        }
 
         return EmailChangeResponse.builder()
                 .success(true)
                 .newEmail(request.getNewEmail())
-                .message("Email changed successfully")
+                .googleUnlinked(googleUnlinked)
+                .message(message)
                 .sessionsRevoked(revokedCount)
                 .build();
     }
@@ -280,7 +300,7 @@ public class AccountService {
             throw new AppException(ErrorCode.SAME_PHONE);
         }
 
-        if (userValidationUtil.userRepository.existsByPhone(request.getNewPhone())) {
+        if (userValidationUtil.userRepository.existsByPhoneAndDeletedAtIsNull(request.getNewPhone())) {
             throw new AppException(ErrorCode.PHONE_ALREADY_EXISTS);
         }
 
@@ -320,7 +340,7 @@ public class AccountService {
             throw new AppException(ErrorCode.SAME_PHONE);
         }
 
-        if (userValidationUtil.userRepository.existsByPhone(request.getNewPhone())) {
+        if (userValidationUtil.userRepository.existsByPhoneAndDeletedAtIsNull(request.getNewPhone())) {
             throw new AppException(ErrorCode.PHONE_ALREADY_EXISTS);
         }
 
@@ -334,7 +354,8 @@ public class AccountService {
         String oldPhone = user.getPhone();
         user.setPhone(request.getNewPhone());
         user.setPhoneChangedAt(LocalDateTime.now());
-        userValidationUtil.userRepository.save(user);
+
+        user = userValidationUtil.userRepository.save(user);
 
         otpService.markOtpAsUsed(otpCode);
 
@@ -343,7 +364,7 @@ public class AccountService {
         return PhoneChangeResponse.builder()
                 .success(true)
                 .newPhone(request.getNewPhone())
-                .message("Phone number changed successfully")
+                .message("Phone number changed successfully. Please login again with new phone.")
                 .sessionsRevoked(revokedCount)
                 .build();
     }
@@ -400,8 +421,22 @@ public class AccountService {
         );
 
         LocalDateTime now = LocalDateTime.now();
+        String deletedSuffix = "_deleted_" + now.toEpochSecond(java.time.ZoneOffset.UTC);
+
+        user.setPhone(user.getPhone() + deletedSuffix);
+
+        if (user.getEmail() != null) {
+            user.setEmail(user.getEmail() + deletedSuffix);
+        }
+
+        if (user.getGoogleId() != null) {
+            user.setGoogleId(user.getGoogleId() + deletedSuffix);
+        }
+
+        // Soft delete
         user.setDeletedAt(now);
         user.setIsActive(false);
+
         userValidationUtil.userRepository.save(user);
 
         otpService.markOtpAsUsed(otpCode);
@@ -409,7 +444,7 @@ public class AccountService {
 
         return AccountDeletionResponse.builder()
                 .success(true)
-                .message("Account deleted successfully")
+                .message("Account has been deleted. You can create a new account with the same phone/email.")
                 .deletedAt(now)
                 .build();
     }

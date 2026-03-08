@@ -14,4 +14,6 @@ public class EmailChangeResponse {
     private String newEmail;
     private String message;
     private int sessionsRevoked;
+
+    private boolean googleUnlinked;
 }

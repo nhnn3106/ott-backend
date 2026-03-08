@@ -40,12 +40,15 @@ public class QrCodeCleanupScheduler {
                     qrCode.setStatus(QrCodeStatus.EXPIRED);
                     qrCode.setUpdatedAt(LocalDateTime.now());
                 });
-
                 qrCodeRepository.saveAll(expiredQrCodes);
                 log.info("Updated {} expired QR codes", expiredQrCodes.size());
             }
 
             LocalDateTime cutoffTime = LocalDateTime.now().minusHours(24);
+
+
+            qrCodeRepository.deleteOrphanQrLoginSessionsBefore(cutoffTime);
+
             qrCodeRepository.deleteByCreatedAtBefore(cutoffTime);
             log.info("Deleted old QR codes created before {}", cutoffTime);
 

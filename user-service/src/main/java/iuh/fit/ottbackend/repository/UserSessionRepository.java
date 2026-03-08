@@ -14,10 +14,6 @@ import java.util.Optional;
 @Repository
 public interface UserSessionRepository extends JpaRepository<UserSession, String> {
 
-    List<UserSession> findByUser(User user);
-
-    Optional<UserSession> findBySessionToken(String sessionToken);
-
     Optional<UserSession> findByDeviceIdAndUser(String deviceId, User user);
 
     @Query("SELECT s FROM UserSession s WHERE s.user = :user AND s.expiresAt > :now")
@@ -40,10 +36,4 @@ public interface UserSessionRepository extends JpaRepository<UserSession, String
     List<UserSession> findByUserIdAndIsActiveTrueOrderByLastActiveAtDesc(String userId);
 
     List<UserSession> findByExpiresAtBeforeAndIsActiveTrue(LocalDateTime expiryTime);
-
-    List<UserSession> findAllByDeviceIdAndUserAndIsActive(String deviceId, User user, boolean isActive);
-
-    Optional<UserSession> findByRefreshToken(String refreshToken);
-
-    Optional<UserSession> findByUserIdAndDeviceIdAndIsActiveTrue(String userId, String deviceId);
 }

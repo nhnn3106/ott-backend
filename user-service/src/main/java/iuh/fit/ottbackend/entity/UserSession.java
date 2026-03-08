@@ -16,10 +16,7 @@ import java.time.LocalDateTime;
         @Index(name = "idx_sessions_device", columnList = "device_id"),
         @Index(name = "idx_sessions_expires", columnList = "expires_at"),
         @Index(name = "idx_sessions_active", columnList = "is_active, user_id")
-},
-        uniqueConstraints = @UniqueConstraint(
-                columnNames = {"device_id", "user_id", "is_active"}
-        )
+}
 )
 @Getter
 @Setter

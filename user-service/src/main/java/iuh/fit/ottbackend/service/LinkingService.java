@@ -13,12 +13,14 @@ import iuh.fit.ottbackend.repository.UserRepository;
 import iuh.fit.ottbackend.utils.ValidationUtils;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class LinkingService {
 
     private final UserRepository userRepository;
@@ -41,7 +43,7 @@ public class LinkingService {
             throw new AppException(ErrorCode.INVALID_PHONE_FORMAT);
         }
 
-        if (userRepository.existsByPhone(request.getPhone())) {
+        if (userRepository.existsByPhoneAndDeletedAtIsNull(request.getPhone())) {
             throw new AppException(ErrorCode.PHONE_ALREADY_EXISTS);
         }
 
@@ -62,7 +64,6 @@ public class LinkingService {
         return userMapper.toUserResponse(user);
     }
 
-
     @Transactional
     public UserResponse linkEmail(String userId, LinkEmailRequest request) {
         User user = userRepository.findById(userId)
@@ -78,7 +79,7 @@ public class LinkingService {
             throw new AppException(ErrorCode.INVALID_EMAIL_FORMAT);
         }
 
-        if (userRepository.existsByEmail(request.getEmail())) {
+        if (userRepository.existsByEmailAndDeletedAtIsNull(request.getEmail())) {
             throw new AppException(ErrorCode.EMAIL_ALREADY_EXISTS);
         }
 
