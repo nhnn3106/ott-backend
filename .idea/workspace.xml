@@ -5,80 +5,31 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="1bb96e93-77b6-4b77-b543-9908f50ffd65" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/config/RabbitMQConfig.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/config/RestTemplateConfig.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/config/SecurityConfig.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/controller/AuthController.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/controller/QrLoginController.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/dto/event/AlertEmailEvent.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/dto/event/OtpEmailEvent.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/dto/event/WelcomeEmailEvent.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/dto/request/CompleteGoogleRegistrationRequest.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/dto/request/GoogleAuthRequest.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/dto/request/IntrospectRequest.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/dto/request/LocalLoginRequest.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/dto/request/LogoutRequest.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/dto/request/QrConfirmRequest.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/dto/request/QrGenerateRequest.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/dto/request/QrScanRequest.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/dto/request/RefreshRequest.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/dto/request/Request2FAOtpRequest.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/dto/request/RequestEmailLoginOtpRequest.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/dto/request/Verify2FARequest.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/dto/request/VerifyEmailLoginOtpRequest.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/dto/response/ApiResponse.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/dto/response/AuthenticationResponse.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/dto/response/GoogleTokenResponse.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/dto/response/GoogleUserInfo.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/dto/response/IntrospectResponse.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/dto/response/OtpResponse.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/dto/response/QrCodeResponse.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/dto/response/SessionInfo.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/dto/response/UserSessionsResponse.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/entity/InvalidatedToken.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/entity/LoginHistory.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/entity/QrCode.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/entity/QrLoginSession.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/entity/TwoFactorAuth.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/entity/User.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/entity/UserSession.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/entity/enums/DeviceType.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/entity/enums/Gender.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/entity/enums/LoginMethod.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/entity/enums/LoginStatus.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/entity/enums/OtpType.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/entity/enums/QrCodeStatus.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/entity/enums/QrCodeType.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/entity/enums/QrLoginSessionStatus.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/exception/AppException.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/exception/ErrorCode.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/exception/GlobalExceptionHandler.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/mapper/QrCodeMapper.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/repository/InvalidatedTokenRepository.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/repository/LoginHistoryRepository.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/repository/QrCodeRepository.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/repository/QrLoginSessionRepository.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/repository/UserSessionRepository.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/repository/httpclient/GoogleIdentityClient.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/repository/httpclient/GoogleUserClient.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/scheduler/AuthCleanupScheduler.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/service/AuthService.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/service/JwtService.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/service/NotificationPublisher.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/service/QrLoginService.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/service/SessionService.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/service/UserServiceClient.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/utils/ControllerUtils.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/utils/ValidationUtils.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/request/ChangeEmailRequest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/request/ChangePasswordRequest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/request/ChangePhoneRequest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/request/DeleteAccountRequest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/request/Disable2FARequest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/request/Enable2FARequest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/request/ForgotPasswordRequest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/request/LinkEmailRequest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/request/LinkPhoneRequest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/request/Request2FADisableOtpRequest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/request/Request2FAEnableOtpRequest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/request/RequestChangeEmailOtpRequest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/request/RequestChangePhoneOtpRequest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/request/RequestDeleteAccountOtpRequest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/request/SetPasswordRequest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/request/UpdateProfileRequest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/request/VerifyPasswordResetRequest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/response/AccountDeletionResponse.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/response/EmailChangeResponse.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/response/Enable2FAResponse.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/response/PasswordChangeResponse.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/response/PhoneChangeResponse.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/response/TwoFactorAuthStatus.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/response/UserSessionsResponse.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/auth-service/Dockerfile" beforeDir="false" afterPath="$PROJECT_DIR$/auth-service/Dockerfile" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/entity/enums/AccountType.java" beforeDir="false" afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/entity/enums/AccountType.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/auth-service/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/auth-service/src/main/resources/application.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notification-service/src/main/resources/templates/otp-email.html" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/src/main/resources/templates/email/otp-email.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notification-service/src/main/resources/templates/otp-login.html" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/src/main/resources/templates/email/otp-login.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notification-service/src/main/resources/templates/welcome-email.html" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/src/main/resources/templates/email/welcome-email.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notification-service/src/main/resources/templates/welcome.html" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/src/main/resources/templates/email/welcome.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/controller/InternalUserController.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/controller/InternalUserController.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -179,6 +130,10 @@
       <recent name="D:\DaiHoc\CongNgheMoi\project\ott-backend\notification-service\src\main\resources\templates\email" />
       <recent name="D:\DaiHoc\CongNgheMoi\project\ott-backend\notification-service\src\main\resources\templates" />
     </key>
+    <key name="CopyClassDialog.RECENTS_KEY">
+      <recent name="iuh.fit.userservice.dto.response" />
+      <recent name="iuh.fit.userservice.dto.request" />
+    </key>
   </component>
   <component name="RunDashboard">
     <option name="configurationTypes">
@@ -263,7 +218,7 @@
       <workItem from="1772127934215" duration="95000" />
       <workItem from="1772991509285" duration="6447000" />
       <workItem from="1773082202922" duration="2933000" />
-      <workItem from="1773085274025" duration="1794000" />
+      <workItem from="1773085274025" duration="2570000" />
     </task>
     <servers />
   </component>
