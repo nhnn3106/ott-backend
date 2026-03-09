@@ -18,13 +18,19 @@ import java.time.LocalDateTime;
                 @Index(name = "idx_email_logs_type",   columnList = "email_type, created_at")
         }
 )
-@Getter @Setter @Builder
-@NoArgsConstructor @AllArgsConstructor
+@Getter
+@Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class EmailLog {
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
 
+    // Không giữ @ManyToOne User — chỉ lưu userId string
+    // vì notification-service không có User entity
     @Column(name = "user_id")
     private String userId;
 
@@ -62,4 +68,8 @@ public class EmailLog {
 
     @Column(name = "failed_at")
     private LocalDateTime failedAt;
+
+    public boolean isSent() {
+        return status == EmailStatus.SENT;
+    }
 }

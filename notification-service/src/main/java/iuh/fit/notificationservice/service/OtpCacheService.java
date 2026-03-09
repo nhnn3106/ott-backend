@@ -32,33 +32,39 @@ public class OtpCacheService {
     public void saveOtp(String identity, String otpType, String otpCode) {
         String key = otpKey(identity, otpType);
         redisTemplate.opsForValue().set(key, otpCode, otpTtlSeconds, TimeUnit.SECONDS);
-        log.debug(" OTP cached: key={}", key);
+        log.debug("OTP cached: key={}, ttl={}s", key, otpTtlSeconds);
     }
 
     public boolean validateOtp(String identity, String otpType, String inputCode) {
         String key = otpKey(identity, otpType);
         Object cached = redisTemplate.opsForValue().get(key);
+
         if (cached == null) {
-            log.warn(" OTP expired or not found: key={}", key);
+            log.warn("OTP expired or not found: key={}", key);
             return false;
         }
+
         return cached.toString().equals(inputCode);
     }
 
     public void deleteOtp(String identity, String otpType) {
         redisTemplate.delete(otpKey(identity, otpType));
+        log.debug("OTP deleted: identity={}, type={}", identity, otpType);
     }
 
     public boolean isRateLimited(String identity, String otpType) {
         String key = rateLimitKey(identity, otpType);
         Long count = redisTemplate.opsForValue().increment(key);
+
         if (count == 1) {
             redisTemplate.expire(key, 1, TimeUnit.HOURS);
         }
+
         if (count > maxOtpPerHour) {
-            log.warn(" Rate limit exceeded: identity={}, type={}", identity, otpType);
+            log.warn(" Rate limit exceeded: identity={}, type={}, count={}", identity, otpType, count);
             return true;
         }
+
         return false;
     }
 

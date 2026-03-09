@@ -1,10 +1,10 @@
 package iuh.fit.notificationservice.config;
 
-import org.springframework.amqp.support.converter.MessageConverter;
-import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.core.*;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
+import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -40,6 +40,7 @@ public class RabbitMQConfig {
 
     @Bean
     public Queue otpQueue() {
+        // OTP queue có Dead Letter Exchange để xử lý message thất bại
         return QueueBuilder.durable(otpQueue)
                 .withArgument("x-dead-letter-exchange", "notification.dlx")
                 .build();
@@ -70,7 +71,6 @@ public class RabbitMQConfig {
         return BindingBuilder.bind(alertQueue()).to(notificationExchange()).with(alertRoutingKey);
     }
 
-    // Dead Letter Exchange — nhận message thất bại
     @Bean
     public DirectExchange deadLetterExchange() {
         return new DirectExchange("notification.dlx");

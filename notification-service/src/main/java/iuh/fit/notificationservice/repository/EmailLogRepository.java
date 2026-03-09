@@ -6,11 +6,21 @@ import iuh.fit.notificationservice.entity.enums.EmailType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
 public interface EmailLogRepository extends JpaRepository<EmailLog, String> {
+
     List<EmailLog> findByUserIdOrderByCreatedAtDesc(String userId);
+
     List<EmailLog> findByStatus(EmailStatus status);
+
+    // Dùng cho scheduler retry
+    List<EmailLog> findByStatusAndRetryCountLessThan(EmailStatus status, int maxRetry);
+
     boolean existsByEmailToAndEmailTypeAndStatus(String emailTo, EmailType emailType, EmailStatus status);
+
+    // Dùng cho scheduler cleanup
+    void deleteByCreatedAtBefore(LocalDateTime cutoff);
 }
