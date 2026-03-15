@@ -53,15 +53,26 @@ public class PostController {
     /** GET /posts/page  – có phân trang */
     @GetMapping("/page")
     public ResponseEntity<Page<PostResponse>> getPostsPaged(
-            @PageableDefault(size = 5, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+            @PageableDefault(size = 0, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return ResponseEntity.ok(postService.getAllPosts(pageable));
     }
+
+    /** GET /posts/page/{userId} */
+    @GetMapping("/page/{userId}")
+    public ResponseEntity<Page<PostResponse>> findAllPostsWithAuthorized(
+            @PageableDefault(size = 4, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
+            @PathVariable String userId) {
+        return ResponseEntity.ok(postService.findAllPostsWithAuthorized(pageable, userId));
+    }
+
 
     /** GET /posts/{id} */
     @GetMapping("/{id}")
     public ResponseEntity<PostResponse> getPostById(@PathVariable String id) {
         return ResponseEntity.ok(postService.getPostById(id));
     }
+
+
 
     /** GET /posts/user/{userId} */
     @GetMapping("/user/{userId}")
