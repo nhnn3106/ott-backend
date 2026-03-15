@@ -29,6 +29,7 @@ public abstract class Content {
 
 
     @Enumerated(EnumType.STRING)
+    @Column(columnDefinition = "ACTIVE")
     private ContentStatusType status;
 
     @Enumerated(EnumType.STRING)
