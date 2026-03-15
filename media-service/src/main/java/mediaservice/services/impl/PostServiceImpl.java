@@ -11,8 +11,7 @@ import mediaservice.models.ImageMedia;
 import mediaservice.models.Post;
 import mediaservice.models.UserAccount;
 import mediaservice.models.VideoMedia;
-import mediaservice.models.enums.ReactionTargetType;
-import mediaservice.models.enums.VisibilityType;
+import mediaservice.models.enums.*;
 import mediaservice.repositories.CommentRepository;
 import mediaservice.repositories.MediaRepository;
 import mediaservice.repositories.PostRepository;
@@ -152,6 +151,25 @@ public class PostServiceImpl implements PostService {
     public Page<PostResponse> getAllPosts(Pageable pageable) {
         return postRepository.findallPosts(pageable)
                 .map(p -> enrichCounts(postMapper.toResponse(p), p.getId()));
+    }
+
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<PostResponse> findAllPostsWithAuthorized(Pageable pageable, String accountId) {
+        return postRepository.
+                findAllPostsWithAuthorized(
+                        ContentStatusType.ACTIVE,
+                        VisibilityType.PUBLIC,
+                        VisibilityType.PRIVATE,
+                        VisibilityType.FRIENDS,
+                        RelationshipStatusType.ACCEPTED,
+                        VisibilityType.CUSTOM,
+                        RuleType.INCLUDE,
+                        RuleType.EXCLUDE,
+                        accountId,
+                        pageable
+                ).map(p -> enrichCounts(postMapper.toResponse(p), p.getId()));
     }
 
 
