@@ -13,10 +13,15 @@ router.get("/users", UserController.getAllUsers);
 
 router.post("/conversations", ConversationController.createConversation);
 router.post("/conversations/add-member", ConversationController.addMember);
+router.put("/conversations/:conversationId", ConversationController.updateConversation);
 
 router.get(
   "/participants/:userId",
   ParticipantController.getConversationsByUserId,
+);
+router.get(
+  "/participants/members/:conversationId",
+  ParticipantController.getConversationMembers,
 );
 router.put(
   "/participants/category",
@@ -32,11 +37,28 @@ router.put(
   "/participants/delete-conversation",
   ParticipantController.deleteConversation,
 );
+router.put(
+  "/participants/role/:conversationId/:userId",
+  ParticipantController.updateMemberRole,
+);
+router.delete(
+  "/participants/leave/:conversationId/:userId",
+  ParticipantController.leaveGroup,
+);
+router.delete(
+  "/participants/remove/:conversationId/:userId",
+  ParticipantController.removeMember,
+);
 
 router.post("/messages/presigned-url", MessageController.generatePresignedUrl);
 router.post("/messages", MessageController.sendMessage);
 router.put("/messages/:msgId/reaction", MessageController.reactToMessage);
+router.put("/messages/:msgId/pin", MessageController.pinMessage);
 router.get("/messages/:conversationId", MessageController.getMessages);
+router.get("/messages/:conversationId/pinned", MessageController.getPinnedMessages);
+router.get("/messages/:conversationId/media", MessageController.getMediaMessages);
+router.get("/messages/:conversationId/files", MessageController.getFileMessages);
+router.get("/messages/:conversationId/links", MessageController.getLinkMessages);
 
 // User Category routes
 router.get("/categories/:userId", UserCategoryController.getUserCategories);
