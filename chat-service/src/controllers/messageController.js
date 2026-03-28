@@ -101,3 +101,99 @@ exports.reactToMessage = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+// Pin/Unpin message
+exports.pinMessage = async (req, res) => {
+  try {
+    const { msgId } = req.params;
+    const { conversationId, userId, isPinned } = req.body;
+
+    const updatedMessage = await MessageService.pinMessage({
+      conversationId,
+      msgId,
+      userId,
+      isPinned,
+    });
+
+    // Emit to all participants
+    const participants =
+      await ParticipantService.getParticipants(conversationId);
+    participants.forEach((p) => {
+      req.io.to(`user:${p.user_id}`).emit("tin_nhan_pin", updatedMessage);
+    });
+
+    res.status(200).json(updatedMessage);
+  } catch (error) {
+    if (error.message === "Tin nhắn không tồn tại") {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Get pinned messages
+exports.getPinnedMessages = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+
+    const messages = await MessageService.getPinnedMessages(conversationId);
+
+    res.status(200).json(messages);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Get media messages (images/videos)
+exports.getMediaMessages = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { limit = 20, skip = 0 } = req.query;
+
+    const messages = await MessageService.getMediaMessages(
+      conversationId,
+      parseInt(limit),
+      parseInt(skip)
+    );
+
+    res.status(200).json(messages);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Get file messages
+exports.getFileMessages = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { limit = 20, skip = 0 } = req.query;
+
+    const messages = await MessageService.getFileMessages(
+      conversationId,
+      parseInt(limit),
+      parseInt(skip)
+    );
+
+    res.status(200).json(messages);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Get link messages
+exports.getLinkMessages = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { limit = 20, skip = 0 } = req.query;
+
+    const messages = await MessageService.getLinkMessages(
+      conversationId,
+      parseInt(limit),
+      parseInt(skip)
+    );
+
+    res.status(200).json(messages);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};

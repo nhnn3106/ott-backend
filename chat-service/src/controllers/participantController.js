@@ -1,33 +1,56 @@
 const ParticipantService = require("../services/participantService");
+const Message = require("../models/Message");
 
 exports.getConversationsByUserId = async (req, res) => {
   try {
     const { userId } = req.params;
 
     const participants = await ParticipantService.getConversationsByUserId(userId);
-    // Trả về đầy đủ participant data + conversation data
-    const result = participants.map(participant => {
-      const conversation = participant.conversation_id;
-      
-      // Nếu conversation không tồn tại, bỏ qua
-      if (!conversation) return null;
-      
-      return {
-        conversation: conversation.toObject(),
-        participant: {
-          _id: participant._id,
-          user_id: participant.user_id,
-          conversation_id: participant.conversation_id._id,
-          settings: participant.settings,
-          last_read_message_id: participant.last_read_message_id,
-          last_read_at: participant.last_read_at,
-          deleted_msg_id: participant.deleted_msg_id,
-          nickname: participant.nickname,
-          joined_at: participant.joined_at,
-          roles: participant.roles,
-        }
-      };
-    }).filter(item => item !== null);
+    // Trả về đầy đủ participant data + conversation data + unread_count
+    const result = (
+      await Promise.all(
+        participants.map(async (participant) => {
+          const conversation = participant.conversation_id;
+
+          // Nếu conversation không tồn tại, bỏ qua
+          if (!conversation) return null;
+
+          const lastReadMsgId = participant.last_read_message_id || "0";
+          const deletedMsgId = participant.deleted_msg_id || "0";
+          const anchorMsgId =
+            BigInt(lastReadMsgId) > BigInt(deletedMsgId)
+              ? lastReadMsgId
+              : deletedMsgId;
+
+          let unread_count = 0;
+          if (conversation.last_message?.msg_id && BigInt(conversation.last_message.msg_id) > BigInt(anchorMsgId)) {
+            unread_count = await Message.countDocuments({
+              conversation_id: conversation._id,
+              msg_id: { $gt: anchorMsgId },
+              is_deleted: { $ne: true },
+              is_revoked: { $ne: true },
+            });
+          }
+
+          return {
+            conversation: conversation.toObject(),
+            participant: {
+              _id: participant._id,
+              user_id: participant.user_id,
+              conversation_id: participant.conversation_id._id,
+              settings: participant.settings,
+              last_read_message_id: participant.last_read_message_id,
+              last_read_at: participant.last_read_at,
+              deleted_msg_id: participant.deleted_msg_id,
+              unread_count,
+              nickname: participant.nickname,
+              joined_at: participant.joined_at,
+              roles: participant.roles,
+            }
+          };
+        })
+      )
+    ).filter((item) => item !== null);
 
     res.status(200).json(result);
   } catch (error) {
@@ -97,6 +120,95 @@ exports.deleteConversation = async (req, res) => {
     const isClientError =
       error.message.includes("không tồn tại") ||
       error.message.includes("chưa có tin nhắn");
+    res.status(isClientError ? 400 : 500).json({ error: error.message });
+  }
+};
+
+// Get conversation members with user details
+exports.getConversationMembers = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const members = await ParticipantService.getConversationMembers(conversationId);
+    res.status(200).json(members);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Leave group
+exports.leaveGroup = async (req, res) => {
+  try {
+    const { conversationId, userId } = req.params;
+    const result = await ParticipantService.leaveGroup(conversationId, userId);
+
+    // Emit to remaining members
+    const participants = await ParticipantService.getParticipants(conversationId);
+    participants.forEach((p) => {
+      req.io.to(`user:${p.user_id}`).emit("roi_nhom", result);
+    });
+
+    res.status(200).json(result);
+  } catch (error) {
+    const isClientError =
+      error.message.includes("không tồn tại") ||
+      error.message.includes("không phải") ||
+      error.message.includes("Chỉ có thể");
+    res.status(isClientError ? 400 : 500).json({ error: error.message });
+  }
+};
+
+// Update member role (admin only)
+exports.updateMemberRole = async (req, res) => {
+  try {
+    const { conversationId, userId } = req.params;
+    const { adminId, newRole } = req.body;
+    
+    const result = await ParticipantService.updateMemberRole(conversationId, userId, newRole, adminId);
+
+    // Emit to all participants
+    const participants = await ParticipantService.getParticipants(conversationId);
+    participants.forEach((p) => {
+      req.io.to(`user:${p.user_id}`).emit("cap_nhat_role", result);
+    });
+
+    res.status(200).json(result);
+  } catch (error) {
+    const isClientError =
+      error.message.includes("không tồn tại") ||
+      error.message.includes("không có quyền") ||
+      error.message.includes("trưởng nhóm") ||
+      error.message.includes("không phải") ||
+      error.message.includes("Chỉ có thể") ||
+      error.message.includes("Không thể");
+    res.status(isClientError ? 400 : 500).json({ error: error.message });
+  }
+};
+
+// Remove member from group (admin only)
+exports.removeMember = async (req, res) => {
+  try {
+    const { conversationId, userId } = req.params;
+    const { adminId } = req.body;
+    
+    const result = await ParticipantService.removeMember(conversationId, userId, adminId);
+
+    // Emit to all participants including removed user
+    const participants = await ParticipantService.getParticipants(conversationId);
+    participants.forEach((p) => {
+      req.io.to(`user:${p.user_id}`).emit("xoa_thanh_vien", result);
+    });
+    // Also notify the removed user
+    req.io.to(`user:${userId}`).emit("bi_xoa_khoi_nhom", result);
+
+    res.status(200).json(result);
+  } catch (error) {
+    const isClientError =
+      error.message.includes("không tồn tại") ||
+      error.message.includes("không có quyền") ||
+      error.message.includes("trưởng nhóm") ||
+      error.message.includes("không phải") ||
+      error.message.includes("Chỉ có thể") ||
+      error.message.includes("Không thể xóa");
     res.status(isClientError ? 400 : 500).json({ error: error.message });
   }
 };

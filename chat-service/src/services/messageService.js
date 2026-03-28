@@ -201,3 +201,109 @@ exports.reactToMessage = async ({
     reactions: updatedMessage.reactions,
   };
 };
+
+// Pin/Unpin message
+exports.pinMessage = async ({ conversationId, msgId, userId, isPinned }) => {
+  const message = await Message.findOne({
+    msg_id: msgId,
+    conversation_id: conversationId,
+  });
+
+  if (!message) {
+    throw new Error("Tin nhắn không tồn tại");
+  }
+
+  message.is_pinned = isPinned;
+  message.pinned_at = isPinned ? new Date() : null;
+  message.pinned_by = isPinned ? userId : null;
+
+  const updatedMessage = await message.save();
+
+  return {
+    _id: updatedMessage._id,
+    msg_id: updatedMessage.msg_id,
+    conversation_id: updatedMessage.conversation_id,
+    is_pinned: updatedMessage.is_pinned,
+    pinned_at: updatedMessage.pinned_at,
+    pinned_by: updatedMessage.pinned_by,
+    type: updatedMessage.type,
+    content: updatedMessage.content,
+    sender_id: updatedMessage.sender_id,
+    createdAt: updatedMessage.createdAt,
+  };
+};
+
+// Get pinned messages for a conversation
+exports.getPinnedMessages = async (conversationId) => {
+  const messages = await Message.find({
+    conversation_id: conversationId,
+    is_pinned: true,
+  }).sort({ pinned_at: -1 });
+
+  return messages;
+};
+
+// Get media messages (images/videos) for a conversation
+exports.getMediaMessages = async (conversationId, limit = 20, skip = 0) => {
+  const messages = await Message.find({
+    conversation_id: conversationId,
+    type: { $in: ["image", "video"] },
+    is_deleted: false,
+    is_revoked: false,
+  })
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit);
+
+  return messages;
+};
+
+// Get file messages for a conversation
+exports.getFileMessages = async (conversationId, limit = 20, skip = 0) => {
+  const messages = await Message.find({
+    conversation_id: conversationId,
+    type: "file",
+    is_deleted: false,
+    is_revoked: false,
+  })
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit);
+
+  return messages;
+};
+
+// Extract and get links from messages
+exports.getLinkMessages = async (conversationId, limit = 20, skip = 0) => {
+  // URL regex pattern
+  const urlPattern = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
+
+  const messages = await Message.find({
+    conversation_id: conversationId,
+    type: "text",
+    is_deleted: false,
+    is_revoked: false,
+  }).sort({ createdAt: -1 });
+
+  // Filter messages that contain links
+  const messagesWithLinks = messages.filter((msg) => {
+    const content = Array.isArray(msg.content) ? msg.content.join(" ") : msg.content;
+    return urlPattern.test(content);
+  });
+
+  // Extract links from messages
+  const linksData = messagesWithLinks.slice(skip, skip + limit).map((msg) => {
+    const content = Array.isArray(msg.content) ? msg.content.join(" ") : msg.content;
+    const links = content.match(urlPattern) || [];
+    
+    return {
+      _id: msg._id,
+      msg_id: msg.msg_id,
+      links: links,
+      sender_id: msg.sender_id,
+      createdAt: msg.createdAt,
+    };
+  });
+
+  return linksData;
+};
