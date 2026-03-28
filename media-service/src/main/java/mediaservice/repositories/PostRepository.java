@@ -26,7 +26,7 @@ public interface PostRepository extends JpaRepository<Post, String> {
     * */
     @Query(value =
         "SELECT p FROM Post p " +
-        "JOIN FETCH p.account a  " +
+        "JOIN FETCH p.account a " +
         "WHERE p.status = :status AND " +
         "( " +
             "p.visibility = :publicVis OR " +
