@@ -18,14 +18,24 @@ router.get(
   "/participants/:userId",
   ParticipantController.getConversationsByUserId,
 );
-router.put("/participants/category", ParticipantController.updateConversationCategory);
-router.put("/participants/notification", ParticipantController.updateNotificationStatus);
+router.put(
+  "/participants/category",
+  ParticipantController.updateConversationCategory,
+);
+router.put(
+  "/participants/notification",
+  ParticipantController.updateNotificationStatus,
+);
 router.put("/participants/pin", ParticipantController.updatePinStatus);
 router.put("/participants/read", ParticipantController.updateLastRead);
-router.put("/participants/delete-conversation", ParticipantController.deleteConversation);
+router.put(
+  "/participants/delete-conversation",
+  ParticipantController.deleteConversation,
+);
 
 router.post("/messages/presigned-url", MessageController.generatePresignedUrl);
 router.post("/messages", MessageController.sendMessage);
+router.put("/messages/:msgId/reaction", MessageController.reactToMessage);
 router.get("/messages/:conversationId", MessageController.getMessages);
 
 // User Category routes
@@ -33,6 +43,9 @@ router.get("/categories/:userId", UserCategoryController.getUserCategories);
 router.post("/categories", UserCategoryController.createCategory);
 router.put("/categories/:categoryId", UserCategoryController.updateCategory);
 router.delete("/categories/:categoryId", UserCategoryController.deleteCategory);
-router.post("/categories/defaults", UserCategoryController.createDefaultCategories);
+router.post(
+  "/categories/defaults",
+  UserCategoryController.createDefaultCategories,
+);
 
 module.exports = router;
