@@ -24,6 +24,9 @@ const buildReplyPreview = (message) => {
     case "file":
       preview = "[Tệp tin]";
       break;
+    case "audio":
+      preview = "[Âm thanh]";
+      break;
     default:
       preview = rawContent;
       break;
@@ -49,7 +52,9 @@ exports.generatePresignedUrl = async (fileName, fileType) => {
     ? "image"
     : fileType.startsWith("video/")
       ? "video"
-      : "file";
+      : fileType.startsWith("audio/")
+        ? "audio"
+        : "file";
 
   const uniqueId = crypto.randomBytes(8).toString("hex");
 

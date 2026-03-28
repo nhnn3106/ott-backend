@@ -1,7 +1,13 @@
 const Conversation = require("../models/Conversation");
 const User = require("../models/User");
 
-exports.createConversation = async ({ creatorId, type, name, avatar, memberCount }) => {
+exports.createConversation = async ({
+  creatorId,
+  type,
+  name,
+  avatar,
+  memberCount,
+}) => {
   const newConversation = new Conversation({
     type: type,
     name: name || "",
@@ -32,6 +38,9 @@ exports.updateLastMessage = async (conversationId, message) => {
     case "file":
       displayContent = "[Tệp tin]";
       break;
+    case "audio":
+      displayContent = "[Âm thanh]";
+      break;
     default: {
       const rawContent = message.content[0] || "";
       displayContent =
@@ -42,7 +51,9 @@ exports.updateLastMessage = async (conversationId, message) => {
     }
   }
 
-  const sender = await User.findOne({ user_id: message.sender_id }).select("name").lean();
+  const sender = await User.findOne({ user_id: message.sender_id })
+    .select("name")
+    .lean();
 
   return await Conversation.findByIdAndUpdate(
     conversationId,
