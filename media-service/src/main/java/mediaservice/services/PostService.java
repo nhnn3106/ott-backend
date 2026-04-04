@@ -14,8 +14,18 @@ public interface PostService {
     PostResponse createPost(String accountId, String caption, VisibilityType visibility,
                             List<MultipartFile> files, List<String> captions);
     PostResponse getPostById(String id);
+
+
     List<PostResponse> getAllPosts();
+
+
     Page<PostResponse> getAllPosts(Pageable pageable);
+
+
+    Page<PostResponse> findAllPostsWithAuthorized(Pageable pageable, String accountId);
+
+
+
     PostResponse updatePost(String id, PostRequest request);
     void deletePost(String id);
     List<PostResponse> getPostsByUserId(String userId);
