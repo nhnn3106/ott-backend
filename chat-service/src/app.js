@@ -5,6 +5,8 @@ const dotenv = require("dotenv");
 const cors = require("cors");
 const connectDB = require("./config/db");
 const apiRoutes = require("./routes/api");
+const messageRoutes = require("./routes/messageRoutes");
+const messageEventsHandler = require("./events/messageEvents");
 const ParticipantService = require("./services/participantService");
 
 dotenv.config();
@@ -23,6 +25,10 @@ const io = new Server(server, {
     methods: ["GET", "POST"],
   },
 });
+
+// ========== MESSAGE EVENTS HANDLER ==========
+messageEventsHandler(io);
+// ==========================================
 
 // In-memory call state by conversationId.
 // Note: This is suitable for single-node deployments.
@@ -246,6 +252,10 @@ io.on("connection", (socket) => {
   });
 });
 
+// ========== MESSAGE ROUTES ==========
+app.use("/api", messageRoutes);
+
+// ========== OTHER ROUTES ==========
 app.use("/api", apiRoutes);
 
 app.get("/", (req, res) => res.send("Chat Service dang chay..."));

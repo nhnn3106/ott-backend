@@ -3,6 +3,7 @@ const Participant = require("../models/Participant");
 const Conversation = require("../models/Conversation");
 const User = require("../models/User");
 const ConversationService = require("./conversationService");
+const messageCacheService = require("./messageCacheService");
 const { PutObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const { s3Client, bucketName } = require("../config/s3");
@@ -111,6 +112,12 @@ exports.sendMessage = async ({
     conversationId,
     savedMessage,
   );
+
+  // Add message to Redis cache (last 20 messages)
+  await messageCacheService.addMessage(conversationId, {
+    ...savedMessage.toObject(),
+    sender_name: updatedConversation?.last_message?.sender_name || "",
+  });
 
   // Gửi kèm sender_name để FE cập nhật conversation list mà không cần query thêm
   return {

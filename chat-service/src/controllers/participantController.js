@@ -23,13 +23,29 @@ exports.getConversationsByUserId = async (req, res) => {
               : deletedMsgId;
 
           let unread_count = 0;
-          if (conversation.last_message?.msg_id && BigInt(conversation.last_message.msg_id) > BigInt(anchorMsgId)) {
-            unread_count = await Message.countDocuments({
-              conversation_id: conversation._id,
-              msg_id: { $gt: anchorMsgId },
-              is_deleted: { $ne: true },
-              is_revoked: { $ne: true },
-            });
+          try {
+            if (conversation.last_message?.msg_id && BigInt(conversation.last_message.msg_id) > BigInt(anchorMsgId)) {
+              // For numeric comparison with large numbers in MongoDB, we need to use $where or numeric operators
+              // Since msg_id is a string, we need to compare them as BigInt in JavaScript
+              const messages = await Message.find({
+                conversation_id: conversation._id,
+                is_deleted: { $ne: true },
+                is_revoked: { $ne: true },
+              })
+                .select("msg_id")
+                .lean();
+
+              unread_count = messages.filter((m) => {
+                try {
+                  return BigInt(m.msg_id) > BigInt(anchorMsgId);
+                } catch {
+                  return false;
+                }
+              }).length;
+            }
+          } catch (error) {
+            console.error("Error calculating unread count:", error);
+            unread_count = 0;
           }
 
           const memberDetails = await ParticipantService.getConversationMembers(
