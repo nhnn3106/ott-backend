@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   # ==================== INFRASTRUCTURE ====================
@@ -83,6 +83,17 @@ services:
       user-service:
         condition: service_started
 
+  media-service:
+    build: ./media-service
+    container_name: ott-media
+    restart: unless-stopped
+    env_file: .env
+    networks:
+      - ott-network
+    depends_on:
+      redis:
+        condition: service_healthy
+
   api-gateway:
     build: ./api-gateway
     container_name: ott-gateway
@@ -96,6 +107,7 @@ services:
       - auth-service
       - user-service
       - notification-service
+      - media-service
 
 volumes:
   redis_data:
