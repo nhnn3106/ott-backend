@@ -112,7 +112,7 @@ public class QrLoginService {
     @Transactional
     public QrStatusResponse confirmQrLogin(QrConfirmRequest request, String userId) {
         log.info("Confirming QR login - qrId: {}, userId: {}, confirmed: {}",
-                request.getQrId(), userId, request.isConfirmed());
+                request.getQrId(), userId, request.getConfirmed());
 
         QrCode qrCode = qrCodeRepository.findById(request.getQrId())
                 .orElseThrow(() -> new AppException(ErrorCode.QR_CODE_NOT_FOUND));
@@ -136,7 +136,7 @@ public class QrLoginService {
         QrLoginSession loginSession = qrLoginSessionRepository.findByQrCode(qrCode)
                 .orElseThrow(() -> new AppException(ErrorCode.SESSION_NOT_FOUND));
 
-        if (!request.isConfirmed()) {
+        if (!request.getConfirmed()) {
             log.info("User rejected QR login - qrId: {}", qrCode.getId());
             qrCode.setStatus(QrCodeStatus.CANCELLED);
             qrCode = qrCodeRepository.save(qrCode);

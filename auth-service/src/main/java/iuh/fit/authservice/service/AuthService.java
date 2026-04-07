@@ -8,10 +8,8 @@ import iuh.fit.authservice.entity.enums.*;
 import iuh.fit.authservice.exception.AppException;
 import iuh.fit.authservice.exception.ErrorCode;
 import iuh.fit.authservice.repository.LoginHistoryRepository;
-import iuh.fit.authservice.repository.UserRepository;
 import iuh.fit.authservice.repository.httpclient.GoogleUserClient;
 import iuh.fit.authservice.utils.ValidationUtils;
-import jakarta.persistence.EntityManager;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -46,9 +44,15 @@ public class AuthService {
     ValidationUtils validationUtils;
     RestTemplate restTemplate;
     UserServiceClient userServiceClient;
-    UserRepository userRepository;
-    EntityManager entityManager;
     UserSyncService userSyncService;
+
+    @NonFinal
+    @Value("${app.user.default-avatar}")
+    String defaultAvatarUrl;
+
+    @NonFinal
+    @Value("${app.user.default-cover-photo}")
+    String defaultCoverPhotoUrl;
 
     @NonFinal
     @Value("${spring.security.oauth2.client.registration.google.client-id}")
@@ -199,18 +203,6 @@ public class AuthService {
 
             validateUserStatus(user, request.getIpAddress(), request.getDeviceInfo());
 
-            if (is2FAEnabled(user)) {
-                log.info("2FA required for Google login, userId: {}", user.getId());
-                sendTwoFactorOtp(user, request.getIpAddress(), request.getLocation());
-
-                return AuthenticationResponse.builder()
-                        .authenticated(false)
-                        .requires2FA(true)
-                        .requiresPhoneSetup(false)
-                        .tempToken(jwtService.generateTempToken(user, "GOOGLE"))
-                        .build();
-            }
-
             log.info("Creating auth response for Google login");
             return createAuthResponse(user, request, LoginMethod.GOOGLE);
 
@@ -245,12 +237,14 @@ public class AuthService {
             throw new AppException(ErrorCode.GOOGLE_ACCOUNT_ALREADY_LINKED);
         }
 
+
         UserServiceClient.CreateUserRequest createRequest = new UserServiceClient.CreateUserRequest(
                 request.getPhone(),
                 googleInfo.getEmail(),
                 googleInfo.getGoogleId(),
                 googleInfo.getName(),
-                googleInfo.getPicture()
+                defaultAvatarUrl,
+                defaultCoverPhotoUrl
         );
 
         UserServiceClient.UserDto user = userServiceClient.createUser(createRequest);
@@ -262,15 +256,26 @@ public class AuthService {
     @Transactional
     public AuthenticationResponse verify2FAOtp(String tempToken, String otpCode,
                                                String deviceId, DeviceType deviceType,
-                                               String ipAddress, String deviceInfo) {
-        log.info("Verifying 2FA OTP");
+                                               String ipAddress, String deviceInfo,
+                                               boolean isBackupCode) {
+        log.info("Verifying 2FA - isBackupCode: {}", isBackupCode);
 
         var userInfo = jwtService.verifyTempToken(tempToken);
         String userId = userInfo.get("userId");
-
         UserServiceClient.UserDto user = userServiceClient.getUserById(userId);
 
-        validateOtpViaNotificationService(null, user.getEmail(), otpCode, OtpType.TWO_FACTOR_AUTH);
+        if (isBackupCode) {
+
+            boolean valid = userServiceClient.validateAndConsumeBackupCode(userId, otpCode);
+            if (!valid) {
+                log.warn("Invalid backup code for userId: {}", userId);
+                throw new AppException(ErrorCode.INVALID_BACKUP_CODE);
+            }
+            log.info("Backup code validated for userId: {}", userId);
+        } else {
+
+            validateOtpViaNotificationService(null, user.getEmail(), otpCode, OtpType.TWO_FACTOR_AUTH);
+        }
 
         LoginMethod loginMethod = LoginMethod.valueOf(
                 userInfo.getOrDefault("loginMethod", "LOCAL")
@@ -280,23 +285,15 @@ public class AuthService {
         String refreshToken = jwtService.generateRefreshToken();
 
         userSyncService.ensureUserExists(user);
-
-        sessionService.createUserSession(
-                user.getId(), deviceId, deviceType, null,
-                ipAddress, deviceInfo, token, refreshToken, loginMethod
-        );
-
+        sessionService.createUserSession(user.getId(), deviceId, deviceType, null,
+                ipAddress, deviceInfo, token, refreshToken, loginMethod);
         logLoginHistory(user, ipAddress, deviceInfo, LoginStatus.SUCCESS, loginMethod, null);
         sendWelcomeEmailIfNeeded(user);
         userServiceClient.updateLastLogin(userId);
 
-        log.info("2FA verification successful for userId: {}", userId);
         return AuthenticationResponse.builder()
-                .token(token)
-                .refreshToken(refreshToken)
-                .authenticated(true)
-                .requires2FA(false)
-                .requiresPhoneSetup(false)
+                .token(token).refreshToken(refreshToken)
+                .authenticated(true).requires2FA(false).requiresPhoneSetup(false)
                 .build();
     }
 
@@ -639,9 +636,4 @@ public class AuthService {
     private void validateTwoFactorOtp(UserServiceClient.UserDto user, String otpCode) {
         validateOtpViaNotificationService(null, user.getEmail(), otpCode, OtpType.TWO_FACTOR_AUTH);
     }
-
-    private String generateAndCacheOtpCode() {
-        return null;
-    }
-
 }

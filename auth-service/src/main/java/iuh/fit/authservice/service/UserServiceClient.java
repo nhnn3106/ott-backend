@@ -34,7 +34,6 @@ public class UserServiceClient {
     @Value("${internal.api-key}")
     private String internalApiKey;
 
-    // DTO nhỏ gọn để map response từ user-service
     @Data
     @Builder
     @NoArgsConstructor
@@ -58,6 +57,9 @@ public class UserServiceClient {
         @JsonAlias({"is2FAEnabled", "2FAEnabled"})
         private Boolean twoFactorEnabled;
         private LocalDate dateOfBirth;
+        @JsonAlias("coverUrl")
+        private String coverUrl;
+
     }
 
     @Data
@@ -87,6 +89,7 @@ public class UserServiceClient {
             );
             UserDto user = extractResult(response);
             log.info("Retrieved user by id: {} successfully", userId);
+            log.error("🔥 RAW USER RESPONSE = {}", response.getBody());
             return user;
         } catch (HttpClientErrorException.NotFound e) {
             log.warn("User not found by id: {}", userId);
@@ -276,6 +279,7 @@ public class UserServiceClient {
         private String googleId;
         private String fullName;
         private String avatarUrl;
+        private String coverPhotoUrl;
     }
 
     public UserDto createUser(CreateUserRequest createRequest) {
@@ -332,6 +336,44 @@ public class UserServiceClient {
             log.info("Session created via user-service for userId: {}", userId);
         } catch (Exception e) {
             log.warn("Failed to create session in user-service for userId={}: {}", userId, e.getMessage());
+        }
+    }
+
+    public boolean validateAndConsumeBackupCode(String userId, String code) {
+        try {
+            Map<String, String> body = new HashMap<>();
+            body.put("code", code);
+
+            restTemplate.exchange(
+                    userServiceUrl + "/internal/users/" + userId + "/backup-code/validate",
+                    HttpMethod.POST,
+                    new HttpEntity<>(body, internalHeaders()),
+                    Void.class
+            );
+            return true;
+        } catch (HttpClientErrorException e) {
+            return false;
+        } catch (Exception e) {
+            log.error("Error validating backup code for userId={}", userId, e);
+            return false;
+        }
+    }
+
+    public void updateContact(String userId, String newPhone, String newEmail) {
+        try {
+            Map<String, String> body = new HashMap<>();
+            if (newPhone != null) body.put("newPhone", newPhone);
+            if (newEmail != null) body.put("newEmail", newEmail);
+
+            restTemplate.exchange(
+                    userServiceUrl + "/internal/users/" + userId + "/contact",
+                    HttpMethod.PATCH,
+                    new HttpEntity<>(body, internalHeaders()),
+                    Void.class
+            );
+            log.info("Contact updated in user-service for userId: {}", userId);
+        } catch (Exception e) {
+            log.warn("Failed to sync contact update for userId={}: {}", userId, e.getMessage());
         }
     }
 }

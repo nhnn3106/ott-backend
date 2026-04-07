@@ -13,11 +13,15 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CompleteGoogleRegistrationRequest {
-    @NotBlank(message = "Temporary token is required")
+
+    @NotBlank(message = "TEMP_TOKEN_IS_REQUIRED")
     private String tempToken;
 
-    @NotBlank(message = "Phone number is required")
-    @Pattern(regexp = "^(0|\\+84)[3|5|7|8|9][0-9]{8}$", message = "Invalid phone format")
+    @NotBlank(message = "PHONE_NUMBER_IS_REQUIRED")
+    @Pattern(
+            regexp = "^(0|\\+84)[3|5|7|8|9][0-9]{8}$",
+            message = "INVALID_PHONE_FORMAT"
+    )
     private String phone;
 
     private String deviceId;

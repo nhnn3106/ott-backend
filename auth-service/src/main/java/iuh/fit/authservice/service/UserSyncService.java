@@ -6,8 +6,8 @@ import iuh.fit.authservice.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.annotation.Propagation;
+
+import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
@@ -16,41 +16,45 @@ public class UserSyncService {
 
     private final UserRepository userRepository;
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void ensureUserExists(UserServiceClient.UserDto userDto) {
-        log.debug("Starting user sync check for userId: {}", userDto.getId());
-
         try {
-            // Check cả id lẫn phone để tránh duplicate
-            boolean exists = userRepository.existsById(userDto.getId())
-                    || userRepository.existsByPhone(userDto.getPhone());
-
-            if (!exists) {
-                log.info("User not found in auth DB, syncing new user - userId: {}", userDto.getId());
-
-                User user = User.builder()
-                        .id(userDto.getId())
-                        .phone(userDto.getPhone())
-                        .email(userDto.getEmail() != null ? userDto.getEmail() : "")
-                        .googleId(userDto.getGoogleId())
-                        .fullName(userDto.getFullName() != null ? userDto.getFullName() : "")
-                        .avatarUrl(userDto.getAvatarUrl())
-                        .isActive(Boolean.TRUE.equals(userDto.getIsActive()))
-                        .isBlocked(Boolean.TRUE.equals(userDto.getIsBlocked()))
-                        .isFirstLogin(Boolean.TRUE.equals(userDto.getIsFirstLogin()))
-                        .welcomeEmailSent(Boolean.TRUE.equals(userDto.getWelcomeEmailSent()))
-                        .build();
-
-                userRepository.saveAndFlush(user);
-                log.info("Successfully synced new user to auth-service DB - userId: {}", userDto.getId());
-            } else {
-                log.debug("User already exists in auth DB, skipping sync - userId: {}", userDto.getId());
+            if (userRepository.existsById(userDto.getId())) {
+                log.debug("User already exists in auth DB - userId: {}", userDto.getId());
+                return;
             }
+
+            // Handle stale auth rows (old deleted accounts) still holding unique googleId.
+            if (userDto.getGoogleId() != null && !userDto.getGoogleId().isBlank()) {
+                userRepository.findByGoogleId(userDto.getGoogleId())
+                        .filter(conflict -> !conflict.getId().equals(userDto.getId()))
+                        .ifPresent(conflict -> {
+                            conflict.setGoogleId(conflict.getGoogleId() + "_deleted_" + System.currentTimeMillis());
+                            conflict.setDeletedAt(LocalDateTime.now());
+                            conflict.setIsActive(false);
+                            userRepository.saveAndFlush(conflict);
+                            log.info("Released conflicting googleId from stale auth user: {}", conflict.getId());
+                        });
+            }
+
+            User user = User.builder()
+                    .id(userDto.getId())
+                    .googleId(userDto.getGoogleId())
+                    .fullName(userDto.getFullName() != null ? userDto.getFullName() : "")
+                    .avatarUrl(userDto.getAvatarUrl())
+                    .isActive(Boolean.TRUE.equals(userDto.getIsActive()))
+                    .isBlocked(Boolean.TRUE.equals(userDto.getIsBlocked()))
+                    .isFirstLogin(Boolean.TRUE.equals(userDto.getIsFirstLogin()))
+                    .welcomeEmailSent(Boolean.TRUE.equals(userDto.getWelcomeEmailSent()))
+                    .coverUrl(userDto.getCoverUrl())
+                    .build();
+
+            userRepository.saveAndFlush(user);
+            log.info("User synced to auth DB - userId: {}", userDto.getId());
+
         } catch (org.springframework.dao.DataIntegrityViolationException e) {
-            log.debug("Concurrent insert detected for userId: {} (expected in high concurrency), skipping",
-                    userDto.getId());
+            log.debug("Concurrent insert for userId: {} - skipping", userDto.getId());
         } catch (Exception e) {
-            log.error("Failed to sync user to auth DB - userId: {}", userDto.getId(), e);
+            log.error("Failed to sync user - userId: {}", userDto.getId(), e);
         }
     }
 }

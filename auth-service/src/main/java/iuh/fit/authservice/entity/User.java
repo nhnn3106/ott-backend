@@ -18,8 +18,6 @@ import java.time.LocalDateTime;
                 @UniqueConstraint(name = "uk_user_google_id", columnNames = "google_id")
         },
         indexes = {
-                @Index(name = "idx_users_phone", columnList = "phone"),
-                @Index(name = "idx_users_email", columnList = "email"),
                 @Index(name = "idx_users_google_id", columnList = "google_id"),
                 @Index(name = "idx_users_account_type", columnList = "account_type"),
                 @Index(name = "idx_users_is_active", columnList = "is_active")
@@ -32,14 +30,9 @@ import java.time.LocalDateTime;
 @Builder
 public class User {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
 
-    @Column(nullable = false, unique = true, length = 50)
-    private String phone;
 
-    @Column(nullable = false, unique = true)
-    private String email;
 
     @Column(name = "google_id", unique = true, length = 150)
     private String googleId;
@@ -132,7 +125,4 @@ public class User {
 
     @Column(name = "welcome_email_sent_at")
     private LocalDateTime welcomeEmailSentAt;
-
-//    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-//    private TwoFactorAuth twoFactorAuth;
 }

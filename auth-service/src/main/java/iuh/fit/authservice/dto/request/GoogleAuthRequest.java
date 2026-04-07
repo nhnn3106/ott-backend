@@ -9,7 +9,8 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 public class GoogleAuthRequest {
-    @NotBlank(message = "Google authorization code is required")
+
+    @NotBlank(message = "GOOGLE_AUTHORIZATION_CODE_IS_REQUIRED")
     private String code;
 
     private String redirectUri;

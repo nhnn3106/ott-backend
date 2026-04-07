@@ -11,5 +11,5 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class QrConfirmRequest {
     private String qrId;
-    private boolean confirmed;
+    private Boolean confirmed;
 }
