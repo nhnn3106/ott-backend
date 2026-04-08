@@ -34,30 +34,30 @@ public class SessionService {
     private final EntityManager entityManager;
 
     @Transactional
-    public UserSession createUserSession(User user, String deviceId, DeviceType deviceType,
+    public UserSession createUserSession(String userId, String deviceId, DeviceType deviceType,
                                          String deviceName, String ipAddress, String userAgent,
                                          String sessionToken, String refreshToken,
                                          LoginMethod loginMethod) {
 
-        if (deviceId != null && user != null) {
+        log.info("Creating new session for userId: {}, deviceId: {}, loginMethod: {}",
+                userId, deviceId, loginMethod);
+
+        if (deviceId != null && userId != null) {
             Optional<UserSession> existingSession = userSessionRepository
-                    .findByDeviceIdAndUserAndIsActive(deviceId, user, true);
+                    .findByDeviceIdAndUserIdAndIsActive(deviceId, userId, true);
 
             if (existingSession.isPresent()) {
                 UserSession oldSession = existingSession.get();
-
                 qrLoginSessionRepository.nullifySessionReference(oldSession);
                 entityManager.flush();
-
                 userSessionRepository.delete(oldSession);
                 entityManager.flush();
-
-                log.info("Deleted old session for deviceId: {}, userId: {}", deviceId, user.getId());
+                log.info("Replaced old session for deviceId: {}, userId: {}", deviceId, userId);
             }
         }
 
         UserSession session = UserSession.builder()
-                .user(user)
+                .userId(userId)
                 .sessionToken(sessionToken)
                 .refreshToken(refreshToken)
                 .deviceId(deviceId)
@@ -72,16 +72,23 @@ public class SessionService {
                 .refreshExpiresAt(LocalDateTime.now().plusSeconds(jwtService.getRefreshExpiration()))
                 .build();
 
-        return userSessionRepository.save(session);
+        UserSession savedSession = userSessionRepository.save(session);
+        log.info("Session created successfully - sessionId: {}, userId: {}", savedSession.getId(), userId);
+
+        return savedSession;
     }
 
     public UserSessionsResponse getUserSessions(String userId, String currentToken) {
+        log.debug("Fetching active sessions for userId: {}", userId);
+
         List<UserSession> sessions = userSessionRepository
                 .findByUserIdAndIsActiveTrueOrderByLastActiveAtDesc(userId);
 
         List<SessionInfo> sessionInfos = sessions.stream()
                 .map(session -> toSessionInfo(session, currentToken))
                 .collect(Collectors.toList());
+
+        log.info("Retrieved {} active sessions for userId: {}", sessionInfos.size(), userId);
 
         return UserSessionsResponse.builder()
                 .sessions(sessionInfos)
@@ -91,50 +98,54 @@ public class SessionService {
 
     @Transactional
     public void revokeSession(String userId, String sessionId) {
+        log.info("Revoking session - sessionId: {}, userId: {}", sessionId, userId);
+
         UserSession session = userSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new AppException(ErrorCode.SESSION_NOT_FOUND));
 
-        if (!session.getUser().getId().equals(userId)) {
+        if (!session.getUserId().equals(userId)) {
+            log.warn("Unauthorized revoke attempt on sessionId: {}", sessionId);
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
         if (!session.getIsActive()) {
+            log.debug("Session already inactive - sessionId: {}", sessionId);
             return;
         }
 
         session.revoke("Revoked by user");
         userSessionRepository.save(session);
-
         invalidateSessionTokens(session);
+
+        log.info("Session revoked successfully - sessionId: {}", sessionId);
     }
 
     @Transactional
     public void revokeSessionByDevice(String userId, String deviceId) {
-        if (deviceId == null) {
-            return;
-        }
+        if (deviceId == null) return;
 
-        User user = User.builder().id(userId).build();
+        log.info("Revoking session by deviceId: {}, userId: {}", deviceId, userId);
+
         Optional<UserSession> sessionOpt = userSessionRepository
-                .findByDeviceIdAndUserAndIsActive(deviceId, user, true);
+                .findByDeviceIdAndUserIdAndIsActive(deviceId, userId, true);
 
         if (sessionOpt.isPresent()) {
             UserSession session = sessionOpt.get();
-
             invalidateSessionTokens(session);
-
             qrLoginSessionRepository.nullifySessionReference(session);
             entityManager.flush();
-
             userSessionRepository.delete(session);
             entityManager.flush();
-
-            log.info("Deleted session for deviceId: {}, userId: {}", deviceId, userId);
+            log.info("Session deleted by deviceId: {}, userId: {}", deviceId, userId);
+        } else {
+            log.debug("No active session found for deviceId: {}", deviceId);
         }
     }
 
     @Transactional
     public void revokeAllOtherSessions(String userId, String currentSessionToken) {
+        log.info("Revoking all other sessions for userId: {}", userId);
+
         List<UserSession> sessions = userSessionRepository.findByUserIdAndIsActiveTrue(userId);
 
         int revokedCount = 0;
@@ -148,14 +159,19 @@ public class SessionService {
 
         if (revokedCount > 0) {
             userSessionRepository.saveAll(sessions);
+            log.info("Revoked {} other sessions for userId: {}", revokedCount, userId);
+        } else {
+            log.debug("No other sessions to revoke for userId: {}", userId);
         }
     }
 
     @Transactional
     public int revokeAllUserSessions(String userId, String reason) {
-        List<UserSession> sessions = userSessionRepository.findByUserIdAndIsActiveTrue(userId);
+        log.info("Revoking all sessions for userId: {} | Reason: {}", userId, reason);
 
+        List<UserSession> sessions = userSessionRepository.findByUserIdAndIsActiveTrue(userId);
         if (sessions.isEmpty()) {
+            log.debug("No active sessions found for userId: {}", userId);
             return 0;
         }
 
@@ -165,22 +181,18 @@ public class SessionService {
         });
 
         userSessionRepository.saveAll(sessions);
+        log.info("Successfully revoked {} sessions for userId: {}", sessions.size(), userId);
+
         return sessions.size();
     }
 
-    public UserSession findActiveSessionByDeviceAndUser(String deviceId, User user) {
-        return userSessionRepository
-                .findByDeviceIdAndUserAndIsActive(deviceId, user, true)
-                .orElseThrow(() -> new AppException(ErrorCode.SESSION_NOT_FOUND));
-    }
-
     @Transactional
-    public void updateSessionTokens(String deviceId, User user, String newToken, String newRefreshToken) {
-        userSessionRepository.findByDeviceIdAndUser(deviceId, user)
+    public void updateSessionTokens(String deviceId, String userId, String newToken, String newRefreshToken) {
+        log.debug("Updating tokens for deviceId: {}, userId: {}", deviceId, userId);
+
+        userSessionRepository.findByDeviceIdAndUserId(deviceId, userId)
                 .ifPresent(session -> {
-                    if (!session.getIsActive()) {
-                        return;
-                    }
+                    if (!session.getIsActive()) return;
 
                     session.setSessionToken(newToken);
                     session.setRefreshToken(newRefreshToken);
@@ -188,44 +200,33 @@ public class SessionService {
                     session.setRefreshExpiresAt(LocalDateTime.now().plusSeconds(jwtService.getRefreshExpiration()));
                     session.setLastActiveAt(LocalDateTime.now());
                     userSessionRepository.save(session);
+
+                    log.info("Session tokens updated successfully for deviceId: {}", deviceId);
                 });
     }
 
     private void invalidateSessionTokens(UserSession session) {
+        log.debug("Invalidating tokens for sessionId: {}", session.getId());
+
         try {
             if (session.getSessionToken() != null) {
                 try {
                     SignedJWT signedJWT = SignedJWT.parse(session.getSessionToken());
                     String jwtId = signedJWT.getJWTClaimsSet().getJWTID();
-                    String userId = session.getUser() != null ? session.getUser().getId() : null;
-
-                    jwtService.invalidateToken(
-                            jwtId,
-                            session.getExpiresAt(),
-                            userId,
-                            "ACCESS",
-                            "Session revoked"
-                    );
+                    jwtService.invalidateToken(jwtId, session.getExpiresAt(),
+                            session.getUserId(), "ACCESS", "Session revoked");
                 } catch (ParseException e) {
-                    // Ignore parse errors
+                    log.warn("Failed to parse session token for invalidation");
                 }
             }
 
             if (session.getRefreshToken() != null) {
                 String refreshTokenId = "refresh_" + session.getId();
-                String userId = session.getUser() != null ? session.getUser().getId() : null;
-
-                jwtService.invalidateToken(
-                        refreshTokenId,
-                        session.getRefreshExpiresAt(),
-                        userId,
-                        "REFRESH",
-                        "Session revoked"
-                );
+                jwtService.invalidateToken(refreshTokenId, session.getRefreshExpiresAt(),
+                        session.getUserId(), "REFRESH", "Session revoked");
             }
-
         } catch (Exception e) {
-            // Log error but don't throw
+            log.error("Error while invalidating tokens for sessionId: {}", session.getId(), e);
         }
     }
 
