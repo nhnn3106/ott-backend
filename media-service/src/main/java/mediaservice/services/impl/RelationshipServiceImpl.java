@@ -11,6 +11,7 @@ import mediaservice.models.enums.RelationshipType;
 import mediaservice.repositories.RelationshipRepository;
 import mediaservice.repositories.UserAccountRepository;
 import mediaservice.services.RelationshipService;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -173,6 +174,7 @@ public class RelationshipServiceImpl implements RelationshipService {
         return relationshipRepository.findBetweenUsers(userId1, userId2)
                 .map(relationshipMapper::toResponse);
     }
+
 
     // ── Private helpers ────────────────────────────────────────────────────
 
