@@ -19,9 +19,7 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Stri
     /** Tìm theo cả hai chiều (bất kể ai gửi) */
     @Query("SELECT r FROM Relationship r WHERE " +
            "(r.requester.id = :userId1 AND r.receiver.id = :userId2) OR " +
-           "(r.requester.id = :userId2 AND r.receiver.id = :userId1) AND " +
-            "r.acceptedAt IS NOT NULL")
-
+           "(r.requester.id = :userId2 AND r.receiver.id = :userId1)")
     Optional<Relationship> findBetweenUsers(@Param("userId1") String userId1, @Param("userId2") String userId2);
 
     /** Lấy danh sách lời mời kết bạn đang chờ mà user nhận được (receiver) */
