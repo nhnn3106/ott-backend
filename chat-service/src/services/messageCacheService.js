@@ -9,6 +9,29 @@
 const redis = require('redis');
 const logger = require('../utils/logger');
 
+const sanitizeAvatarValue = (value) => {
+  const avatar = String(value || '').trim();
+  if (!avatar) return '';
+
+  // Never cache inline binary avatar payloads (data:image/...)
+  if (/^data:image\//i.test(avatar)) {
+    return '';
+  }
+
+  return avatar;
+};
+
+const sanitizeMessageForCache = (message) => {
+  if (!message || typeof message !== 'object') {
+    return message;
+  }
+
+  return {
+    ...message,
+    sender_avatar: sanitizeAvatarValue(message.sender_avatar),
+  };
+};
+
 class MessageCacheService {
   constructor() {
     const redisUrl = process.env.REDIS_URL || process.env.REDIS_URI;
@@ -130,10 +153,12 @@ class MessageCacheService {
         throw new Error(`Invalid msg_id: ${message.msg_id}`);
       }
 
+      const sanitizedMessage = sanitizeMessageForCache(message);
+
       // Step 1: Add message to ZSET (score = Snowflake ID)
       await this.client.zAdd(key, {
         score,
-        value: JSON.stringify(message),
+        value: JSON.stringify(sanitizedMessage),
       });
 
       logger.info(
@@ -189,9 +214,10 @@ class MessageCacheService {
           logger.warn(`Invalid msg_id: ${msg.msg_id}, skipping`);
           return null;
         }
+        const sanitizedMessage = sanitizeMessageForCache(msg);
         return {
           score,
-          value: JSON.stringify(msg),
+          value: JSON.stringify(sanitizedMessage),
         };
       }).filter(item => item !== null);
 
@@ -243,18 +269,19 @@ class MessageCacheService {
     }
 
     try {
+      const normalizedMessageId = String(messageId || '');
+
       // 1. Remove old message
-      const removed = await this.removeMessage(conversationId, messageId);
+      const removed = await this.removeMessage(conversationId, normalizedMessageId);
 
       if (!removed) {
-        logger.warn(`Message ${messageId} not found in cache`);
-        return false;
+        logger.warn(`Message ${normalizedMessageId} not found in cache, fallback to upsert`);
       }
 
-      // 2. Add updated message
+      // 2. Add updated message (upsert behavior)
       await this.addMessage(conversationId, updatedMessage);
 
-      logger.info(`✓ Message ${messageId} updated in cache`);
+      logger.info(`✓ Message ${normalizedMessageId} updated in cache`);
       return true;
     } catch (error) {
       logger.error(`Error updating message in cache:`, error);
@@ -274,6 +301,7 @@ class MessageCacheService {
     }
 
     try {
+      const normalizedMessageId = String(messageId || '');
       const key = `${this.CACHE_KEY_PREFIX}${conversationId}`;
 
       // Get all messages
@@ -282,9 +310,9 @@ class MessageCacheService {
       // Find and remove the target message
       for (const msgJson of messages) {
         const msg = JSON.parse(msgJson);
-        if (msg.msg_id === messageId || msg._id === messageId) {
+        if (String(msg.msg_id || '') === normalizedMessageId || String(msg._id || '') === normalizedMessageId) {
           await this.client.zRem(key, msgJson);
-          logger.info(`✓ Message ${messageId} removed from cache`);
+          logger.info(`✓ Message ${normalizedMessageId} removed from cache`);
           return true;
         }
       }
