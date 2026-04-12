@@ -80,7 +80,40 @@ const buildReplyPreview = (message, senderName = "") => {
   };
 };
 
+const sanitizeAvatarValue = (value) => {
+  const avatar = String(value || "").trim();
+  if (!avatar) return "";
+  if (/^data:image\//i.test(avatar)) return "";
+  return avatar;
+};
+
 class MessageRepository {
+  async hydrateSenderInfo(messages = []) {
+    const senderIds = [
+      ...new Set(messages.map((message) => String(message?.sender_id || "")).filter(Boolean)),
+    ];
+
+    if (!senderIds.length) {
+      return messages;
+    }
+
+    const senders = await User.find({ user_id: { $in: senderIds } })
+      .select("user_id name avatar")
+      .lean();
+    const senderMap = new Map(
+      senders.map((sender) => [String(sender.user_id || ""), sender]),
+    );
+
+    return messages.map((message) => {
+      const sender = senderMap.get(String(message.sender_id || ""));
+      return {
+        ...message,
+        sender_name: sender?.name || message.sender_name || "",
+        sender_avatar: sanitizeAvatarValue(sender?.avatar || message.sender_avatar || ""),
+      };
+    });
+  }
+
   getMessageStableId(message) {
     return String(message?.msg_id || message?._id || "").trim();
   }
@@ -253,9 +286,12 @@ class MessageRepository {
             );
 
             if (!dbLatestId || cacheLatestId === dbLatestId) {
+              const hydratedSenders = await this.hydrateSenderInfo(
+                visibleMessages,
+              );
               return await this.hydrateReplyPreviews(
                 conversationId,
-                visibleMessages,
+                hydratedSenders,
               );
             }
 
@@ -289,11 +325,12 @@ class MessageRepository {
 
       // Step 3: Reverse to get oldest → newest order
       const orderedMessages = messages.reverse();
+      const hydratedWithSender = await this.hydrateSenderInfo(orderedMessages);
 
       // Always hydrate reply preview so payload is consistent between cache-hit and cache-miss paths.
       const hydratedMessages = await this.hydrateReplyPreviews(
         conversationId,
-        orderedMessages,
+        hydratedWithSender,
       );
 
       // Step 4: Cache the results
@@ -600,13 +637,23 @@ class MessageRepository {
         throw new Error("Message not found");
       }
 
-      // Check if reaction already exists
-      const reactionIndex = message.reactions.findIndex(
-        (r) => r.user_id === userId && r.type === emoji,
+      // One user can keep only one reaction on a message.
+      const reactionByUserIndex = message.reactions.findIndex(
+        (r) => r.user_id === userId,
       );
 
-      if (reactionIndex === -1) {
-        // Add new reaction
+      if (reactionByUserIndex >= 0) {
+        if (message.reactions[reactionByUserIndex].type === emoji) {
+          // Tap same emoji again -> remove reaction.
+          message.reactions.splice(reactionByUserIndex, 1);
+        } else {
+          // Replace with new emoji.
+          message.reactions[reactionByUserIndex] = {
+            user_id: userId,
+            type: emoji,
+          };
+        }
+      } else {
         message.reactions.push({ user_id: userId, type: emoji });
       }
 
