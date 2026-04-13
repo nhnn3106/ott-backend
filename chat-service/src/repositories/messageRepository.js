@@ -80,7 +80,40 @@ const buildReplyPreview = (message, senderName = "") => {
   };
 };
 
+const sanitizeAvatarValue = (value) => {
+  const avatar = String(value || "").trim();
+  if (!avatar) return "";
+  if (/^data:image\//i.test(avatar)) return "";
+  return avatar;
+};
+
 class MessageRepository {
+  async hydrateSenderInfo(messages = []) {
+    const senderIds = [
+      ...new Set(messages.map((message) => String(message?.sender_id || "")).filter(Boolean)),
+    ];
+
+    if (!senderIds.length) {
+      return messages;
+    }
+
+    const senders = await User.find({ user_id: { $in: senderIds } })
+      .select("user_id name avatar")
+      .lean();
+    const senderMap = new Map(
+      senders.map((sender) => [String(sender.user_id || ""), sender]),
+    );
+
+    return messages.map((message) => {
+      const sender = senderMap.get(String(message.sender_id || ""));
+      return {
+        ...message,
+        sender_name: sender?.name || message.sender_name || "",
+        sender_avatar: sanitizeAvatarValue(sender?.avatar || message.sender_avatar || ""),
+      };
+    });
+  }
+
   getMessageStableId(message) {
     return String(message?.msg_id || message?._id || "").trim();
   }
@@ -300,10 +333,18 @@ class MessageRepository {
             );
 
             if (!dbLatestId || cacheLatestId === dbLatestId) {
-              const liveReactionMessages = await this.hydrateLiveReactions(
-                conversationId,
-                visibleMessages,
-              );
+// Gộp cả 3 bước: Reaction -> Người gửi -> Reply
+            const liveReactionMessages = await this.hydrateLiveReactions(
+              conversationId,
+              visibleMessages
+            );
+            const hydratedSenders = await this.hydrateSenderInfo(
+              liveReactionMessages
+            );
+            return await this.hydrateReplyPreviews(
+              conversationId,
+              hydratedSenders
+            );
               return await this.hydrateReplyPreviews(
                 conversationId,
                 liveReactionMessages,
@@ -340,11 +381,12 @@ class MessageRepository {
 
       // Step 3: Reverse to get oldest → newest order
       const orderedMessages = messages.reverse();
+      const hydratedWithSender = await this.hydrateSenderInfo(orderedMessages);
 
       // Always hydrate reply preview so payload is consistent between cache-hit and cache-miss paths.
       const hydratedMessages = await this.hydrateReplyPreviews(
         conversationId,
-        orderedMessages,
+        hydratedWithSender,
       );
 
       // Step 4: Cache the results
@@ -651,7 +693,7 @@ class MessageRepository {
         throw new Error("Message not found");
       }
 
-      if (!Array.isArray(message.reactions)) {
+if (!Array.isArray(message.reactions)) {
         message.reactions = [];
       }
 
@@ -668,12 +710,18 @@ class MessageRepository {
           ? String(message.reactions[currentReactionIndex]?.type || "")
           : "";
 
-      if (currentReactionIndex >= 0) {
-        message.reactions.splice(currentReactionIndex, 1);
-      }
-
-      // Toggle off if user selects the same reaction again.
-      if (currentReactionType !== normalizedEmoji) {
+if (currentReactionIndex >= 0) {
+        if (message.reactions[currentReactionIndex].type === normalizedEmoji) {
+          // Tap same emoji again -> remove reaction.
+          message.reactions.splice(currentReactionIndex, 1);
+        } else {
+          // Replace with new emoji.
+          message.reactions[currentReactionIndex] = {
+            user_id: userId,
+            type: normalizedEmoji,
+          };
+        }
+      } else {
         message.reactions.push({ user_id: userId, type: normalizedEmoji });
       }
 
