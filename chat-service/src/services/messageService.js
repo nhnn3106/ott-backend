@@ -593,18 +593,30 @@ exports.reactToMessage = async ({
     throw new Error("Reaction không hợp lệ");
   }
 
-  const existingByUserIndex = message.reactions.findIndex(
+if (!Array.isArray(message.reactions)) {
+    message.reactions = [];
+  }
+
+  const currentReactionIndex = message.reactions.findIndex(
     (reaction) => reaction.user_id === userId,
   );
+  const currentReactionType =
+    currentReactionIndex >= 0
+      ? String(message.reactions[currentReactionIndex]?.type || "")
+      : "";
 
-  if (existingByUserIndex >= 0) {
-    const existingReaction = message.reactions[existingByUserIndex];
+  if (currentReactionIndex >= 0) {
+    message.reactions.splice(currentReactionIndex, 1);
+  }
+
+if (currentReactionIndex >= 0) {
+    const existingReaction = message.reactions[currentReactionIndex];
     if (existingReaction.type === normalizedReaction) {
       // Bấm lại cùng emoji thì bỏ reaction đó.
-      message.reactions.splice(existingByUserIndex, 1);
+      message.reactions.splice(currentReactionIndex, 1);
     } else {
       // Mỗi user chỉ giữ 1 reaction, đổi sang emoji mới.
-      message.reactions[existingByUserIndex] = {
+      message.reactions[currentReactionIndex] = {
         user_id: userId,
         type: normalizedReaction,
       };
@@ -618,7 +630,7 @@ exports.reactToMessage = async ({
 
   const updatedMessage = await message.save();
 
-  const sender = await User.findOne({ user_id: updatedMessage.sender_id })
+const sender = await User.findOne({ user_id: updatedMessage.sender_id })
     .select("name avatar")
     .lean();
   const cachedMessage = {
