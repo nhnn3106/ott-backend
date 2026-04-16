@@ -9,10 +9,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.TreeSet;
 
 import org.springframework.stereotype.Service;
 
 import iuh.fit.se.analyticservice.client.UserServiceClient;
+import iuh.fit.se.analyticservice.dto.DailyActivityResponse;
 import iuh.fit.se.analyticservice.dto.DailyPostCountResponse;
 import iuh.fit.se.analyticservice.dto.MessageTypesResponse;
 import iuh.fit.se.analyticservice.dto.OverviewResponse;
@@ -35,15 +37,19 @@ public class AdminAnalyticsService {
     private final RawPostEventRepository rawPostEventRepository;
     private final UserServiceClient userServiceClient;
 
-    public OverviewResponse getOverview() {
-        long totalUsers = rawUserEventRepository.count();
-        long totalMessages = rawMessageEventRepository.count();
-        long totalPosts = rawPostEventRepository.count();
+    public OverviewResponse getOverview(String timeRange) {
+        Instant from = resolveFrom(timeRange);
+        long totalUsers = from == null ? rawUserEventRepository.count() : rawUserEventRepository.countByTimestampGreaterThanEqual(from);
+        long totalMessages = from == null ? rawMessageEventRepository.count() : rawMessageEventRepository.countByTimestampGreaterThanEqual(from);
+        long totalPosts = from == null ? rawPostEventRepository.count() : rawPostEventRepository.countByTimestampGreaterThanEqual(from);
         return new OverviewResponse(totalUsers, totalMessages, totalPosts);
     }
 
-    public List<RecentNewUserDTO> getRecentUsers() {
-        List<RawUserEvent> recentEvents = rawUserEventRepository.findTop5ByOrderByTimestampDesc();
+    public List<RecentNewUserDTO> getRecentUsers(String timeRange) {
+        Instant from = resolveFrom(timeRange);
+        List<RawUserEvent> recentEvents = from == null
+                ? rawUserEventRepository.findTop5ByOrderByTimestampDesc()
+                : rawUserEventRepository.findTop5ByTimestampGreaterThanEqualOrderByTimestampDesc(from);
         List<RecentNewUserDTO> result = new ArrayList<>();
 
         try {
@@ -62,12 +68,15 @@ public class AdminAnalyticsService {
         }
     }
 
-    public MessageTypesResponse getMessageTypes() {
+    public MessageTypesResponse getMessageTypes(String timeRange) {
+        Instant from = resolveFrom(timeRange);
         long text = 0;
         long image = 0;
         long voice = 0;
 
-        List<Object[]> rows = rawMessageEventRepository.countByMessageType();
+        List<Object[]> rows = from == null
+                ? rawMessageEventRepository.countByMessageType()
+                : rawMessageEventRepository.countByMessageTypeFrom(from);
         for (Object[] row : rows) {
             String type = row[0] != null ? row[0].toString().toLowerCase(Locale.ROOT) : "";
             long count = ((Number) row[1]).longValue();
@@ -85,28 +94,102 @@ public class AdminAnalyticsService {
         return new MessageTypesResponse(text, image, voice);
     }
 
-    public List<DailyPostCountResponse> getPostDaily7Days() {
-        LocalDate today = LocalDate.now(ZoneOffset.UTC);
-        LocalDate fromDate = today.minusDays(6);
-        Instant from = fromDate.atStartOfDay().toInstant(ZoneOffset.UTC);
+    public List<DailyActivityResponse> getDailyActivity(String timeRange) {
+        Instant from = resolveFrom(timeRange);
+        Map<LocalDate, Long> postsByDate = countPostsByDate(from);
+        Map<LocalDate, Long> messagesByDate = countMessagesByDate(from);
 
-        Map<LocalDate, Long> countByDate = new HashMap<>();
-        for (Object[] row : rawPostEventRepository.countPostsByDateFrom(from)) {
-            LocalDate date;
-            if (row[0] instanceof Date sqlDate) {
-                date = sqlDate.toLocalDate();
-            } else {
-                date = LocalDate.parse(String.valueOf(row[0]));
-            }
-            long count = ((Number) row[1]).longValue();
-            countByDate.put(date, count);
-        }
-
-        List<DailyPostCountResponse> result = new ArrayList<>();
-        for (int i = 0; i < 7; i++) {
-            LocalDate date = fromDate.plusDays(i);
-            result.add(new DailyPostCountResponse(date, countByDate.getOrDefault(date, 0L)));
+        List<DailyActivityResponse> result = new ArrayList<>();
+        for (LocalDate date : buildDateRange(from, postsByDate.keySet(), messagesByDate.keySet())) {
+            result.add(new DailyActivityResponse(
+                    date,
+                    postsByDate.getOrDefault(date, 0L),
+                    messagesByDate.getOrDefault(date, 0L)
+            ));
         }
         return result;
+    }
+
+    public List<DailyPostCountResponse> getPostDailyOnly(String timeRange) {
+        Instant from = resolveFrom(timeRange);
+        Map<LocalDate, Long> postsByDate = countPostsByDate(from);
+
+        List<DailyPostCountResponse> result = new ArrayList<>();
+        for (LocalDate date : buildDateRange(from, postsByDate.keySet(), java.util.Collections.emptySet())) {
+            result.add(new DailyPostCountResponse(date, postsByDate.getOrDefault(date, 0L)));
+        }
+        return result;
+    }
+
+    private Map<LocalDate, Long> countPostsByDate(Instant from) {
+        Map<LocalDate, Long> countByDate = new HashMap<>();
+        List<Object[]> rows = from == null
+                ? rawPostEventRepository.countPostsByDateAll()
+                : rawPostEventRepository.countPostsByDateFrom(from);
+
+        for (Object[] row : rows) {
+            countByDate.put(toLocalDate(row[0]), ((Number) row[1]).longValue());
+        }
+        return countByDate;
+    }
+
+    private Map<LocalDate, Long> countMessagesByDate(Instant from) {
+        Map<LocalDate, Long> countByDate = new HashMap<>();
+        List<Object[]> rows = from == null
+                ? rawMessageEventRepository.countMessagesByDateAll()
+                : rawMessageEventRepository.countMessagesByDateFrom(from);
+
+        for (Object[] row : rows) {
+            countByDate.put(toLocalDate(row[0]), ((Number) row[1]).longValue());
+        }
+        return countByDate;
+    }
+
+    private List<LocalDate> buildDateRange(Instant from, java.util.Set<LocalDate> firstDates, java.util.Set<LocalDate> secondDates) {
+        TreeSet<LocalDate> allDates = new TreeSet<>();
+        allDates.addAll(firstDates);
+        allDates.addAll(secondDates);
+
+        if (from != null) {
+            LocalDate start = from.atZone(ZoneOffset.UTC).toLocalDate();
+            LocalDate end = LocalDate.now(ZoneOffset.UTC);
+            List<LocalDate> range = new ArrayList<>();
+            for (LocalDate date = start; !date.isAfter(end); date = date.plusDays(1)) {
+                range.add(date);
+            }
+            return range;
+        }
+
+        if (allDates.isEmpty()) {
+            return List.of();
+        }
+
+        LocalDate start = allDates.first();
+        LocalDate end = allDates.last();
+        List<LocalDate> range = new ArrayList<>();
+        for (LocalDate date = start; !date.isAfter(end); date = date.plusDays(1)) {
+            range.add(date);
+        }
+        return range;
+    }
+
+    private LocalDate toLocalDate(Object value) {
+        if (value instanceof Date sqlDate) {
+            return sqlDate.toLocalDate();
+        }
+        return LocalDate.parse(String.valueOf(value));
+    }
+
+    private Instant resolveFrom(String timeRange) {
+        String normalized = timeRange == null ? "alltime" : timeRange.trim().toLowerCase(Locale.ROOT);
+        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+
+        return switch (normalized) {
+            case "today" -> today.atStartOfDay().toInstant(ZoneOffset.UTC);
+            case "last7days", "7d", "last_7_days" -> today.minusDays(6).atStartOfDay().toInstant(ZoneOffset.UTC);
+            case "last30days", "30d", "last_30_days" -> today.minusDays(29).atStartOfDay().toInstant(ZoneOffset.UTC);
+            case "all", "alltime", "all_time" -> null;
+            default -> null;
+        };
     }
 }

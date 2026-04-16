@@ -17,4 +17,12 @@ public interface RawPostEventRepository extends JpaRepository<RawPostEvent, Stri
             "GROUP BY FUNCTION('DATE', p.timestamp) " +
             "ORDER BY FUNCTION('DATE', p.timestamp)")
     List<Object[]> countPostsByDateFrom(@Param("from") Instant from);
+
+        @Query("SELECT FUNCTION('DATE', p.timestamp), COUNT(p) " +
+            "FROM RawPostEvent p " +
+            "GROUP BY FUNCTION('DATE', p.timestamp) " +
+            "ORDER BY FUNCTION('DATE', p.timestamp)")
+        List<Object[]> countPostsByDateAll();
+
+        long countByTimestampGreaterThanEqual(Instant from);
 }

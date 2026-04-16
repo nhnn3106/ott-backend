@@ -1,16 +1,14 @@
 package iuh.fit.se.analyticservice.listener;
 
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
-import java.util.Map;
 
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
-import org.springframework.boot.json.JsonParser;
-import org.springframework.boot.json.JsonParserFactory;
 import org.springframework.stereotype.Component;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import iuh.fit.se.analyticservice.config.RabbitMqConfig;
+import iuh.fit.se.analyticservice.dto.UserRegisteredEvent;
 import iuh.fit.se.analyticservice.entity.RawUserEvent;
 import iuh.fit.se.analyticservice.repository.RawUserEventRepository;
 import lombok.RequiredArgsConstructor;
@@ -22,28 +20,23 @@ import lombok.extern.slf4j.Slf4j;
 public class UserRegisteredEventListener {
 
     private final RawUserEventRepository rawUserEventRepository;
-    private final JsonParser jsonParser = JsonParserFactory.getJsonParser();
+    private final ObjectMapper objectMapper;
 
     @RabbitListener(queues = RabbitMqConfig.USER_REGISTERED_QUEUE)
     public void handleUserRegisteredEvent(Message message) {
         try {
             String payload = new String(message.getBody(), StandardCharsets.UTF_8);
-            Map<String, Object> data = jsonParser.parseMap(payload);
+            UserRegisteredEvent event = objectMapper.readValue(payload, UserRegisteredEvent.class);
 
-            String eventId = String.valueOf(data.get("eventId"));
-            String userId = String.valueOf(data.get("userId"));
-            String registerMethod = String.valueOf(data.get("registerMethod"));
-            Instant timestamp = Instant.parse(String.valueOf(data.get("timestamp")));
-
-                RawUserEvent raw = new RawUserEvent(
-                    eventId,
-                    userId,
-                    registerMethod,
-                    timestamp
+            RawUserEvent raw = new RawUserEvent(
+                    event.getEventId(),
+                    event.getUserId(),
+                    event.getRegisterMethod(),
+                    event.getTimestamp()
             );
 
-                rawUserEventRepository.save(raw);
-            log.info("Saved registration event: eventId={}, userId={}", eventId, userId);
+            rawUserEventRepository.save(raw);
+            log.info("Saved registration event: eventId={}, userId={}", event.getEventId(), event.getUserId());
         } catch (Exception ex) {
             log.error("Failed to parse/save registration event payload", ex);
         }
