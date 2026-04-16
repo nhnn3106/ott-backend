@@ -19,12 +19,15 @@ import mediaservice.repositories.MediaRepository;
 import mediaservice.repositories.PostRepository;
 import mediaservice.repositories.ReactionRepository;
 import mediaservice.repositories.UserAccountRepository;
+import mediaservice.dtos.messages.MediaCompressionJob;
 import mediaservice.services.PostService;
+import mediaservice.services.MediaCompressionJobPublisher;
 import mediaservice.services.S3Service;
 import mediaservice.dtos.requests.AccessControlRequest;
 import mediaservice.dtos.requests.MediaRequest;
 import mediaservice.models.enums.MediaType;
 import mediaservice.utils.MediaUrlBuilder;
+import mediaservice.utils.MediaTempFileStore;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
@@ -55,6 +58,7 @@ public class PostServiceImpl implements PostService {
     private final S3Service s3Service;
     private final ContentAccessControlRepository contentAccessControlRepository;
     private final MediaUrlBuilder mediaUrlBuilder;
+    private final MediaCompressionJobPublisher mediaCompressionJobPublisher;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -176,6 +180,7 @@ public class PostServiceImpl implements PostService {
                         String fileName = s3Key.substring(s3Key.lastIndexOf('/') + 1);
                         log.info("[createPost] Uploaded media #{} -> {} (stored as: {})",
                                 index, s3Key, fileName);
+                        enqueueCompressionIfNeeded(file, s3Key);
                         return new UploadResult(index, fileName, isVideo, mediaCaption);
                     } catch (Exception e) {
                         log.error("[createPost] S3 upload FAILED for file '{}': {}",
@@ -377,6 +382,7 @@ public class PostServiceImpl implements PostService {
                         String fileName = s3Key.substring(s3Key.lastIndexOf('/') + 1);
                         log.info("[updatePost] Uploaded media #{} -> {} (stored as: {})",
                                 targetOrderIndex, s3Key, fileName);
+                        enqueueCompressionIfNeeded(file, s3Key);
                         return new UploadResult(targetOrderIndex, fileName, isVideo, mediaCaption);
                     } catch (Exception e) {
                         log.error("[updatePost] S3 upload FAILED for file '{}': {}",
@@ -415,6 +421,34 @@ public class PostServiceImpl implements PostService {
         entityManager.refresh(updatedPost);
 
         return enrichCounts(postMapper.toResponse(updatedPost), updatedPost.getId());
+    }
+
+    private void enqueueCompressionIfNeeded(MultipartFile file, String s3Key) {
+        String contentType = file.getContentType() != null ? file.getContentType() : "";
+        boolean isVideo = contentType.startsWith("video/");
+        boolean isAudio = contentType.startsWith("audio/");
+
+        if (!isVideo && !isAudio) {
+            return;
+        }
+
+        try {
+            String mediaType = isAudio ? "AUDIO" : "VIDEO";
+            String outputContentType = isAudio ? "audio/mp4" : "video/mp4";
+            String prefix = isAudio ? "audio-" : "video-";
+
+            java.nio.file.Path tempPath = MediaTempFileStore.saveToTemp(file, prefix);
+            MediaCompressionJob job = new MediaCompressionJob(
+                    tempPath.toString(),
+                    mediaType,
+                    s3Key,
+                    outputContentType
+            );
+            mediaCompressionJobPublisher.publish(job);
+        } catch (Exception ex) {
+            log.warn("[MediaCompression] Failed to enqueue job for {}: {}",
+                    file.getOriginalFilename(), ex.getMessage());
+        }
     }
 
     @Override

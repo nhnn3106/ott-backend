@@ -5,8 +5,11 @@ import mediaservice.dtos.requests.StoryRequest;
 import mediaservice.dtos.responses.StoryUploadResponse;
 import mediaservice.dtos.responses.StoryReelResponse;
 import mediaservice.dtos.responses.StoryResponse;
+import mediaservice.dtos.messages.MediaCompressionJob;
+import mediaservice.services.MediaCompressionJobPublisher;
 import mediaservice.services.S3Service;
 import mediaservice.services.StoryService;
+import mediaservice.utils.MediaTempFileStore;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -22,6 +25,7 @@ public class StoryController {
 
     private final StoryService storyService;
     private final S3Service s3Service;
+    private final MediaCompressionJobPublisher mediaCompressionJobPublisher;
 
     /** POST /stories - tao story moi */
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -45,7 +49,36 @@ public class StoryController {
         String fileName = shortToken + extension;
         String fileKey = s3Service.uploadFile(file, "stories", fileName);
 
+        enqueueCompressionIfNeeded(file, fileKey);
+
         return ResponseEntity.ok(new StoryUploadResponse(null, fileKey));
+    }
+
+    private void enqueueCompressionIfNeeded(MultipartFile file, String s3Key) {
+        String contentType = file.getContentType() != null ? file.getContentType() : "";
+        boolean isVideo = contentType.startsWith("video/");
+        boolean isAudio = contentType.startsWith("audio/");
+
+        if (!isVideo && !isAudio) {
+            return;
+        }
+
+        try {
+            String mediaType = isAudio ? "AUDIO" : "VIDEO";
+            String outputContentType = isAudio ? "audio/mp4" : "video/mp4";
+            String prefix = isAudio ? "audio-" : "video-";
+
+            java.nio.file.Path tempPath = MediaTempFileStore.saveToTemp(file, prefix);
+            MediaCompressionJob job = new MediaCompressionJob(
+                    tempPath.toString(),
+                    mediaType,
+                    s3Key,
+                    outputContentType
+            );
+            mediaCompressionJobPublisher.publish(job);
+        } catch (Exception ex) {
+            // Ignore enqueue failures to keep upload flow stable.
+        }
     }
 
     /** GET /stories - lay tat ca stories */
