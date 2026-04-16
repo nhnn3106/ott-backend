@@ -8,15 +8,19 @@ import lombok.Data;
 
 @Data
 public class VerifyEmailLoginOtpRequest {
-    @NotBlank(message = "Email is required")
-    @Email(message = "Invalid email format")
+
+    @NotBlank(message = "EMAIL_IS_REQUIRED")
+    @Email(message = "INVALID_EMAIL_FORMAT")
     private String email;
 
-    @NotBlank(message = "OTP code is required")
-    @Pattern(regexp = "\\d{6}", message = "OTP must be 6 digits")
+    @NotBlank(message = "OTP_CODE_IS_REQUIRED")
+    @Pattern(
+            regexp = "\\d{6}",
+            message = "OTP_MUST_BE_6_DIGITS"
+    )
     private String otpCode;
 
-    @NotBlank(message = "Device ID is required")
+    @NotBlank(message = "DEVICE_ID_IS_REQUIRED")
     private String deviceId;
 
     private DeviceType deviceType;
