@@ -76,12 +76,22 @@ const endCallRoom = async (conversationId, endedBy = null) => {
   }
 
   const payload = {
-    conversationId,
-    endedBy,
+    conversationId: String(conversationId),
+    endedBy: endedBy ? String(endedBy) : null,
   };
+
+  console.log(`[CALL] endCallRoom: conversationId=${payload.conversationId}, endedBy=${payload.endedBy}`);
 
   io.to(`call:${conversationId}`).emit("ket_thuc_phong_goi", payload);
 
+  // Luôn phát tín hiệu đến memberIds từ cache để đảm bảo tốc độ và sự tin cậy
+  if (callState.memberIds) {
+    callState.memberIds.forEach((uid) => {
+      io.to(`user:${uid}`).emit("ket_thuc_phong_goi", payload);
+    });
+  }
+
+  // Dự phòng: Phát tín hiệu đến toàn bộ thành viên theo DB
   try {
     const participants = await ParticipantService.getParticipants(conversationId);
     participants.forEach((participant) => {
@@ -156,6 +166,7 @@ const scheduleNoAnswerTimeout = ({ conversationId, callerId, callType }) => {
         content: `Cuộc gọi ${callType === "video" ? "video" : "thoại"} nhỡ`,
       });
 
+      console.log(`[CALL] No-answer timeout triggered for ${conversationId}`);
       endCallRoom(conversationId, callerId);
     }
   }, NO_ANSWER_TIMEOUT_MS);
@@ -528,6 +539,21 @@ io.on("connection", (socket) => {
       userId,
       isCameraOff,
     });
+  });
+
+  socket.on("disconnecting", async () => {
+    const userId = socket.data.userId;
+    if (!userId) return;
+
+    // Nếu socket đang trong phòng gọi "call:...", dọn dẹp ngay khi đóng tab
+    // Lưu ý: socket.rooms chứa phòng của chính socket đó và các phòng nó tham gia
+    const rooms = Array.from(socket.rooms);
+    const callRoomId = rooms.find(r => r.startsWith("call:"));
+    
+    if (callRoomId) {
+      console.log(`Socket cua user ${userId} trong phong ${callRoomId} dang ngat ket noi (disconnecting).`);
+      removeUserFromAllCalls(userId);
+    }
   });
 
   socket.on("disconnect", async () => {
