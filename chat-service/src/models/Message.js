@@ -41,6 +41,7 @@ const MessageSchema = new mongoose.Schema(
         "call_missed",
         "call_cancel",
         "call_no_answer",
+        "poll",
       ],
       default: "text",
     },
@@ -49,6 +50,17 @@ const MessageSchema = new mongoose.Schema(
     size: { type: Number, default: 0 },
 
     reply_to_msg_id: { type: String, default: null },
+
+    // Poll fields
+    poll_question: { type: String, default: null },
+    poll_multiple_choice: { type: Boolean, default: false },
+    poll_options: [
+      {
+        id: { type: String },
+        name: { type: String },
+        voters: [{ type: String, ref: "User" }],
+      },
+    ],
 
     reactions: [
       {

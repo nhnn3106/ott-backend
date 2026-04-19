@@ -360,3 +360,32 @@ exports.updateMemberNickname = async (req, res) => {
     res.status(isClientError ? 400 : 500).json({ error: error.message });
   }
 };
+
+exports.transferOwnership = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { currentOwnerId, newOwnerId } = req.body;
+
+    const result = await ParticipantService.transferOwnership(
+      conversationId,
+      currentOwnerId,
+      newOwnerId,
+    );
+
+    const participants =
+      await ParticipantService.getParticipants(conversationId);
+    participants.forEach((p) => {
+      req.io.to(`user:${p.user_id}`).emit("chuyen_quyen_truong_nhom", result);
+    });
+
+    res.status(200).json(result);
+  } catch (error) {
+    const isClientError =
+      error.message.includes("không tồn tại") ||
+      error.message.includes("Chỉ có thể") ||
+      error.message.includes("Chỉ trưởng nhóm") ||
+      error.message.includes("Không thể chuyển quyền") ||
+      error.message.includes("không phải là thành viên");
+    res.status(isClientError ? 400 : 500).json({ error: error.message });
+  }
+};

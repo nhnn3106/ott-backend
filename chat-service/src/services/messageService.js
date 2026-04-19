@@ -252,6 +252,7 @@ const buildReplyPreview = (message, senderName = "") => {
     media_count: message.type === "image" ? mediaUrls.length : undefined,
     is_deleted: !!message.is_deleted,
     is_revoked: !!message.is_revoked,
+    poll_question: message.type === "poll" ? message.poll_question : undefined,
   };
 };
 
@@ -324,6 +325,9 @@ exports.sendMessage = async ({
   type,
   size,
   replyToMsgId,
+  pollQuestion,
+  pollMultipleChoice,
+  pollOptions,
 }) => {
   // Nếu content đã là array (image keys) thì dùng trực tiếp, không thì wrap
   const contentArray = Array.isArray(content) ? content : [content];
@@ -359,6 +363,9 @@ exports.sendMessage = async ({
     type: type,
     size: size,
     reply_to_msg_id: replyToMsgId || null,
+    poll_question: pollQuestion || null,
+    poll_multiple_choice: pollMultipleChoice || false,
+    poll_options: pollOptions || [],
   });
 
   const savedMessage = await newMessage.save();
@@ -1420,4 +1427,60 @@ exports.searchEverything = async ({
       files.length +
       media.length,
   };
+};
+
+// Vote for a poll
+exports.votePoll = async ({ conversationId, msgId, userId, optionIds }) => {
+  const message = await Message.findOne({
+    msg_id: msgId,
+    conversation_id: conversationId,
+  });
+
+  if (!message) {
+    throw new Error("Tin nhắn không tồn tại");
+  }
+
+  if (message.type !== "poll") {
+    throw new Error("Tin nhắn không phải là khảo sát");
+  }
+
+  if (message.is_deleted || message.is_revoked) {
+    throw new Error("Khảo sát đã bị xóa hoặc thu hồi");
+  }
+
+  // Remove user from all options first
+  message.poll_options.forEach((opt) => {
+    opt.voters = opt.voters.filter((voterId) => String(voterId) !== String(userId));
+  });
+
+  // Then add user to selected options
+  if (Array.isArray(optionIds) && optionIds.length > 0) {
+    if (!message.poll_multiple_choice && optionIds.length > 1) {
+      throw new Error("Khảo sát này chỉ cho phép chọn 1 đáp án");
+    }
+
+    message.poll_options.forEach((opt) => {
+      if (optionIds.includes(String(opt.id))) {
+        opt.voters.push(userId);
+      }
+    });
+  }
+
+  const updatedMessage = await message.save();
+
+  const sender = await User.findOne({ user_id: updatedMessage.sender_id })
+    .select("name avatar")
+    .lean();
+  
+  const cachedMessage = {
+    ...updatedMessage.toObject(),
+    sender_name: sender?.name || updatedMessage.sender_name || "",
+    sender_avatar: sanitizeAvatarValue(
+      sender?.avatar || updatedMessage.sender_avatar || "",
+    ),
+  };
+
+  await messageCacheService.updateMessage(conversationId, msgId, cachedMessage);
+
+  return cachedMessage;
 };

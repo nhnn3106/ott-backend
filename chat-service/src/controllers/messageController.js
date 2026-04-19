@@ -15,8 +15,17 @@ exports.generatePresignedUrl = async (req, res) => {
 
 exports.sendMessage = async (req, res) => {
   try {
-    const { conversationId, senderId, content, type, size, replyToMsgId } =
-      req.body;
+    const {
+      conversationId,
+      senderId,
+      content,
+      type,
+      size,
+      replyToMsgId,
+      pollQuestion,
+      pollMultipleChoice,
+      pollOptions,
+    } = req.body;
 
     const savedMessage = await MessageService.sendMessage({
       conversationId,
@@ -25,6 +34,9 @@ exports.sendMessage = async (req, res) => {
       type,
       size,
       replyToMsgId,
+      pollQuestion,
+      pollMultipleChoice,
+      pollOptions,
     });
 
     // Emit đến user room riêng của từng participant thay vì conversation room
@@ -40,6 +52,39 @@ exports.sendMessage = async (req, res) => {
     if (error.message === "Tin nhắn trả lời không hợp lệ") {
       return res.status(400).json({ error: error.message });
     }
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.votePoll = async (req, res) => {
+  try {
+    const { msgId } = req.params;
+    const { conversationId, userId, optionIds } = req.body;
+
+    const updatedMessage = await MessageService.votePoll({
+      conversationId,
+      msgId,
+      userId,
+      optionIds,
+    });
+
+    const participants =
+      await ParticipantService.getParticipants(conversationId);
+    participants.forEach((p) => {
+      req.io.to(`user:${p.user_id}`).emit("tin_nhan_cap_nhat", updatedMessage);
+    });
+
+    res.status(200).json(updatedMessage);
+  } catch (error) {
+    if (
+      error.message === "Tin nhắn không tồn tại" ||
+      error.message === "Tin nhắn không phải là khảo sát" ||
+      error.message === "Khảo sát này chỉ cho phép chọn 1 đáp án" ||
+      error.message === "Khảo sát đã bị xóa hoặc thu hồi"
+    ) {
+      return res.status(400).json({ error: error.message });
+    }
+
     res.status(500).json({ error: error.message });
   }
 };
