@@ -109,6 +109,8 @@ exports.addMember = async (req, res) => {
       await ParticipantService.assertGroupManager(conversationId, addedBy);
     }
 
+    const lastMsgId = conversation.last_message?.msg_id || "0";
+
     const addedMembers = [];
 
     for (const memberId of memberIds) {
@@ -117,6 +119,7 @@ exports.addMember = async (req, res) => {
         userId: memberId,
         role: "user",
         addedBy: addedBy,
+        lastMsgId, // Pass lastMsgId to hide previous messages
       });
       addedMembers.push(member);
     }
@@ -125,12 +128,6 @@ exports.addMember = async (req, res) => {
     await Conversation.findByIdAndUpdate(conversationId, {
       $inc: { member_count: memberIds.length },
     });
-
-    // Hide all existing messages from new members
-    await Message.updateMany(
-      { conversation_id: conversationId },
-      { $addToSet: { deleted_for: { $each: memberIds } } },
-    );
 
     // Get user info for notification message
     const memberUsers = await Promise.all(

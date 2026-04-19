@@ -330,22 +330,15 @@ exports.removeMember = async (req, res) => {
     const adminName = adminUser?.name || adminId;
     const systemContent = `${removedName} đã bị đuổi khỏi nhóm bởi ${adminName}`;
 
-    // Hide old chat history only for removed member.
-    await Message.updateMany(
-      { conversation_id: conversationId },
-      { $addToSet: { deleted_for: userId } },
-    );
-
     const participants =
       await ParticipantService.getParticipants(conversationId);
 
-    // Notice for remaining members.
-    const systemMessageForMembers = await Message.create({
+    // System notice for remaining members only
+    const systemMessage = await Message.create({
       conversation_id: conversationId,
       sender_id: adminId,
       type: "system_leave",
       content: [systemContent],
-      deleted_for: [userId],
       system_meta: {
         action: "member_removed",
         removed_user_id: userId,
@@ -353,36 +346,19 @@ exports.removeMember = async (req, res) => {
       },
     });
 
-    // Private final notice for removed member with delete action.
-    const systemMessageForRemovedUser = await Message.create({
-      conversation_id: conversationId,
-      sender_id: adminId,
-      type: "system_leave",
-      content: ["Bạn đã bị đuổi khỏi nhóm"],
-      deleted_for: participants
-        .map((item) => item.user_id)
-        .filter((id) => String(id) !== String(userId)),
-      system_meta: {
-        action: "removed_from_group",
-        removed_user_id: userId,
-        removed_by: adminId,
-        show_delete_action: true,
-      },
-    });
-
     await ConversationService.updateLastMessage(
       conversationId,
-      systemMessageForMembers,
+      systemMessage,
     );
 
+    // Notify remaining members
     participants.forEach((p) => {
-      req.io.to(`user:${p.user_id}`).emit("tin_nhan", systemMessageForMembers);
+      req.io.to(`user:${p.user_id}`).emit("tin_nhan", systemMessage);
       req.io.to(`user:${p.user_id}`).emit("xoa_thanh_vien", result);
     });
 
-    req.io.to(`user:${userId}`).emit("tin_nhan", systemMessageForRemovedUser);
+    // Notify kicked user and disconnect from socket room
     req.io.to(`user:${userId}`).emit("bi_xoa_khoi_nhom", result);
-    // Ensure kicked user cannot keep receiving conversation-room broadcasts.
     req.io.in(`user:${userId}`).socketsLeave(conversationId);
 
     res.status(200).json(result);

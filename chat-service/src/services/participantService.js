@@ -84,7 +84,7 @@ exports.ensureSelfConversation = async (userId) => {
   return { selfConversation, participant };
 };
 
-exports.addParticipant = async ({ conversationId, userId, role, addedBy }) => {
+exports.addParticipant = async ({ conversationId, userId, role, addedBy, lastMsgId = "0" }) => {
   const existing = await Participant.findOne({
     conversation_id: conversationId,
     user_id: userId,
@@ -94,6 +94,8 @@ exports.addParticipant = async ({ conversationId, userId, role, addedBy }) => {
     existing.roles = role || existing.roles;
     existing.added_by = addedBy || existing.added_by;
     existing.joined_at = new Date();
+    // Khi thêm lại thành viên đã bị xóa/đuổi, vẫn áp dụng logic ẩn tin nhắn cũ
+    existing.deleted_msg_id = lastMsgId;
     existing.settings = {
       ...existing.settings,
       removed_from_group_at: null,
@@ -110,6 +112,7 @@ exports.addParticipant = async ({ conversationId, userId, role, addedBy }) => {
     user_id: userId,
     roles: role,
     added_by: addedBy,
+    deleted_msg_id: lastMsgId,
   });
 
   return await newMember.save();
@@ -394,11 +397,11 @@ exports.removeMember = async (conversationId, userId, adminId) => {
     throw new Error("Bạn không thể tự xóa chính mình. Hãy dùng chức năng rời nhóm");
   }
 
-  // Soft remove participant so removed member can still see final notice and delete conversation manually.
-  participant.settings = participant.settings || {};
-  participant.settings.removed_from_group_at = new Date();
-  participant.settings.removed_by = adminId;
-  await participant.save();
+  // Hard delete: xóa hoàn toàn participant khỏi DB
+  await Participant.deleteOne({
+    conversation_id: conversationId,
+    user_id: userId,
+  });
 
   // Update member count
   await Conversation.findByIdAndUpdate(conversationId, {

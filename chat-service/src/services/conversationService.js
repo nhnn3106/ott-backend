@@ -147,7 +147,36 @@ exports.dissolveGroup = async (conversationId, requesterId) => {
     .map((item) => item.user_id)
     .filter(Boolean);
 
+  const { DeleteObjectCommand } = require("@aws-sdk/client-s3");
+  const { s3Client, bucketName } = require("../config/s3");
+  const messageCacheService = require("./messageCacheService");
+
+  // Get messages to extract S3 keys before deleting
+  const messages = await Message.find({ conversation_id: conversationId }).lean();
+  const keysToDelete = [];
+  
+  messages.forEach(msg => {
+    if (['image', 'video', 'audio', 'file'].includes(msg.type) && Array.isArray(msg.content)) {
+      msg.content.forEach(key => {
+        if (key && !/^(https?:\/\/|www\.|data:)/i.test(key)) {
+          keysToDelete.push(key);
+        }
+      });
+    }
+  });
+
+  if (keysToDelete.length > 0) {
+    try {
+      await Promise.all(keysToDelete.map(key => 
+        s3Client.send(new DeleteObjectCommand({ Bucket: bucketName, Key: key }))
+      ));
+    } catch (err) {
+      console.error("Lỗi xóa file S3 khi giải tán nhóm:", err);
+    }
+  }
+
   const messageResult = await Message.deleteMany({ conversation_id: conversationId });
+  await messageCacheService.clearCache(conversationId);
 
   const finalNotice = await Message.create({
     conversation_id: conversationId,
