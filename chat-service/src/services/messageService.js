@@ -352,6 +352,23 @@ exports.sendMessage = async ({
       .lean();
   }
 
+  const participant = await Participant.findOne({
+    conversation_id: conversationId,
+    user_id: senderId,
+  }).lean();
+
+  if (!participant) {
+    throw new Error("Bạn không thuộc cuộc hội thoại này");
+  }
+
+  if (participant?.settings?.removed_from_group_at) {
+    throw new Error("Bạn đã bị đuổi khỏi nhóm");
+  }
+
+  if (participant?.settings?.group_dissolved_at) {
+    throw new Error("Nhóm đã được giải tán");
+  }
+
   const newMessage = new Message({
     conversation_id: conversationId,
     sender_id: senderId,

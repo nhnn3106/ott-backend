@@ -302,6 +302,7 @@ public class UserServiceClient {
                     .userId(user.getId())
                     .username(user.getFullName())
                     .avatar(user.getAvatarUrl())
+                    .phone(user.getPhone())
                     .email(user.getEmail())
                     .build();
             userEventPublisher.publishUserCreated(event);

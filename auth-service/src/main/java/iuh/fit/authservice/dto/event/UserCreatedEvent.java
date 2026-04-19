@@ -13,5 +13,6 @@ public class UserCreatedEvent {
     private String userId;
     private String username;
     private String avatar;
+    private String phone;
     private String email;
 }

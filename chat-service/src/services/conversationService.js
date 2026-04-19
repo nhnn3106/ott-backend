@@ -28,6 +28,8 @@ exports.getAllConversations = async () => {
 };
 
 exports.updateLastMessage = async (conversationId, message) => {
+  const rawType = String(message?.type || "text");
+  const safeType = rawType.startsWith("system_") ? "text" : rawType;
   let displayContent = "";
 
   switch (message.type) {
@@ -65,7 +67,7 @@ exports.updateLastMessage = async (conversationId, message) => {
         sender_id: message.sender_id,
         sender_name: sender?.name || "",
         content: displayContent,
-        type: message.type,
+        type: safeType,
         createdAt: message.createdAt,
       },
     },
@@ -145,18 +147,45 @@ exports.dissolveGroup = async (conversationId, requesterId) => {
     .map((item) => item.user_id)
     .filter(Boolean);
 
-  const [messageResult, participantResult] = await Promise.all([
-    Message.deleteMany({ conversation_id: conversationId }),
-    Participant.deleteMany({ conversation_id: conversationId }),
-  ]);
+  const messageResult = await Message.deleteMany({ conversation_id: conversationId });
 
-  await Conversation.deleteOne({ _id: conversationId });
+  const finalNotice = await Message.create({
+    conversation_id: conversationId,
+    sender_id: requesterId,
+    type: "system_leave",
+    content: ["Nhóm đã được giải tán"],
+    system_meta: {
+      action: "group_dissolved",
+      dissolved_by: requesterId,
+      show_delete_for_non_owner: true,
+    },
+  });
+
+    // Add owner to deleted_for so they don't see the final message
+    await Message.findByIdAndUpdate(
+      finalNotice._id,
+      { $addToSet: { deleted_for: requesterId } },
+    );
+
+  await exports.updateLastMessage(conversationId, finalNotice);
+
+  await Participant.updateMany(
+    { conversation_id: conversationId },
+    {
+      $set: {
+        "settings.group_dissolved_at": new Date(),
+        "settings.group_dissolved_by": requesterId,
+      },
+    },
+  );
 
   return {
     success: true,
     conversationId,
+      ownerId: requesterId,
     affectedUserIds,
     deletedMessages: messageResult.deletedCount || 0,
-    deletedParticipants: participantResult.deletedCount || 0,
+    deletedParticipants: 0,
+    finalNotice,
   };
 };

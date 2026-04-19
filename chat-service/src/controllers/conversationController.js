@@ -3,6 +3,7 @@ const ParticipantService = require("../services/participantService");
 const MessageService = require("../services/messageService");
 const UserService = require("../services/userService");
 const Conversation = require("../models/Conversation");
+const Message = require("../models/Message");
 
 exports.createConversation = async (req, res) => {
   try {
@@ -125,6 +126,12 @@ exports.addMember = async (req, res) => {
       $inc: { member_count: memberIds.length },
     });
 
+    // Hide all existing messages from new members
+    await Message.updateMany(
+      { conversation_id: conversationId },
+      { $addToSet: { deleted_for: { $each: memberIds } } },
+    );
+
     // Get user info for notification message
     const memberUsers = await Promise.all(
       memberIds.map(async (id) => {
@@ -146,12 +153,25 @@ exports.addMember = async (req, res) => {
       type: "system_add",
     });
 
+    await Message.findByIdAndUpdate(notificationMessage._id, {
+      $set: {
+        system_meta: {
+          action: "member_added",
+          added_by: addedBy,
+          added_user_ids: memberIds,
+        },
+      },
+    });
+
+    const finalNotificationMessage = await Message.findById(notificationMessage._id).lean();
+
     // Emit to all existing participants
     const participants = await ParticipantService.getParticipants(conversationId);
     participants.forEach((p) => {
       addedMembers.forEach((member) => {
         req.io.to(`user:${p.user_id}`).emit("them_nguoi_moi", member);
       });
+      req.io.to(`user:${p.user_id}`).emit("tin_nhan", finalNotificationMessage || notificationMessage);
     });
 
     // Emit to new members so they can get the conversation
@@ -164,7 +184,7 @@ exports.addMember = async (req, res) => {
       `${memberIds.length} members added to room ${conversationId}`,
     );
 
-    res.status(200).json({ members: addedMembers, message: notificationMessage });
+    res.status(200).json({ members: addedMembers, message: finalNotificationMessage || notificationMessage });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -173,12 +193,20 @@ exports.addMember = async (req, res) => {
 exports.dissolveGroup = async (req, res) => {
   try {
     const { conversationId, userId } = req.params;
+    const requester = await UserService.getUser(userId);
+    const requesterName = requester?.name || userId;
     const result = await ConversationService.dissolveGroup(conversationId, userId);
 
     result.affectedUserIds.forEach((targetUserId) => {
+      req.io.to(`user:${targetUserId}`).emit("tin_nhan", result.finalNotice);
       req.io.to(`user:${targetUserId}`).emit("giai_tan_nhom", {
         conversationId,
+        dissolvedBy: userId,
+        dissolvedByName: requesterName,
+        message: String(result.finalNotice?.content?.[0] || "Nhóm đã được giải tán"),
+        deleteForOwner: String(targetUserId) === String(result.ownerId),
       });
+      req.io.in(`user:${targetUserId}`).socketsLeave(conversationId);
     });
 
     res.status(200).json({

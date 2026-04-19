@@ -1,4 +1,6 @@
 const ParticipantService = require("../services/participantService");
+const ConversationService = require("../services/conversationService");
+const UserService = require("../services/userService");
 const Message = require("../models/Message");
 
 const buildConversationPreviewContent = (message) => {
@@ -167,6 +169,14 @@ exports.updateConversationCategory = async (req, res) => {
       userId,
       categoryId,
     );
+
+    req.io.to(`user:${userId}`).emit("cap_nhat_phan_loai", {
+      conversationId,
+      userId,
+      categoryId: categoryId ?? null,
+      participant,
+    });
+
     res.status(200).json(participant);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -312,14 +322,68 @@ exports.removeMember = async (req, res) => {
       adminId,
     );
 
-    // Emit to all participants including removed user
+    const [removedUser, adminUser] = await Promise.all([
+      UserService.getUser(userId),
+      UserService.getUser(adminId),
+    ]);
+    const removedName = removedUser?.name || userId;
+    const adminName = adminUser?.name || adminId;
+    const systemContent = `${removedName} đã bị đuổi khỏi nhóm bởi ${adminName}`;
+
+    // Hide old chat history only for removed member.
+    await Message.updateMany(
+      { conversation_id: conversationId },
+      { $addToSet: { deleted_for: userId } },
+    );
+
     const participants =
       await ParticipantService.getParticipants(conversationId);
+
+    // Notice for remaining members.
+    const systemMessageForMembers = await Message.create({
+      conversation_id: conversationId,
+      sender_id: adminId,
+      type: "system_leave",
+      content: [systemContent],
+      deleted_for: [userId],
+      system_meta: {
+        action: "member_removed",
+        removed_user_id: userId,
+        removed_by: adminId,
+      },
+    });
+
+    // Private final notice for removed member with delete action.
+    const systemMessageForRemovedUser = await Message.create({
+      conversation_id: conversationId,
+      sender_id: adminId,
+      type: "system_leave",
+      content: ["Bạn đã bị đuổi khỏi nhóm"],
+      deleted_for: participants
+        .map((item) => item.user_id)
+        .filter((id) => String(id) !== String(userId)),
+      system_meta: {
+        action: "removed_from_group",
+        removed_user_id: userId,
+        removed_by: adminId,
+        show_delete_action: true,
+      },
+    });
+
+    await ConversationService.updateLastMessage(
+      conversationId,
+      systemMessageForMembers,
+    );
+
     participants.forEach((p) => {
+      req.io.to(`user:${p.user_id}`).emit("tin_nhan", systemMessageForMembers);
       req.io.to(`user:${p.user_id}`).emit("xoa_thanh_vien", result);
     });
-    // Also notify the removed user
+
+    req.io.to(`user:${userId}`).emit("tin_nhan", systemMessageForRemovedUser);
     req.io.to(`user:${userId}`).emit("bi_xoa_khoi_nhom", result);
+    // Ensure kicked user cannot keep receiving conversation-room broadcasts.
+    req.io.in(`user:${userId}`).socketsLeave(conversationId);
 
     res.status(200).json(result);
   } catch (error) {
