@@ -1,4 +1,6 @@
 const ParticipantService = require("../services/participantService");
+const ConversationService = require("../services/conversationService");
+const UserService = require("../services/userService");
 const Message = require("../models/Message");
 
 const buildConversationPreviewContent = (message) => {
@@ -167,6 +169,14 @@ exports.updateConversationCategory = async (req, res) => {
       userId,
       categoryId,
     );
+
+    req.io.to(`user:${userId}`).emit("cap_nhat_phan_loai", {
+      conversationId,
+      userId,
+      categoryId: categoryId ?? null,
+      participant,
+    });
+
     res.status(200).json(participant);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -312,14 +322,44 @@ exports.removeMember = async (req, res) => {
       adminId,
     );
 
-    // Emit to all participants including removed user
+    const [removedUser, adminUser] = await Promise.all([
+      UserService.getUser(userId),
+      UserService.getUser(adminId),
+    ]);
+    const removedName = removedUser?.name || userId;
+    const adminName = adminUser?.name || adminId;
+    const systemContent = `${removedName} đã bị đuổi khỏi nhóm bởi ${adminName}`;
+
     const participants =
       await ParticipantService.getParticipants(conversationId);
+
+    // System notice for remaining members only
+    const systemMessage = await Message.create({
+      conversation_id: conversationId,
+      sender_id: adminId,
+      type: "system_leave",
+      content: [systemContent],
+      system_meta: {
+        action: "member_removed",
+        removed_user_id: userId,
+        removed_by: adminId,
+      },
+    });
+
+    await ConversationService.updateLastMessage(
+      conversationId,
+      systemMessage,
+    );
+
+    // Notify remaining members
     participants.forEach((p) => {
+      req.io.to(`user:${p.user_id}`).emit("tin_nhan", systemMessage);
       req.io.to(`user:${p.user_id}`).emit("xoa_thanh_vien", result);
     });
-    // Also notify the removed user
+
+    // Notify kicked user and disconnect from socket room
     req.io.to(`user:${userId}`).emit("bi_xoa_khoi_nhom", result);
+    req.io.in(`user:${userId}`).socketsLeave(conversationId);
 
     res.status(200).json(result);
   } catch (error) {

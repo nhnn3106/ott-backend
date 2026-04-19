@@ -279,6 +279,11 @@ io.on("connection", (socket) => {
     console.log(`User tham gia vao phong: ${conversationId}`);
   });
 
+  socket.on("roi_nhom_chat", (conversationId) => {
+    socket.leave(conversationId);
+    console.log(`User roi phong: ${conversationId}`);
+  });
+
   // Mỗi user join 1 room riêng theo userId — dùng để nhận tin nhắn và hội thoại mới
   socket.on("tham_gia_user_room", (userId) => {
     socket.data.userId = userId;

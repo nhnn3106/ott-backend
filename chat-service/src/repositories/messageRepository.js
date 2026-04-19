@@ -165,14 +165,33 @@ class MessageRepository {
     return this.getMessageStableId(latest);
   }
 
-  isVisibleToUser(message, userId) {
+  isVisibleToUser(message, userId, deletedMsgId = "0") {
     if (message.is_deleted) return false;
+    
+    // Check if message is older than the user's join point (or clear chat point)
+    if (deletedMsgId && deletedMsgId !== "0" && message.msg_id) {
+      if (BigInt(message.msg_id) <= BigInt(deletedMsgId)) {
+        return false;
+      }
+    }
+
     if (!userId) return true;
 
     const deletedFor = Array.isArray(message.deleted_for)
       ? message.deleted_for
       : [];
     return !deletedFor.includes(userId);
+  }
+
+  async getDeletedMsgId(conversationId, userId) {
+    if (!userId) return "0";
+    try {
+      const Participant = require("../models/Participant");
+      const participant = await Participant.findOne({ conversation_id: conversationId, user_id: userId }).select('deleted_msg_id').lean();
+      return participant?.deleted_msg_id || "0";
+    } catch (e) {
+      return "0";
+    }
   }
 
   async hydrateReplyPreviews(conversationId, messages, userId) {
@@ -330,6 +349,8 @@ class MessageRepository {
    */
   async getConversationMessages(conversationId, limit = 20, userId) {
     try {
+      const deletedMsgId = await this.getDeletedMsgId(conversationId, userId);
+
       // Step 1: Check Redis cache
       const cachedExists =
         await messageCacheService.cacheExists(conversationId);
@@ -343,7 +364,7 @@ class MessageRepository {
             `✓ CACHE HIT: ${messages.length} messages for ${conversationId}`,
           );
           const visibleMessages = messages.filter((m) =>
-            this.isVisibleToUser(m, userId),
+            this.isVisibleToUser(m, userId, deletedMsgId),
           );
 
           if (visibleMessages.length > 0) {
@@ -382,11 +403,17 @@ class MessageRepository {
       // Step 2: Cache miss - fetch from MongoDB
       logger.info(`✗ CACHE MISS: Fetching from MongoDB for ${conversationId}`);
 
-      const messages = await Message.find({
+      const query = {
         conversation_id: conversationId,
         is_deleted: false,
         ...(userId ? { deleted_for: { $ne: userId } } : {}),
-      })
+      };
+
+      if (deletedMsgId !== "0") {
+        query.msg_id = { $gt: deletedMsgId };
+      }
+
+      const messages = await Message.find(query)
         .sort({ createdAt: -1 })
         .limit(limit)
         .lean();
@@ -521,17 +548,25 @@ class MessageRepository {
         `📥 Loading older messages for ${conversationId}, before msg_id: ${beforeMsgId}`,
       );
 
+      const deletedMsgId = await this.getDeletedMsgId(conversationId, userId);
+
       // msg_id is stored as string (Snowflake). Keep string comparison to avoid
       // precision loss when converting large IDs to Number.
       const beforeId = String(beforeMsgId);
 
-      // Fetch from MongoDB (messages with msg_id < beforeMsgId)
-      const messages = await Message.find({
+      const query = {
         conversation_id: conversationId,
         is_deleted: false,
         ...(userId ? { deleted_for: { $ne: userId } } : {}),
         msg_id: { $lt: beforeId },
-      })
+      };
+
+      if (deletedMsgId !== "0") {
+        query.msg_id = { $lt: beforeId, $gt: deletedMsgId };
+      }
+
+      // Fetch from MongoDB (messages with msg_id < beforeMsgId)
+      const messages = await Message.find(query)
         .sort({ msg_id: -1 }) // newest first (largest ID first)
         .limit(limit + 1) // +1 to check if more exist
         .lean();
@@ -588,9 +623,15 @@ class MessageRepository {
         `📤 Loading newer messages for ${conversationId}, after msg_id: ${afterMsgId}`,
       );
 
+      const deletedMsgId = await this.getDeletedMsgId(conversationId, userId);
+
       // msg_id is stored as string (Snowflake). Keep string comparison to avoid
       // precision loss when converting large IDs to Number.
-      const afterId = String(afterMsgId);
+      let afterId = String(afterMsgId);
+      
+      if (deletedMsgId !== "0" && BigInt(deletedMsgId) > BigInt(afterId)) {
+         afterId = deletedMsgId;
+      }
 
       const messages = await Message.find({
         conversation_id: conversationId,

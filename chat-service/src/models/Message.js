@@ -47,6 +47,10 @@ const MessageSchema = new mongoose.Schema(
 
     content: [{ type: String }],
     size: { type: Number, default: 0 },
+    system_meta: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
 
     reply_to_msg_id: { type: String, default: null },
 

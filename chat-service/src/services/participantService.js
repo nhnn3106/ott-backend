@@ -84,14 +84,27 @@ exports.ensureSelfConversation = async (userId) => {
   return { selfConversation, participant };
 };
 
-exports.addParticipant = async ({ conversationId, userId, role, addedBy }) => {
+exports.addParticipant = async ({ conversationId, userId, role, addedBy, lastMsgId = "0" }) => {
   const existing = await Participant.findOne({
     conversation_id: conversationId,
     user_id: userId,
   });
 
   if (existing) {
-    return existing;
+    existing.roles = role || existing.roles;
+    existing.added_by = addedBy || existing.added_by;
+    existing.joined_at = new Date();
+    // Khi thêm lại thành viên đã bị xóa/đuổi, vẫn áp dụng logic ẩn tin nhắn cũ
+    existing.deleted_msg_id = lastMsgId;
+    existing.settings = {
+      ...existing.settings,
+      removed_from_group_at: null,
+      removed_by: null,
+      group_dissolved_at: null,
+      group_dissolved_by: null,
+    };
+
+    return await existing.save();
   }
 
   const newMember = new Participant({
@@ -99,6 +112,7 @@ exports.addParticipant = async ({ conversationId, userId, role, addedBy }) => {
     user_id: userId,
     roles: role,
     added_by: addedBy,
+    deleted_msg_id: lastMsgId,
   });
 
   return await newMember.save();
@@ -136,6 +150,13 @@ exports.getConversationsByUserId = async (userId) => {
 };
 
 exports.getParticipants = async (conversationId) => {
+  return await Participant.find({
+    conversation_id: conversationId,
+    "settings.removed_from_group_at": null,
+  });
+};
+
+exports.getParticipantsIncludingRemoved = async (conversationId) => {
   return await Participant.find({ conversation_id: conversationId });
 };
 
@@ -253,7 +274,10 @@ exports.getParticipant = async (conversationId, userId) => {
 exports.getConversationMembers = async (conversationId) => {
   const User = require("../models/User");
   
-  const participants = await Participant.find({ conversation_id: conversationId });
+  const participants = await Participant.find({
+    conversation_id: conversationId,
+    "settings.removed_from_group_at": null,
+  });
   
   // Get user details for each participant
   const membersWithDetails = await Promise.all(
@@ -373,7 +397,7 @@ exports.removeMember = async (conversationId, userId, adminId) => {
     throw new Error("Bạn không thể tự xóa chính mình. Hãy dùng chức năng rời nhóm");
   }
 
-  // Remove participant
+  // Hard delete: xóa hoàn toàn participant khỏi DB
   await Participant.deleteOne({
     conversation_id: conversationId,
     user_id: userId,
