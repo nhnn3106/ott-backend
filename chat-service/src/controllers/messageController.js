@@ -53,7 +53,7 @@ exports.sendMessage = async (req, res) => {
         const sysMsg = await MessageService.sendMessage({
           conversationId,
           senderId,
-          content: `${savedMessage.sender_name} đã tạo cuộc bình chọn: ${pollQuestion}`,
+          content: `${savedMessage.sender_name}: đã tạo cuộc bình chọn: ${pollQuestion}`,
           type: "system_poll",
           size: 0,
         });
@@ -129,7 +129,7 @@ exports.forwardMessage = async (req, res) => {
     for (let i = 0; i < targetConversationIds.length; i++) {
       const targetConversationId = targetConversationIds[i];
       const savedMessage = forwardedMessages[i];
-      
+
       if (savedMessage) {
         const participants = await ParticipantService.getParticipants(targetConversationId);
         participants.forEach((p) => {
