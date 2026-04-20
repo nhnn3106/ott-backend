@@ -411,4 +411,61 @@ exports.removeMember = async (conversationId, userId, adminId) => {
   return { success: true, conversationId, userId };
 };
 
+// Transfer ownership of a group (owner only)
+exports.transferOwnership = async (conversationId, currentOwnerId, newOwnerId) => {
+  const conversation = await Conversation.findById(conversationId);
+
+  if (!conversation) {
+    throw new Error("Cuộc hội thoại không tồn tại");
+  }
+
+  if (conversation.type !== "group") {
+    throw new Error("Chỉ có thể chuyển quyền trưởng nhóm trong nhóm chat");
+  }
+
+  if (String(conversation.created_by) !== String(currentOwnerId)) {
+    throw new Error("Chỉ trưởng nhóm hiện tại mới có quyền chuyển quyền");
+  }
+  
+  if (String(currentOwnerId) === String(newOwnerId)) {
+    throw new Error("Không thể chuyển quyền cho chính mình");
+  }
+
+  const newOwner = await Participant.findOne({
+    conversation_id: conversationId,
+    user_id: newOwnerId,
+  });
+
+  if (!newOwner) {
+    throw new Error("Người được chuyển quyền không phải là thành viên của nhóm");
+  }
+
+  // Update conversation creator
+  conversation.created_by = newOwnerId;
+  await conversation.save();
+
+  // Find previous owner and update to user/admin. Default down to admin
+  const prevOwner = await Participant.findOne({
+    conversation_id: conversationId,
+    user_id: currentOwnerId,
+  });
+  
+  if (prevOwner) {
+    prevOwner.roles = "user";
+    await prevOwner.save();
+  }
+
+  // Ensure new owner has admin/owner roles level representation if needed
+  // In your current model, owner is just created_by, but maybe they were a user, let's make sure they are at least admin.
+  newOwner.roles = "admin";
+  await newOwner.save();
+
+  return { 
+    success: true, 
+    conversationId, 
+    oldOwnerId: currentOwnerId,
+    newOwnerId 
+  };
+};
+
 exports.assertGroupManager = assertGroupManager;

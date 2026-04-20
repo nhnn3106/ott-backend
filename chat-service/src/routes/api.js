@@ -52,6 +52,10 @@ router.put(
   "/participants/nickname/:conversationId/:userId",
   ParticipantController.updateMemberNickname,
 );
+router.put(
+  "/participants/transfer-owner/:conversationId",
+  ParticipantController.transferOwnership,
+);
 router.delete(
   "/participants/leave/:conversationId/:userId",
   ParticipantController.leaveGroup,
@@ -65,6 +69,7 @@ router.post("/messages/presigned-url", MessageController.generatePresignedUrl);
 router.post("/messages", MessageController.sendMessage);
 router.post("/messages/forward", MessageController.forwardMessage);
 router.put("/messages/:msgId/reaction", MessageController.reactToMessage);
+router.put("/messages/:msgId/vote", MessageController.votePoll);
 router.put("/messages/:msgId/revoke", MessageController.revokeMessage);
 router.put("/messages/:msgId/delete", MessageController.deleteMessage);
 router.put("/messages/:msgId/pin", MessageController.pinMessage);

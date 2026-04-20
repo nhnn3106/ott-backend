@@ -26,7 +26,6 @@ exports.createConversation = async ({
 exports.getAllConversations = async () => {
   return await Conversation.find().sort({ updatedAt: -1 });
 };
-
 exports.updateLastMessage = async (conversationId, message) => {
   const rawType = String(message?.type || "text");
   const safeType = rawType.startsWith("system_") ? "text" : rawType;
@@ -44,6 +43,9 @@ exports.updateLastMessage = async (conversationId, message) => {
       break;
     case "audio":
       displayContent = "[Âm thanh]";
+      break;
+    case "poll":
+      displayContent = `[Bình chọn] ${message.poll_question || "Khảo sát mới"}`;
       break;
     default: {
       const rawContent = message.content[0] || "";
