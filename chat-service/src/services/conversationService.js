@@ -26,7 +26,6 @@ exports.createConversation = async ({
 exports.getAllConversations = async () => {
   return await Conversation.find().sort({ updatedAt: -1 });
 };
-
 exports.updateLastMessage = async (conversationId, message) => {
   let displayContent = "";
 
@@ -42,6 +41,9 @@ exports.updateLastMessage = async (conversationId, message) => {
       break;
     case "audio":
       displayContent = "[Âm thanh]";
+      break;
+    case "poll":
+      displayContent = `[Bình chọn] ${message.poll_question || "Khảo sát mới"}`;
       break;
     default: {
       const rawContent = message.content[0] || "";

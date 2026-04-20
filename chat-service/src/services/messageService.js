@@ -1448,12 +1448,21 @@ exports.votePoll = async ({ conversationId, msgId, userId, optionIds }) => {
     throw new Error("Khảo sát đã bị xóa hoặc thu hồi");
   }
 
+  const voter = await User.findOne({ user_id: userId }).select("name").lean();
+  const voterName = voter?.name || "Một thành viên";
+
+  // Check if they were already in any option
+  const wasVoted = message.poll_options.some((opt) =>
+    opt.voters.some((v) => String(v) === String(userId))
+  );
+
   // Remove user from all options first
   message.poll_options.forEach((opt) => {
     opt.voters = opt.voters.filter((voterId) => String(voterId) !== String(userId));
   });
 
   // Then add user to selected options
+  const selectedOptionNames = [];
   if (Array.isArray(optionIds) && optionIds.length > 0) {
     if (!message.poll_multiple_choice && optionIds.length > 1) {
       throw new Error("Khảo sát này chỉ cho phép chọn 1 đáp án");
@@ -1462,11 +1471,40 @@ exports.votePoll = async ({ conversationId, msgId, userId, optionIds }) => {
     message.poll_options.forEach((opt) => {
       if (optionIds.includes(String(opt.id))) {
         opt.voters.push(userId);
+        selectedOptionNames.push(opt.name);
       }
     });
   }
 
   const updatedMessage = await message.save();
+
+  // Create system notification
+  let systemMessage = null;
+  if (selectedOptionNames.length > 0) {
+    const actionText = wasVoted 
+      ? `${voterName} đã thay đổi bình chọn` 
+      : `${voterName} đã bình chọn cho "${selectedOptionNames.join(", ")}"`;
+
+    const systemDoc = new Message({
+      conversation_id: conversationId,
+      sender_id: userId,
+      type: "system_poll",
+      content: [actionText],
+      size: 0,
+    });
+
+    const savedSystemMessage = await systemDoc.save();
+    
+    // Enrich system message for broadcast
+    systemMessage = {
+      ...savedSystemMessage.toObject(),
+      sender_name: voterName,
+    };
+
+    // Update conversation last message and cache
+    await ConversationService.updateLastMessage(conversationId, savedSystemMessage);
+    await messageCacheService.addMessage(conversationId, systemMessage);
+  }
 
   const sender = await User.findOne({ user_id: updatedMessage.sender_id })
     .select("name avatar")
@@ -1482,5 +1520,8 @@ exports.votePoll = async ({ conversationId, msgId, userId, optionIds }) => {
 
   await messageCacheService.updateMessage(conversationId, msgId, cachedMessage);
 
-  return cachedMessage;
+  return {
+    ...cachedMessage,
+    systemMessage,
+  };
 };

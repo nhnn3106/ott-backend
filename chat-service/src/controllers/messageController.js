@@ -53,7 +53,7 @@ exports.sendMessage = async (req, res) => {
         const sysMsg = await MessageService.sendMessage({
           conversationId,
           senderId,
-          content: `tạo cuộc bình chọn: ${pollQuestion}`,
+          content: `${savedMessage.sender_name} đã tạo cuộc bình chọn: ${pollQuestion}`,
           type: "system_poll",
           size: 0,
         });
@@ -79,7 +79,7 @@ exports.votePoll = async (req, res) => {
     const { msgId } = req.params;
     const { conversationId, userId, optionIds } = req.body;
 
-    const updatedMessage = await MessageService.votePoll({
+    const result = await MessageService.votePoll({
       conversationId,
       msgId,
       userId,
@@ -89,10 +89,13 @@ exports.votePoll = async (req, res) => {
     const participants =
       await ParticipantService.getParticipants(conversationId);
     participants.forEach((p) => {
-      req.io.to(`user:${p.user_id}`).emit("tin_nhan_cap_nhat", updatedMessage);
+      req.io.to(`user:${p.user_id}`).emit("tin_nhan_cap_nhat", result);
+      if (result.systemMessage) {
+        req.io.to(`user:${p.user_id}`).emit("tin_nhan", result.systemMessage);
+      }
     });
 
-    res.status(200).json(updatedMessage);
+    res.status(200).json(result);
   } catch (error) {
     if (
       error.message === "Tin nhắn không tồn tại" ||
