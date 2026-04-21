@@ -200,6 +200,11 @@ exports.dissolveGroup = async (conversationId, requesterId) => {
 
   await exports.updateLastMessage(conversationId, finalNotice);
 
+  await Conversation.findByIdAndUpdate(conversationId, {
+    status: "dissolved",
+    is_dissolved: true
+  });
+
   await Participant.updateMany(
     { conversation_id: conversationId },
     {
@@ -209,6 +214,14 @@ exports.dissolveGroup = async (conversationId, requesterId) => {
       },
     },
   );
+
+  // Hide conversation for owner (soft-delete style)
+  if (finalNotice && finalNotice.msg_id) {
+    await Participant.findOneAndUpdate(
+      { conversation_id: conversationId, user_id: requesterId },
+      { $set: { deleted_msg_id: finalNotice.msg_id } }
+    );
+  }
 
   return {
     success: true,
