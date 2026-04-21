@@ -12,7 +12,9 @@ const messageRoutes = require("./routes/messageRoutes");
 const messageEventsHandler = require("./events/messageEvents");
 const ParticipantService = require("./services/participantService");
 const MessageService = require("./services/messageService");
+const { initAllConsumers } = require("./consumers");
 connectDB();
+initAllConsumers();
 
 const app = express();
 const server = http.createServer(app);

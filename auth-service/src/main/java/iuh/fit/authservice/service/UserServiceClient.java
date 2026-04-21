@@ -298,15 +298,6 @@ public class UserServiceClient {
             UserDto user = extractResult(response);
             log.info("User created successfully via user-service - userId: {}", user.getId());
 
-            UserCreatedEvent event = UserCreatedEvent.builder()
-                    .userId(user.getId())
-                    .username(user.getFullName())
-                    .avatar(user.getAvatarUrl())
-                    .phone(user.getPhone())
-                    .email(user.getEmail())
-                    .build();
-            userEventPublisher.publishUserCreated(event);
-
             return user;
         } catch (Exception e) {
             log.error("Error calling user-service createUser", e);

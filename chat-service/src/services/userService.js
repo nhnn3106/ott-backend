@@ -1,6 +1,44 @@
 const User = require("../models/User");
 const UserCacheService = require("./userCacheService");
 
+const extractAvatarPath = (avatarUrl) => {
+  if (!avatarUrl) return "";
+  try {
+    // If it's already a path, return it
+    if (avatarUrl.startsWith("/")) return avatarUrl;
+    
+    const url = new URL(avatarUrl);
+    // Extract path from S3 or other full URLs
+    // e.g., https://bucket.s3.region.amazonaws.com/avatar/abc.png -> /avatar/abc.png
+    return url.pathname;
+  } catch (e) {
+    return avatarUrl;
+  }
+};
+
+exports.createUser = async (userData) => {
+  const { userId, username, avatar, phone, email } = userData;
+
+  const existingUser = await User.findOne({ user_id: userId });
+  if (existingUser) {
+    return existingUser;
+  }
+
+  const newUser = new User({
+    user_id: userId,
+    name: username || "Người dùng",
+    avatar: extractAvatarPath(avatar),
+    phone: phone || "",
+    email: email || "",
+    is_online: false,
+    last_active_at: new Date(),
+  });
+
+  await newUser.save();
+  await UserCacheService.setCachedUser(userId, newUser);
+  return newUser;
+};
+
 exports.syncUser = async ({ user_id, name }) => {
   const user = await User.findOneAndUpdate(
     { user_id: user_id },
