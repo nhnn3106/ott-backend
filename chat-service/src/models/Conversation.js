@@ -70,6 +70,16 @@ const ConversationSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    
+    status: {
+      type: String,
+      default: "active",
+    },
+
+    is_dissolved: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,
