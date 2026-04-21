@@ -16,11 +16,6 @@ public class UserEventPublisher {
     private final RabbitMQConfig rabbitMQConfig;
 
     public void publishUserCreated(UserCreatedEvent event) {
-        if (event == null || event.getUserId() == null || event.getUserId().isBlank()) {
-            log.warn("Skip publish user.created event due to missing userId");
-            return;
-        }
-
         try {
             rabbitTemplate.convertAndSend(
                     rabbitMQConfig.userEventsExchange,
@@ -29,7 +24,8 @@ public class UserEventPublisher {
             );
             log.info("Published user.created event for userId={}", event.getUserId());
         } catch (Exception e) {
-            log.error("Failed to publish user.created event for userId={}", event.getUserId(), e);
+            log.error("Failed to publish user.created event for userId={}: {}", 
+                    event.getUserId(), e.getMessage());
         }
     }
 }

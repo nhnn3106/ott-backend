@@ -1,11 +1,11 @@
 package iuh.fit.userservice.service;
 
+import iuh.fit.userservice.dto.event.UserCreatedEvent;
 import iuh.fit.userservice.dto.request.RegisterRequest;
 import iuh.fit.userservice.dto.request.RequestRegisterOtpRequest;
 import iuh.fit.userservice.dto.request.UpdateContactRequest;
 import iuh.fit.userservice.dto.response.OtpResponse;
 import iuh.fit.userservice.dto.response.UserResponse;
-import iuh.fit.userservice.dto.event.UserCreatedEvent;
 import iuh.fit.userservice.entity.OtpCode;
 import iuh.fit.userservice.entity.User;
 import iuh.fit.userservice.entity.enums.AccountType;
@@ -41,11 +41,11 @@ public class UserService {
     UserMapper userMapper;
     OtpService otpService;
     NotificationPublisher notificationPublisher;
-    UserEventPublisher userEventPublisher;
     ValidationUtils validationUtils;
     EntityManager entityManager;
-    private final UserValidationUtil userValidationUtil;
-    private final AuthServiceClient authServiceClient;
+    UserValidationUtil userValidationUtil;
+    AuthServiceClient authServiceClient;
+    UserEventPublisher userEventPublisher;
 
     @NonFinal
     @Value("${aws.s3.default-avatar}")
@@ -141,18 +141,17 @@ public class UserService {
         user = userRepository.save(user);
         otpService.markOtpAsUsed(otpCode);
 
-        authServiceClient.syncUser(user);
-
-        String username = buildUsername(user);
-        userEventPublisher.publishUserCreated(UserCreatedEvent.builder()
-            .userId(user.getId())
-            .username(username)
-            .avatar(user.getAvatarUrl())
-            .email(user.getEmail())
-            .build());
-
         // Welcome email async
         notificationPublisher.sendWelcomeEmailAsync(user);
+
+        // Publish event for Chat service (One time, with phone)
+        userEventPublisher.publishUserCreated(UserCreatedEvent.builder()
+                .userId(user.getId())
+                .username(user.getFullName())
+                .avatar(user.getAvatarUrl())
+                .email(user.getEmail())
+                .phone(user.getPhone())
+                .build());
 
         return userMapper.toUserResponse(user);
     }
