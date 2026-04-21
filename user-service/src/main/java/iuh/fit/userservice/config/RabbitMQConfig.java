@@ -19,6 +19,12 @@ public class RabbitMQConfig {
     @Value("${rabbitmq.routing-key.alert}")
     public String alertRoutingKey;
 
+    @Value("${rabbitmq.exchange.user-events}")
+    public String userEventsExchange;
+
+    @Value("${rabbitmq.routing-key.user-created}")
+    public String userCreatedRoutingKey;
+
     @Bean
     public MessageConverter jsonMessageConverter() {
         return new Jackson2JsonMessageConverter();
@@ -29,5 +35,10 @@ public class RabbitMQConfig {
         RabbitTemplate template = new RabbitTemplate(connectionFactory);
         template.setMessageConverter(jsonMessageConverter());
         return template;
+    }
+
+    @Bean
+    public org.springframework.amqp.core.TopicExchange userEventsExchange() {
+        return new org.springframework.amqp.core.TopicExchange(userEventsExchange, true, false);
     }
 }
