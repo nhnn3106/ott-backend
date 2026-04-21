@@ -1,6 +1,5 @@
 package iuh.fit.authservice.service;
 
-import iuh.fit.authservice.dto.event.UserCreatedEvent;
 import iuh.fit.authservice.entity.User;
 import iuh.fit.authservice.repository.UserRepository;
 
@@ -16,7 +15,6 @@ import java.time.LocalDateTime;
 public class UserSyncService {
 
     private final UserRepository userRepository;
-    private final UserEventPublisher userEventPublisher;
 
     public void ensureUserExists(UserServiceClient.UserDto userDto) {
         try {
@@ -52,16 +50,6 @@ public class UserSyncService {
 
             userRepository.saveAndFlush(user);
             log.info("User synced to auth DB - userId: {}", userDto.getId());
-
-            // Publish event for other services (e.g. chat-service)
-            UserCreatedEvent event = UserCreatedEvent.builder()
-                    .userId(userDto.getId())
-                    .username(userDto.getFullName())
-                    .avatar(userDto.getAvatarUrl())
-                    .phone(userDto.getPhone())
-                    .email(userDto.getEmail())
-                    .build();
-            userEventPublisher.publishUserCreated(event);
 
         } catch (org.springframework.dao.DataIntegrityViolationException e) {
             log.debug("Concurrent insert for userId: {} - skipping", userDto.getId());
