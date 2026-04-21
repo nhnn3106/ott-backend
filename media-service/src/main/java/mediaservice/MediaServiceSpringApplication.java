@@ -5,11 +5,13 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.data.redis.repository.configuration.EnableRedisRepositories;
+import org.springframework.amqp.rabbit.annotation.EnableRabbit;
 import mediaservice.configs.MediaCompressionProperties;
 import mediaservice.configs.MediaDeleteProperties;
 import mediaservice.configs.MediaUploadProperties;
 
 @SpringBootApplication
+@EnableRabbit
 @EnableJpaRepositories(basePackages = "mediaservice.repositories")
 @EnableConfigurationProperties({
     MediaCompressionProperties.class,

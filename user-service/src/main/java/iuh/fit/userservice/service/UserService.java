@@ -5,6 +5,7 @@ import iuh.fit.userservice.dto.request.RequestRegisterOtpRequest;
 import iuh.fit.userservice.dto.request.UpdateContactRequest;
 import iuh.fit.userservice.dto.response.OtpResponse;
 import iuh.fit.userservice.dto.response.UserResponse;
+import iuh.fit.userservice.dto.event.UserCreatedEvent;
 import iuh.fit.userservice.entity.OtpCode;
 import iuh.fit.userservice.entity.User;
 import iuh.fit.userservice.entity.enums.AccountType;
@@ -40,6 +41,7 @@ public class UserService {
     UserMapper userMapper;
     OtpService otpService;
     NotificationPublisher notificationPublisher;
+    UserEventPublisher userEventPublisher;
     ValidationUtils validationUtils;
     EntityManager entityManager;
     private final UserValidationUtil userValidationUtil;
@@ -141,10 +143,41 @@ public class UserService {
 
         authServiceClient.syncUser(user);
 
+        String username = buildUsername(user);
+        userEventPublisher.publishUserCreated(UserCreatedEvent.builder()
+            .userId(user.getId())
+            .username(username)
+            .avatar(user.getAvatarUrl())
+            .email(user.getEmail())
+            .build());
+
         // Welcome email async
         notificationPublisher.sendWelcomeEmailAsync(user);
 
         return userMapper.toUserResponse(user);
+    }
+
+    private String buildUsername(User user) {
+        String base = null;
+        if (user.getEmail() != null && user.getEmail().contains("@")) {
+            base = user.getEmail().substring(0, user.getEmail().indexOf('@'));
+        } else if (user.getFullName() != null) {
+            base = user.getFullName();
+        }
+
+        if (base == null || base.isBlank()) {
+            return "user";
+        }
+
+        String normalized = validationUtils.sanitizeString(base)
+                .replace(" ", "")
+                .toLowerCase();
+
+        if (normalized.isBlank()) {
+            return "user";
+        }
+
+        return normalized.length() > 50 ? normalized.substring(0, 50) : normalized;
     }
 
     public void updateContact(String userId, UpdateContactRequest request) {

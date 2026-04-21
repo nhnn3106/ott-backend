@@ -4,9 +4,11 @@ import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.core.Queue;
+import org.springframework.amqp.core.TopicExchange;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Value;
 
 import mediaservice.configs.MediaDeleteProperties;
 import mediaservice.configs.MediaUploadProperties;
@@ -72,6 +74,26 @@ public class RabbitMQConfig {
         return BindingBuilder.bind(mediaDeleteQueue)
                 .to(mediaDeleteExchange)
                 .with(properties.getRoutingKey());
+    }
+
+    @Bean
+    public TopicExchange userEventsExchange(@Value("${user.events.exchange}") String exchange) {
+        return new TopicExchange(exchange, true, false);
+    }
+
+    @Bean
+    public Queue userCreatedQueue(@Value("${user.created.queue}") String queue) {
+        return new Queue(queue);
+    }
+
+    @Bean
+    public Binding userCreatedBinding(
+            Queue userCreatedQueue,
+            TopicExchange userEventsExchange,
+            @Value("${user.created.routing-key}") String routingKey) {
+        return BindingBuilder.bind(userCreatedQueue)
+                .to(userEventsExchange)
+                .with(routingKey);
     }
 
     @Bean
