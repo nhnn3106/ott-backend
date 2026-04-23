@@ -14,8 +14,6 @@ const ParticipantService = require("./services/participantService");
 const MessageService = require("./services/messageService");
 const { initAllConsumers } = require("./consumers");
 connectDB();
-initAllConsumers();
-
 const app = express();
 const server = http.createServer(app);
 
@@ -29,6 +27,9 @@ const io = new Server(server, {
     methods: ["GET", "POST"],
   },
 });
+
+// Initialize consumers with io
+initAllConsumers(io);
 
 // ========== MESSAGE EVENTS HANDLER ==========
 messageEventsHandler(io);

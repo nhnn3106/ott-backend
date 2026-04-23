@@ -33,12 +33,9 @@ public class RelationshipSocketServer {
 
         server = new SocketIOServer(config);
 
-        server.addConnectListener(client ->
-            logger.info("Relationship socket connected: {}", client.getSessionId())
-        );
-        server.addDisconnectListener(client ->
-            logger.info("Relationship socket disconnected: {}", client.getSessionId())
-        );
+        server.addConnectListener(client -> logger.info("Relationship socket connected: {}", client.getSessionId()));
+        server.addDisconnectListener(
+                client -> logger.info("Relationship socket disconnected: {}", client.getSessionId()));
 
         try {
             server.start();

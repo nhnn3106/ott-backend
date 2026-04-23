@@ -151,7 +151,11 @@ public class RelationshipServiceImpl implements RelationshipService {
             throw new IllegalStateException("Lời mời không ở trạng thái chờ.");
         }
         String actorId = rel.getReceiver() != null ? rel.getReceiver().getId() : null;
+        
+        // Cập nhật status thành REMOVED trước khi gửi để các service khác biết đường mà xóa
+        rel.setStatus(RelationshipStatusType.REMOVED);
         relationshipRealtimePublisher.publishAfterCommit("REQUEST_REJECTED", rel, actorId);
+        
         relationshipRepository.delete(rel);
     }
 
@@ -163,7 +167,11 @@ public class RelationshipServiceImpl implements RelationshipService {
             throw new IllegalStateException("Chỉ có thể hủy lời mời đang ở trạng thái chờ.");
         }
         String actorId = rel.getRequester() != null ? rel.getRequester().getId() : null;
-        relationshipRealtimePublisher.publishAfterCommit("REQUEST_CANCELED", rel, actorId);
+        
+        // Thống nhất dùng REQUEST_CANCELLED (2 chữ L)
+        rel.setStatus(RelationshipStatusType.REMOVED);
+        relationshipRealtimePublisher.publishAfterCommit("REQUEST_CANCELLED", rel, actorId);
+        
         relationshipRepository.delete(rel);
     }
 
@@ -174,7 +182,10 @@ public class RelationshipServiceImpl implements RelationshipService {
         if (rel.getStatus() != RelationshipStatusType.ACCEPTED) {
             throw new IllegalStateException("Hai người dùng này chưa là bạn bè.");
         }
+        
+        rel.setStatus(RelationshipStatusType.REMOVED);
         relationshipRealtimePublisher.publishAfterCommit("UNFRIENDED", rel, null);
+        
         relationshipRepository.delete(rel);
     }
 
@@ -246,8 +257,9 @@ public class RelationshipServiceImpl implements RelationshipService {
         rel.setType(RelationshipType.FRIEND);
         
         relationshipRepository.save(rel);
-        // Do NOT call realtimePublisher.publish here as it might cause loops if both sides emit
-        // However, we might want to emit to Socket.IO only
+        
+        // Phát Socket.IO để UI cập nhật ngay lập tức mà không gây vòng lặp RabbitMQ
+        relationshipRealtimePublisher.publishToSocketOnly("SYNC_UPDATE", rel, null);
     }
 
     private Relationship buildRelationshipFromRequest(RelationshipRequest request) {

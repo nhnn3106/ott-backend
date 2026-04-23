@@ -26,7 +26,6 @@ public class UserAccountServiceImpl implements UserAccountService {
     private final UserAccountRepository userAccountRepository;
     private final UserAccountMapper userAccountMapper;
     private final S3Service s3Service;
-    private final mediaservice.services.UserAccountSyncService userAccountSyncService;
 
     @Override
     @Transactional
@@ -41,13 +40,8 @@ public class UserAccountServiceImpl implements UserAccountService {
     @Transactional(readOnly = true)
     @Cacheable(value = "users", key = "#id", unless = "#result == null")
     public UserAccountResponse getUserAccountById(String id) {
-        UserAccount userAccount = userAccountRepository.findById(id).orElse(null);
-        if (userAccount == null) {
-            userAccount = userAccountSyncService.syncUserAccountById(id);
-        }
-        if (userAccount == null) {
-            throw new RuntimeException("User account not found with id: " + id);
-        }
+        UserAccount userAccount = userAccountRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("User account not found with id: " + id));
         return userAccountMapper.toResponse(userAccount);
     }
 
