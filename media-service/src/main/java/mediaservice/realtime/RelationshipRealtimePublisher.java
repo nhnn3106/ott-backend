@@ -66,6 +66,29 @@ public class RelationshipRealtimePublisher {
         eventPublisher.publish(type, relationship);
     }
 
+    public void publishToSocketOnly(String type, Relationship relationship, String actorId) {
+        if (relationship == null) return;
+
+        Set<String> targets = new LinkedHashSet<>();
+        if (relationship.getRequester() != null) targets.add(relationship.getRequester().getId());
+        if (relationship.getReceiver() != null) targets.add(relationship.getReceiver().getId());
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("type", type);
+        payload.put("relationshipId", relationship.getId());
+        payload.put("requesterId", relationship.getRequester() != null ? relationship.getRequester().getId() : null);
+        payload.put("receiverId", relationship.getReceiver() != null ? relationship.getReceiver().getId() : null);
+        payload.put("status", relationship.getStatus() != null ? relationship.getStatus().name() : null);
+        payload.put("actorId", actorId);
+        payload.put("timestamp", Instant.now().toString());
+        payload.put("targetUserIds", targets.stream().toList());
+
+        RelationshipSocketServer socketServer = socketServerProvider.getIfAvailable();
+        if (socketServer != null && socketServer.getServer() != null) {
+            socketServer.getServer().getBroadcastOperations().sendEvent(EVENT_NAME, payload);
+        }
+    }
+
     public void publishAfterCommit(String type, Relationship relationship, String actorId) {
         if (relationship == null) {
             return;
