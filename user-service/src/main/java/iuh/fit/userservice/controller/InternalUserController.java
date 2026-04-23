@@ -84,33 +84,6 @@ public class InternalUserController {
                 (String) body.get("fullName"), (String) body.get("avatarUrl"), coverPhotoUrl,
                 (String) body.getOrDefault("accountType", "USER")
         )).build();
-
-        String phone    = (String) body.get("phone");
-        String email    = (String) body.get("email");
-        String googleId = (String) body.get("googleId");
-        String fullName = (String) body.get("fullName");
-        String avatarUrl= (String) body.get("avatarUrl");
-        String accountTypeStr = (String) body.getOrDefault("accountType", "USER");
-
-        User user = User.builder()
-                .phone(phone).email(email).googleId(googleId).fullName(fullName)
-                .avatarUrl(avatarUrl)
-                .accountType(AccountType.valueOf(accountTypeStr))
-                .isPhoneVerified(phone != null).isEmailVerified(email != null)
-                .isActive(true).isBlocked(false)
-                .isFirstLogin(true).welcomeEmailSent(false)
-                .build();
-
-        if (phone   != null) user.setPhoneVerifiedAt(LocalDateTime.now());
-        if (email   != null) user.setEmailVerifiedAt(LocalDateTime.now());
-
-        user = userRepository.save(user);
-        log.info("User created via internal API: {}", user.getId());
-
-        String registerMethod = (googleId != null && !googleId.isBlank()) ? "google" : "internal";
-        notificationPublisher.publishUserRegisteredEvent(user.getId(), registerMethod);
-
-        return ApiResponse.<UserResponse>builder().result(userMapper.toUserResponse(user)).build();
     }
 
     @GetMapping("/exists/phone/{phone}")

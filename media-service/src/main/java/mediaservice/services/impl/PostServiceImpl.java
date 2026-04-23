@@ -1,55 +1,12 @@
 package mediaservice.services.impl;
 
+import java.util.ArrayList;
 import java.util.List;
-
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
+import java.util.UUID;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import mediaservice.dtos.requests.PostRequest;
-import mediaservice.dtos.responses.PostResponse;
-import mediaservice.mappers.PostMapper;
-import mediaservice.models.ImageMedia;
-import mediaservice.models.Post;
-import mediaservice.models.UserAccount;
-import mediaservice.models.VideoMedia;
-import mediaservice.models.enums.ContentStatusType;
-import mediaservice.models.enums.ReactionTargetType;
-import mediaservice.models.enums.RelationshipStatusType;
-import mediaservice.models.enums.RuleType;
-import mediaservice.models.enums.VisibilityType;
-import mediaservice.repositories.CommentRepository;
-import mediaservice.repositories.ContentAccessControlRepository;
-import mediaservice.repositories.MediaRepository;
-import mediaservice.repositories.PostRepository;
-import mediaservice.repositories.ReactionRepository;
-import mediaservice.repositories.UserAccountRepository;
-import mediaservice.services.AnalyticsEventPublisher;
-import mediaservice.services.PostService;
-import mediaservice.services.MediaCompressionJobPublisher;
-import mediaservice.services.S3Service;
-import mediaservice.dtos.messages.MediaCompressionJob;
-import mediaservice.dtos.messages.MediaDeleteJob;
-import mediaservice.dtos.messages.MediaUploadJob;
-import mediaservice.realtime.MediaRealtimePublisher;
-import mediaservice.realtime.MediaRealtimeUpdate;
-import mediaservice.services.PostService;
-import mediaservice.services.MediaCompressionJobPublisher;
-import mediaservice.services.MediaDeleteJobPublisher;
-import mediaservice.services.MediaUploadJobPublisher;
-import mediaservice.dtos.requests.AccessControlRequest;
-import mediaservice.dtos.requests.MediaRequest;
-import mediaservice.models.enums.MediaType;
-import mediaservice.utils.MediaUrlBuilder;
-import mediaservice.utils.MediaTempFileStore;
+
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
@@ -60,9 +17,45 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import mediaservice.dtos.messages.MediaCompressionJob;
+import mediaservice.dtos.messages.MediaDeleteJob;
+import mediaservice.dtos.messages.MediaUploadJob;
+import mediaservice.dtos.requests.AccessControlRequest;
+import mediaservice.dtos.requests.MediaRequest;
+import mediaservice.dtos.requests.PostRequest;
+import mediaservice.dtos.responses.PostResponse;
+import mediaservice.mappers.PostMapper;
+import mediaservice.models.Content;
+import mediaservice.models.ContentAccessControl;
+import mediaservice.models.ImageMedia;
+import mediaservice.models.Post;
+import mediaservice.models.UserAccount;
+import mediaservice.models.VideoMedia;
+import mediaservice.models.enums.ContentStatusType;
+import mediaservice.models.enums.MediaType;
+import mediaservice.models.enums.ReactionTargetType;
+import mediaservice.models.enums.RelationshipStatusType;
+import mediaservice.models.enums.RuleType;
+import mediaservice.models.enums.VisibilityType;
+import mediaservice.realtime.MediaRealtimePublisher;
+import mediaservice.realtime.MediaRealtimeUpdate;
+import mediaservice.repositories.CommentRepository;
+import mediaservice.repositories.ContentAccessControlRepository;
+import mediaservice.repositories.MediaRepository;
+import mediaservice.repositories.PostRepository;
+import mediaservice.repositories.ReactionRepository;
+import mediaservice.repositories.UserAccountRepository;
+import mediaservice.services.AnalyticsEventPublisher;
+import mediaservice.services.MediaCompressionJobPublisher;
+import mediaservice.services.MediaDeleteJobPublisher;
+import mediaservice.services.MediaUploadJobPublisher;
+import mediaservice.services.PostService;
+import mediaservice.services.S3Service;
+import mediaservice.utils.MediaTempFileStore;
+import mediaservice.utils.MediaUrlBuilder;
 
 @Slf4j
 @Service
