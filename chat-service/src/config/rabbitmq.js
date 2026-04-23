@@ -47,7 +47,8 @@ const publishToQueue = async (queueName, payload) => {
     if (!channel) {
       await connectRabbitMQ();
     }
-    await channel.assertQueue(queueName, { durable: true });
+    // Remove assertQueue to prevent 406 PRECONDITION-FAILED if another service configured it differently.
+    // The consumer service (e.g. analytics-service) should be responsible for declaring its queue with correct args.
     channel.sendToQueue(queueName, Buffer.from(JSON.stringify(payload)), {
       persistent: true,
       contentType: "application/json",
