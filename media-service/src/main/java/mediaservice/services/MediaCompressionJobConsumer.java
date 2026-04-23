@@ -3,12 +3,15 @@ package mediaservice.services;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import mediaservice.dtos.messages.MediaCompressionJob;
+import mediaservice.realtime.MediaRealtimePublisher;
+import mediaservice.realtime.MediaRealtimeUpdate;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Service;
 
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 @Slf4j
 @Service
@@ -17,6 +20,7 @@ public class MediaCompressionJobConsumer {
 
     private final MediaCompressionService mediaCompressionService;
     private final S3Service s3Service;
+    private final MediaRealtimePublisher mediaRealtimePublisher;
 
     @RabbitListener(queues = "${media.compression.queue}")
     public void handleCompression(MediaCompressionJob job) throws Exception {
@@ -41,6 +45,13 @@ public class MediaCompressionJobConsumer {
 
             if (job.getS3Key() != null && !job.getS3Key().isBlank()) {
                 uploadToS3(job, outputPath);
+                mediaRealtimePublisher.publish(
+                    job.getContentTargetType(),
+                    job.getContentId(),
+                    job.getOperation(),
+                    List.of(new MediaRealtimeUpdate(job.getMediaId(), job.getS3Key(), job.getOrderIndex())),
+                    List.of(job.getS3Key())
+                );
             }
         } catch (Exception ex) {
             log.error("[MediaCompression] Failed job: {}", job, ex);

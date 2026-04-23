@@ -84,14 +84,20 @@ exports.ensureSelfConversation = async (userId) => {
   return { selfConversation, participant };
 };
 
-exports.addParticipant = async ({ conversationId, userId, role, addedBy }) => {
+exports.addParticipant = async ({ conversationId, userId, role, addedBy, lastMsgId = "0", status = "joined" }) => {
   const existing = await Participant.findOne({
     conversation_id: conversationId,
     user_id: userId,
   });
 
   if (existing) {
-    return existing;
+    existing.roles = role || existing.roles;
+    existing.added_by = addedBy || existing.added_by;
+    existing.joined_at = new Date();
+    existing.status = status || existing.status;
+    // Khi thêm lại thành viên đã bị xóa/đuổi, vẫn áp dụng logic ẩn tin nhắn cũ
+    existing.deleted_msg_id = lastMsgId;
+    return await existing.save();
   }
 
   const newMember = new Participant({
@@ -99,6 +105,8 @@ exports.addParticipant = async ({ conversationId, userId, role, addedBy }) => {
     user_id: userId,
     roles: role,
     added_by: addedBy,
+    deleted_msg_id: lastMsgId,
+    status: status,
   });
 
   return await newMember.save();
@@ -136,6 +144,23 @@ exports.getConversationsByUserId = async (userId) => {
 };
 
 exports.getParticipants = async (conversationId) => {
+  return await Participant.find({
+    conversation_id: conversationId,
+    status: { $in: ["joined", "invited"] },
+    "settings.removed_from_group_at": null,
+  });
+};
+
+// Only joined participants — used for message emission (invited users should NOT see messages)
+exports.getJoinedParticipants = async (conversationId) => {
+  return await Participant.find({
+    conversation_id: conversationId,
+    status: "joined",
+    "settings.removed_from_group_at": null,
+  });
+};
+
+exports.getParticipantsIncludingRemoved = async (conversationId) => {
   return await Participant.find({ conversation_id: conversationId });
 };
 
@@ -253,18 +278,26 @@ exports.getParticipant = async (conversationId, userId) => {
 exports.getConversationMembers = async (conversationId) => {
   const User = require("../models/User");
   
-  const participants = await Participant.find({ conversation_id: conversationId });
+  const participants = await Participant.find({
+    conversation_id: conversationId,
+    "settings.removed_from_group_at": null,
+  });
   
   // Get user details for each participant
   const membersWithDetails = await Promise.all(
     participants.map(async (p) => {
-      const user = await User.findOne({ user_id: p.user_id }).lean();
+      // Try to find by UUID first, then by ObjectId
+      let user = await User.findOne({ user_id: p.user_id }).lean();
+      if (!user) {
+        user = await User.findById(p.user_id).lean();
+      }
       return {
         _id: p._id,
         user_id: p.user_id,
         roles: p.roles,
         joined_at: p.joined_at,
         added_by: p.added_by,
+        status: p.status,
         nickname: p.nickname,
         user: user ? {
           name: user.name,
@@ -320,7 +353,11 @@ exports.leaveGroup = async (conversationId, userId) => {
 
 // Update member role (owner or admin)
 exports.updateMemberRole = async (conversationId, userId, newRole, adminId) => {
-  const { conversation } = await assertGroupManager(conversationId, adminId);
+  const { conversation, isOwner } = await assertGroupManager(conversationId, adminId);
+
+  if (!isOwner) {
+    throw new Error("Chỉ trưởng nhóm mới có quyền phân quyền");
+  }
 
   if (!["admin", "user"].includes(String(newRole))) {
     throw new Error("Vai trò không hợp lệ");
@@ -353,7 +390,7 @@ exports.updateMemberRole = async (conversationId, userId, newRole, adminId) => {
 
 // Remove member from group (owner or admin)
 exports.removeMember = async (conversationId, userId, adminId) => {
-  const { conversation } = await assertGroupManager(conversationId, adminId);
+  const { conversation, isOwner } = await assertGroupManager(conversationId, adminId);
 
   const participant = await Participant.findOne({
     conversation_id: conversationId,
@@ -362,6 +399,11 @@ exports.removeMember = async (conversationId, userId, adminId) => {
 
   if (!participant) {
     throw new Error("Người dùng không phải là thành viên của nhóm này");
+  }
+
+  // Admin (deputy) cannot remove other admins
+  if (!isOwner && participant.roles === "admin") {
+    throw new Error("Phó nhóm không thể xóa phó nhóm khác");
   }
 
   // Cannot remove owner
@@ -373,7 +415,7 @@ exports.removeMember = async (conversationId, userId, adminId) => {
     throw new Error("Bạn không thể tự xóa chính mình. Hãy dùng chức năng rời nhóm");
   }
 
-  // Remove participant
+  // Hard delete: xóa hoàn toàn participant khỏi DB
   await Participant.deleteOne({
     conversation_id: conversationId,
     user_id: userId,
@@ -385,6 +427,63 @@ exports.removeMember = async (conversationId, userId, adminId) => {
   });
 
   return { success: true, conversationId, userId };
+};
+
+// Transfer ownership of a group (owner only)
+exports.transferOwnership = async (conversationId, currentOwnerId, newOwnerId) => {
+  const conversation = await Conversation.findById(conversationId);
+
+  if (!conversation) {
+    throw new Error("Cuộc hội thoại không tồn tại");
+  }
+
+  if (conversation.type !== "group") {
+    throw new Error("Chỉ có thể chuyển quyền trưởng nhóm trong nhóm chat");
+  }
+
+  if (String(conversation.created_by) !== String(currentOwnerId)) {
+    throw new Error("Chỉ trưởng nhóm hiện tại mới có quyền chuyển quyền");
+  }
+  
+  if (String(currentOwnerId) === String(newOwnerId)) {
+    throw new Error("Không thể chuyển quyền cho chính mình");
+  }
+
+  const newOwner = await Participant.findOne({
+    conversation_id: conversationId,
+    user_id: newOwnerId,
+  });
+
+  if (!newOwner) {
+    throw new Error("Người được chuyển quyền không phải là thành viên của nhóm");
+  }
+
+  // Update conversation creator
+  conversation.created_by = newOwnerId;
+  await conversation.save();
+
+  // Find previous owner and update to user/admin. Default down to admin
+  const prevOwner = await Participant.findOne({
+    conversation_id: conversationId,
+    user_id: currentOwnerId,
+  });
+  
+  if (prevOwner) {
+    prevOwner.roles = "user";
+    await prevOwner.save();
+  }
+
+  // Ensure new owner has admin/owner roles level representation if needed
+  // In your current model, owner is just created_by, but maybe they were a user, let's make sure they are at least admin.
+  newOwner.roles = "admin";
+  await newOwner.save();
+
+  return { 
+    success: true, 
+    conversationId, 
+    oldOwnerId: currentOwnerId,
+    newOwnerId 
+  };
 };
 
 exports.assertGroupManager = assertGroupManager;

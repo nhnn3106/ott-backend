@@ -23,11 +23,58 @@ exports.createConversation = async ({
   return await newConversation.save();
 };
 
+exports.findOrCreatePrivateConversation = async (user1Id, user2Id) => {
+  const Participant = require("../models/Participant");
+  
+  // Tìm các participant của user1
+  const p1 = await Participant.find({ user_id: user1Id }).lean();
+  const conv1Ids = p1.map(p => String(p.conversation_id));
+  
+  // Tìm tất cả các participant của user2 mà thuộc các conversation của user1
+  const commonParticipants = await Participant.find({
+    user_id: user2Id,
+    conversation_id: { $in: conv1Ids }
+  }).populate("conversation_id").lean();
+
+  // Tìm cuộc hội thoại type 'private' trong số các cuộc hội thoại chung
+  const privateParticipant = commonParticipants.find(p => 
+    p.conversation_id && 
+    p.conversation_id.type === "private" && 
+    !p.conversation_id.is_self_conversation
+  );
+
+  if (privateParticipant) {
+    return privateParticipant.conversation_id;
+  }
+
+  // Nếu không thấy, tạo mới
+  const conversation = await exports.createConversation({
+    creatorId: user1Id,
+    type: "private",
+    memberCount: 2
+  });
+
+  const ParticipantService = require("./participantService");
+  await ParticipantService.addParticipant({
+    conversationId: conversation._id,
+    userId: user1Id,
+    role: "user"
+  });
+  await ParticipantService.addParticipant({
+    conversationId: conversation._id,
+    userId: user2Id,
+    role: "user"
+  });
+
+  return conversation;
+};
+
 exports.getAllConversations = async () => {
   return await Conversation.find().sort({ updatedAt: -1 });
 };
-
 exports.updateLastMessage = async (conversationId, message) => {
+  const rawType = String(message?.type || "text");
+  const safeType = rawType; // Preserve system type for frontend
   let displayContent = "";
 
   switch (message.type) {
@@ -42,6 +89,9 @@ exports.updateLastMessage = async (conversationId, message) => {
       break;
     case "audio":
       displayContent = "[Âm thanh]";
+      break;
+    case "poll":
+      displayContent = `[Bình chọn] ${message.poll_question || "Khảo sát mới"}`;
       break;
     default: {
       const rawContent = message.content[0] || "";
@@ -65,7 +115,7 @@ exports.updateLastMessage = async (conversationId, message) => {
         sender_id: message.sender_id,
         sender_name: sender?.name || "",
         content: displayContent,
-        type: message.type,
+        type: safeType,
         createdAt: message.createdAt,
       },
     },
@@ -90,19 +140,15 @@ exports.updateConversation = async (conversationId, updateData) => {
   }
 
   if (updateData.requesterId) {
-    const isOwner =
-      String(conversation.created_by) === String(updateData.requesterId);
-    if (!isOwner) {
-      const participant = await Participant.findOne({
-        conversation_id: conversationId,
-        user_id: updateData.requesterId,
-      })
-        .select("roles")
-        .lean();
+    const participant = await Participant.findOne({
+      conversation_id: conversationId,
+      user_id: updateData.requesterId,
+    })
+      .select("roles")
+      .lean();
 
-      if (!participant || participant.roles !== "admin") {
-        throw new Error("Chỉ trưởng nhóm hoặc phó nhóm mới có quyền cập nhật nhóm");
-      }
+    if (!participant) {
+      throw new Error("Chỉ thành viên nhóm mới có quyền cập nhật nhóm");
     }
   }
 
@@ -145,18 +191,87 @@ exports.dissolveGroup = async (conversationId, requesterId) => {
     .map((item) => item.user_id)
     .filter(Boolean);
 
-  const [messageResult, participantResult] = await Promise.all([
-    Message.deleteMany({ conversation_id: conversationId }),
-    Participant.deleteMany({ conversation_id: conversationId }),
-  ]);
+  const { DeleteObjectCommand } = require("@aws-sdk/client-s3");
+  const { s3Client, bucketName } = require("../config/s3");
+  const messageCacheService = require("./messageCacheService");
 
-  await Conversation.deleteOne({ _id: conversationId });
+  // Get messages to extract S3 keys before deleting
+  const messages = await Message.find({ conversation_id: conversationId }).lean();
+  const keysToDelete = [];
+  
+  messages.forEach(msg => {
+    if (['image', 'video', 'audio', 'file'].includes(msg.type) && Array.isArray(msg.content)) {
+      msg.content.forEach(key => {
+        if (key && !/^(https?:\/\/|www\.|data:)/i.test(key)) {
+          keysToDelete.push(key);
+        }
+      });
+    }
+  });
+
+  if (keysToDelete.length > 0) {
+    try {
+      await Promise.all(keysToDelete.map(key => 
+        s3Client.send(new DeleteObjectCommand({ Bucket: bucketName, Key: key }))
+      ));
+    } catch (err) {
+      console.error("Lỗi xóa file S3 khi giải tán nhóm:", err);
+    }
+  }
+
+  const messageResult = await Message.deleteMany({ conversation_id: conversationId });
+  await messageCacheService.clearCache(conversationId);
+
+  const finalNotice = await Message.create({
+    conversation_id: conversationId,
+    sender_id: requesterId,
+    type: "system_leave",
+    content: ["Nhóm đã được giải tán"],
+    system_meta: {
+      action: "group_dissolved",
+      dissolved_by: requesterId,
+      show_delete_for_non_owner: true,
+    },
+  });
+
+    // Add owner to deleted_for so they don't see the final message
+    await Message.findByIdAndUpdate(
+      finalNotice._id,
+      { $addToSet: { deleted_for: requesterId } },
+    );
+
+  await exports.updateLastMessage(conversationId, finalNotice);
+
+  await Conversation.findByIdAndUpdate(conversationId, {
+    status: "dissolved",
+    is_dissolved: true
+  });
+
+  await Participant.updateMany(
+    { conversation_id: conversationId },
+    {
+      $set: {
+        "settings.group_dissolved_at": new Date(),
+        "settings.group_dissolved_by": requesterId,
+      },
+    },
+  );
+
+  // Hide conversation for owner (soft-delete style)
+  if (finalNotice && finalNotice.msg_id) {
+    await Participant.findOneAndUpdate(
+      { conversation_id: conversationId, user_id: requesterId },
+      { $set: { deleted_msg_id: finalNotice.msg_id } }
+    );
+  }
 
   return {
     success: true,
     conversationId,
+      ownerId: requesterId,
     affectedUserIds,
     deletedMessages: messageResult.deletedCount || 0,
-    deletedParticipants: participantResult.deletedCount || 0,
+    deletedParticipants: 0,
+    finalNotice,
   };
 };

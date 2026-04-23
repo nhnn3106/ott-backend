@@ -253,6 +253,7 @@ const buildReplyPreview = (message, senderName = "") => {
     media_count: message.type === "image" ? mediaUrls.length : undefined,
     is_deleted: !!message.is_deleted,
     is_revoked: !!message.is_revoked,
+    poll_question: message.type === "poll" ? message.poll_question : undefined,
   };
 };
 
@@ -314,8 +315,12 @@ exports.generatePresignedUrl = async (fileName, fileType) => {
   });
 
   const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 300 });
+  const fileUrl = `https://${bucketName}.s3.${process.env.AWS_REGION || "ap-southeast-1"}.amazonaws.com/${key}`;
 
-  return { uploadUrl, fileCategory, key };
+  console.log("Generated Presigned URL for:", fileName);
+  console.log("Final response object:", { uploadUrl: "...", fileCategory, key, fileUrl });
+
+  return { uploadUrl, fileCategory, key, fileUrl };
 };
 
 exports.sendMessage = async ({
@@ -325,6 +330,9 @@ exports.sendMessage = async ({
   type,
   size,
   replyToMsgId,
+  pollQuestion,
+  pollMultipleChoice,
+  pollOptions,
 }) => {
   // Nếu content đã là array (image keys) thì dùng trực tiếp, không thì wrap
   const contentArray = Array.isArray(content) ? content : [content];
@@ -353,6 +361,23 @@ exports.sendMessage = async ({
       .lean();
   }
 
+  const participant = await Participant.findOne({
+    conversation_id: conversationId,
+    user_id: senderId,
+  }).lean();
+
+  if (!participant) {
+    throw new Error("Bạn không thuộc cuộc hội thoại này");
+  }
+
+  if (participant?.settings?.removed_from_group_at) {
+    throw new Error("Bạn đã bị đuổi khỏi nhóm");
+  }
+
+  if (participant?.settings?.group_dissolved_at) {
+    throw new Error("Nhóm đã được giải tán");
+  }
+
   const newMessage = new Message({
     conversation_id: conversationId,
     sender_id: senderId,
@@ -360,6 +385,9 @@ exports.sendMessage = async ({
     type: type,
     size: size,
     reply_to_msg_id: replyToMsgId || null,
+    poll_question: pollQuestion || null,
+    poll_multiple_choice: pollMultipleChoice || false,
+    poll_options: pollOptions || [],
   });
 
   const savedMessage = await newMessage.save();
@@ -476,6 +504,18 @@ exports.getMessageHistory = async (
   deletedMsgId = "0",
   userId,
 ) => {
+  // If user is invited but not yet joined, they shouldn't see messages
+  if (userId) {
+    const participant = await Participant.findOne({
+      conversation_id: conversationId,
+      user_id: userId,
+    }).lean();
+    
+    if (participant && participant.status === "invited") {
+      return []; // Return empty history for invited users
+    }
+  }
+
   const messages = await Message.find({ conversation_id: conversationId }).sort(
     {
       msg_id: 1,
@@ -1434,5 +1474,102 @@ exports.searchEverything = async ({
       messages.length +
       files.length +
       media.length,
+  };
+};
+
+// Vote for a poll
+exports.votePoll = async ({ conversationId, msgId, userId, optionIds }) => {
+  const message = await Message.findOne({
+    msg_id: msgId,
+    conversation_id: conversationId,
+  });
+
+  if (!message) {
+    throw new Error("Tin nhắn không tồn tại");
+  }
+
+  if (message.type !== "poll") {
+    throw new Error("Tin nhắn không phải là khảo sát");
+  }
+
+  if (message.is_deleted || message.is_revoked) {
+    throw new Error("Khảo sát đã bị xóa hoặc thu hồi");
+  }
+
+  const voter = await User.findOne({ user_id: userId }).select("name").lean();
+  const voterName = voter?.name || "Một thành viên";
+
+  // Check if they were already in any option
+  const wasVoted = message.poll_options.some((opt) =>
+    opt.voters.some((v) => String(v) === String(userId))
+  );
+
+  // Remove user from all options first
+  message.poll_options.forEach((opt) => {
+    opt.voters = opt.voters.filter((voterId) => String(voterId) !== String(userId));
+  });
+
+  // Then add user to selected options
+  const selectedOptionNames = [];
+  if (Array.isArray(optionIds) && optionIds.length > 0) {
+    if (!message.poll_multiple_choice && optionIds.length > 1) {
+      throw new Error("Khảo sát này chỉ cho phép chọn 1 đáp án");
+    }
+
+    message.poll_options.forEach((opt) => {
+      if (optionIds.includes(String(opt.id))) {
+        opt.voters.push(userId);
+        selectedOptionNames.push(opt.name);
+      }
+    });
+  }
+
+  const updatedMessage = await message.save();
+
+  // Create system notification
+  let systemMessage = null;
+  if (selectedOptionNames.length > 0) {
+    const actionText = wasVoted 
+      ? `${voterName} đã thay đổi bình chọn` 
+      : `${voterName} đã bình chọn cho "${selectedOptionNames.join(", ")}"`;
+
+    const systemDoc = new Message({
+      conversation_id: conversationId,
+      sender_id: userId,
+      type: "system_poll",
+      content: [actionText],
+      size: 0,
+    });
+
+    const savedSystemMessage = await systemDoc.save();
+    
+    // Enrich system message for broadcast
+    systemMessage = {
+      ...savedSystemMessage.toObject(),
+      sender_name: voterName,
+    };
+
+    // Update conversation last message and cache
+    await ConversationService.updateLastMessage(conversationId, savedSystemMessage);
+    await messageCacheService.addMessage(conversationId, systemMessage);
+  }
+
+  const sender = await User.findOne({ user_id: updatedMessage.sender_id })
+    .select("name avatar")
+    .lean();
+  
+  const cachedMessage = {
+    ...updatedMessage.toObject(),
+    sender_name: sender?.name || updatedMessage.sender_name || "",
+    sender_avatar: sanitizeAvatarValue(
+      sender?.avatar || updatedMessage.sender_avatar || "",
+    ),
+  };
+
+  await messageCacheService.updateMessage(conversationId, msgId, cachedMessage);
+
+  return {
+    ...cachedMessage,
+    systemMessage,
   };
 };

@@ -1,5 +1,6 @@
 package iuh.fit.userservice.service;
 
+import iuh.fit.userservice.dto.event.UserCreatedEvent;
 import iuh.fit.userservice.dto.request.RegisterRequest;
 import iuh.fit.userservice.dto.request.RequestRegisterOtpRequest;
 import iuh.fit.userservice.dto.request.UpdateContactRequest;
@@ -42,8 +43,9 @@ public class UserService {
     NotificationPublisher notificationPublisher;
     ValidationUtils validationUtils;
     EntityManager entityManager;
-    private final UserValidationUtil userValidationUtil;
-    private final AuthServiceClient authServiceClient;
+    UserValidationUtil userValidationUtil;
+    AuthServiceClient authServiceClient;
+    UserEventPublisher userEventPublisher;
 
     @NonFinal
     @Value("${aws.s3.default-avatar}")
@@ -146,7 +148,39 @@ public class UserService {
         // Welcome email async
         notificationPublisher.sendWelcomeEmailAsync(user);
 
+        // Publish event for Chat service (One time, with phone)
+        userEventPublisher.publishUserCreated(UserCreatedEvent.builder()
+                .userId(user.getId())
+                .username(user.getFullName())
+                .avatar(user.getAvatarUrl())
+                .email(user.getEmail())
+                .phone(user.getPhone())
+                .build());
+
         return userMapper.toUserResponse(user);
+    }
+
+    private String buildUsername(User user) {
+        String base = null;
+        if (user.getEmail() != null && user.getEmail().contains("@")) {
+            base = user.getEmail().substring(0, user.getEmail().indexOf('@'));
+        } else if (user.getFullName() != null) {
+            base = user.getFullName();
+        }
+
+        if (base == null || base.isBlank()) {
+            return "user";
+        }
+
+        String normalized = validationUtils.sanitizeString(base)
+                .replace(" ", "")
+                .toLowerCase();
+
+        if (normalized.isBlank()) {
+            return "user";
+        }
+
+        return normalized.length() > 50 ? normalized.substring(0, 50) : normalized;
     }
 
     public void updateContact(String userId, UpdateContactRequest request) {

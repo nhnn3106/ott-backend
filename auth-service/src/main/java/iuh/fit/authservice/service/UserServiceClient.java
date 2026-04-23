@@ -28,7 +28,6 @@ import java.util.Map;
 public class UserServiceClient {
 
     private final RestTemplate restTemplate;
-    private final UserEventPublisher userEventPublisher;
 
     @Value("${internal.user-service-url}")
     private String userServiceUrl;
@@ -297,14 +296,6 @@ public class UserServiceClient {
             );
             UserDto user = extractResult(response);
             log.info("User created successfully via user-service - userId: {}", user.getId());
-
-            UserCreatedEvent event = UserCreatedEvent.builder()
-                    .userId(user.getId())
-                    .username(user.getFullName())
-                    .avatar(user.getAvatarUrl())
-                    .email(user.getEmail())
-                    .build();
-            userEventPublisher.publishUserCreated(event);
 
             return user;
         } catch (Exception e) {

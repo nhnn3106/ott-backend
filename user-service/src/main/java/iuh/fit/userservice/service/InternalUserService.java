@@ -1,5 +1,6 @@
 package iuh.fit.userservice.service;
 
+import iuh.fit.userservice.dto.event.UserCreatedEvent;
 import iuh.fit.userservice.dto.response.UserResponse;
 import iuh.fit.userservice.entity.TwoFactorAuth;
 import iuh.fit.userservice.entity.User;
@@ -31,6 +32,7 @@ public class InternalUserService {
     private final SessionService sessionService;
     private final TwoFactorAuthRepository twoFactorAuthRepository;
     private final PasswordEncoder passwordEncoder;
+    private final UserEventPublisher userEventPublisher;
 
     @Value("${aws.s3.default-avatar}")
     private String defaultAvatarUrl;
@@ -95,6 +97,17 @@ public class InternalUserService {
 
         user = userRepository.save(user);
         notificationPublisher.sendWelcomeEmailAsync(user);
+
+        // Publish event for Chat service
+        UserCreatedEvent event = UserCreatedEvent.builder()
+                .userId(user.getId())
+                .username(user.getFullName())
+                .avatar(user.getAvatarUrl())
+                .email(user.getEmail())
+                .phone(user.getPhone())
+                .build();
+        userEventPublisher.publishUserCreated(event);
+
         log.info("User created via internal API: {}", user.getId());
         return userMapper.toUserResponse(user);
     }

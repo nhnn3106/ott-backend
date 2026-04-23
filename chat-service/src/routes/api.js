@@ -6,9 +6,13 @@ const ConversationController = require("../controllers/conversationController");
 const MessageController = require("../controllers/messageController");
 const ParticipantController = require("../controllers/participantController");
 const UserCategoryController = require("../controllers/userCategoryController");
+const relationshipRoutes = require("./relationshipRoutes");
+
+router.use("/relationships", relationshipRoutes);
 
 router.post("/users/sync", UserController.syncUser);
 router.get("/users/:userId", UserController.getUser);
+router.get("/users/phone/:phone", UserController.getUserByPhone);
 router.get("/users", UserController.getAllUsers);
 
 router.post("/conversations", ConversationController.createConversation);
@@ -52,6 +56,10 @@ router.put(
   "/participants/nickname/:conversationId/:userId",
   ParticipantController.updateMemberNickname,
 );
+router.put(
+  "/participants/transfer-owner/:conversationId",
+  ParticipantController.transferOwnership,
+);
 router.delete(
   "/participants/leave/:conversationId/:userId",
   ParticipantController.leaveGroup,
@@ -60,11 +68,14 @@ router.delete(
   "/participants/remove/:conversationId/:userId",
   ParticipantController.removeMember,
 );
+router.put("/participants/accept-invitation", ParticipantController.acceptInvitation);
+router.put("/participants/reject-invitation", ParticipantController.rejectInvitation);
 
 router.post("/messages/presigned-url", MessageController.generatePresignedUrl);
 router.post("/messages", MessageController.sendMessage);
 router.post("/messages/forward", MessageController.forwardMessage);
 router.put("/messages/:msgId/reaction", MessageController.reactToMessage);
+router.put("/messages/:msgId/vote", MessageController.votePoll);
 router.put("/messages/:msgId/revoke", MessageController.revokeMessage);
 router.put("/messages/:msgId/delete", MessageController.deleteMessage);
 router.put("/messages/:msgId/pin", MessageController.pinMessage);
