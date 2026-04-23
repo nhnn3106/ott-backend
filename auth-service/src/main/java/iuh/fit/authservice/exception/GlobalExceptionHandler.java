@@ -9,6 +9,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestControllerAdvice
@@ -22,19 +23,26 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(errorCode.getHttpStatus())
                 .body(ApiResponse.<Void>builder()
                         .code(errorCode.getCode())
-                        .message(e.getMessage())
+                        .message(errorCode.getMessage())
                         .build());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiResponse<Void>> handleValidationException(MethodArgumentNotValidException e) {
-        String message = e.getBindingResult().getFieldErrors().stream()
-                .map(FieldError::getDefaultMessage)
-                .collect(Collectors.joining(", "));
+    public ResponseEntity<ApiResponse<Object>> handleValidationException(MethodArgumentNotValidException e) {
+
+        Map<String, String> errors = e.getBindingResult()
+                .getFieldErrors()
+                .stream()
+                .collect(Collectors.toMap(
+                        FieldError::getField,
+                        FieldError::getDefaultMessage
+                ));
+
         return ResponseEntity.badRequest()
-                .body(ApiResponse.<Void>builder()
-                        .code(ErrorCode.INVALID_KEY.getCode())
-                        .message(message)
+                .body(ApiResponse.builder()
+                        .code(1111)
+                        .message("VALIDATION_FAILED")
+                        .result(errors)
                         .build());
     }
 

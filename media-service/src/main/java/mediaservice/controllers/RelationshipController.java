@@ -17,6 +17,7 @@ import java.util.Optional;
  * Endpoints kết bạn:
  *  POST   /relationships/send?requesterId=&receiverId=   → gửi lời mời
  *  PATCH  /relationships/{id}/accept                     → chấp nhận
+ *  PATCH  /relationships/{id}/block?blockerId=           → chặn
  *  DELETE /relationships/{id}/reject                     → từ chối
  *  DELETE /relationships/{id}/cancel                     → hủy lời mời đã gửi
  *  DELETE /relationships/{id}/unfriend                   → hủy kết bạn
@@ -32,6 +33,22 @@ public class RelationshipController {
 
     private final RelationshipService relationshipService;
 
+
+    @GetMapping
+    public ResponseEntity<RelationshipResponse> getRelationshipOf(
+            @RequestParam String user1,
+            @RequestParam String user2
+    ) {
+        return ResponseEntity.ok(relationshipService.getRelationshipBetween(user1, user2).orElse(null));
+    }
+
+
+    @GetMapping ("/send")
+    public ResponseEntity<RelationshipResponse> getFriendRequest(
+            @RequestParam String requesterId,
+            @RequestParam String receiverId) {
+        return ResponseEntity.ok(relationshipService.getRelationshipBetween(requesterId, receiverId).orElse(null));
+    }
     /* ─── Gửi lời mời kết bạn ─────────────────────────────── */
     @PostMapping("/send")
     public ResponseEntity<RelationshipResponse> sendFriendRequest(
@@ -44,6 +61,15 @@ public class RelationshipController {
     @PatchMapping("/{id}/accept")
     public ResponseEntity<RelationshipResponse> acceptFriendRequest(@PathVariable String id) {
         return ResponseEntity.ok(relationshipService.acceptFriendRequest(id));
+    }
+
+    /* ─── Chặn người dùng ─────────────────────────────────── */
+    @PatchMapping("/{id}/block")
+    public ResponseEntity<RelationshipResponse> blockRelationship(
+            @PathVariable String id,
+            @RequestParam String blockerId
+    ) {
+        return ResponseEntity.ok(relationshipService.blockRelationship(id, blockerId));
     }
 
     /* ─── Từ chối lời mời ─────────────────────────────────── */

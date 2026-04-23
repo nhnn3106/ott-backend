@@ -4,15 +4,13 @@ import com.nimbusds.jose.JOSEException;
 import iuh.fit.authservice.dto.request.*;
 import iuh.fit.authservice.dto.response.*;
 import iuh.fit.authservice.entity.LoginHistory;
-import iuh.fit.authservice.entity.User;
-import iuh.fit.authservice.entity.UserSession;
 import iuh.fit.authservice.entity.enums.*;
 import iuh.fit.authservice.exception.AppException;
 import iuh.fit.authservice.exception.ErrorCode;
 import iuh.fit.authservice.repository.LoginHistoryRepository;
 import iuh.fit.authservice.repository.httpclient.GoogleUserClient;
 import iuh.fit.authservice.utils.ValidationUtils;
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -22,6 +20,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
@@ -45,6 +44,15 @@ public class AuthService {
     ValidationUtils validationUtils;
     RestTemplate restTemplate;
     UserServiceClient userServiceClient;
+    UserSyncService userSyncService;
+
+    @NonFinal
+    @Value("${app.user.default-avatar}")
+    String defaultAvatarUrl;
+
+    @NonFinal
+    @Value("${app.user.default-cover-photo}")
+    String defaultCoverPhotoUrl;
 
     @NonFinal
     @Value("${spring.security.oauth2.client.registration.google.client-id}")
@@ -61,10 +69,12 @@ public class AuthService {
     private static final String GRANT_TYPE = "authorization_code";
     private static final String GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 
-
     @Transactional
     public AuthenticationResponse localLogin(LocalLoginRequest request) {
+        log.info("Local login attempt started for phone: {}", request.getPhone());
+
         if (!validationUtils.isValidPhone(request.getPhone())) {
+            log.warn("Invalid phone format: {}", request.getPhone());
             throw new AppException(ErrorCode.INVALID_PHONE_FORMAT);
         }
 
@@ -72,6 +82,7 @@ public class AuthService {
 
         String passwordHash = userServiceClient.getPasswordHash(user.getId());
         if (passwordHash == null) {
+            log.warn("Password not set for userId: {}", user.getId());
             logLoginHistory(user, request.getIpAddress(), request.getDeviceInfo(),
                     LoginStatus.FAILED, LoginMethod.LOCAL, "Password not set");
             throw new AppException(ErrorCode.INCORRECT_PASSWORD);
@@ -80,6 +91,7 @@ public class AuthService {
         validateUserStatus(user, request.getIpAddress(), request.getDeviceInfo());
 
         if (!passwordEncoder.matches(request.getPassword(), passwordHash)) {
+            log.warn("Invalid password for userId: {}", user.getId());
             logLoginHistory(user, request.getIpAddress(), request.getDeviceInfo(),
                     LoginStatus.FAILED, LoginMethod.LOCAL, "Invalid password");
             throw new AppException(ErrorCode.INCORRECT_PASSWORD);
@@ -87,6 +99,7 @@ public class AuthService {
 
         if (is2FAEnabled(user)) {
             if (request.getOtpCode() == null || request.getOtpCode().trim().isEmpty()) {
+                log.info("2FA required for userId: {}", user.getId());
                 sendTwoFactorOtp(user, request.getIpAddress(), request.getLocation());
 
                 return AuthenticationResponse.builder()
@@ -97,15 +110,18 @@ public class AuthService {
                         .build();
             }
 
-            validateTwoFactorOtp(user.getPhone(), request.getOtpCode());
+            log.info("Validating 2FA OTP for userId: {}", user.getId());
+            validateTwoFactorOtp(user, request.getOtpCode());
         }
 
+        log.info("Local login successful for userId: {}", user.getId());
         return createAuthResponse(user, request, LoginMethod.LOCAL);
     }
 
-
     @Transactional
     public AuthenticationResponse googleAuth(GoogleAuthRequest request) {
+        log.info("Google auth started - redirectUri: {}", request.getRedirectUri());
+
         String redirectUri = request.getRedirectUri() != null
                 ? request.getRedirectUri()
                 : REDIRECT_URI;
@@ -146,10 +162,17 @@ public class AuthService {
                     userInfo.getGoogleId(), userInfo.getEmail(), userInfo.getName());
 
             if (userInfo.getEmail() == null || !validationUtils.isValidEmail(userInfo.getEmail())) {
+                log.warn("Invalid email from Google");
                 throw new AppException(ErrorCode.GOOGLE_AUTH_FAILED);
             }
 
-            UserServiceClient.UserDto user = userServiceClient.getUserByGoogleId(userInfo.getGoogleId());
+            UserServiceClient.UserDto user = null;
+
+            try {
+                user = userServiceClient.getUserByGoogleId(userInfo.getGoogleId());
+            } catch (AppException e) {
+                user = null;
+            }
 
             if (user == null) {
                 log.info("User not found by googleId, trying email: {}", userInfo.getEmail());
@@ -180,17 +203,6 @@ public class AuthService {
 
             validateUserStatus(user, request.getIpAddress(), request.getDeviceInfo());
 
-            if (is2FAEnabled(user)) {
-                sendTwoFactorOtp(user, request.getIpAddress(), request.getLocation());
-
-                return AuthenticationResponse.builder()
-                        .authenticated(false)
-                        .requires2FA(true)
-                        .requiresPhoneSetup(false)
-                        .tempToken(jwtService.generateTempToken(user, "GOOGLE"))
-                        .build();
-            }
-
             log.info("Creating auth response for Google login");
             return createAuthResponse(user, request, LoginMethod.GOOGLE);
 
@@ -205,6 +217,8 @@ public class AuthService {
 
     @Transactional
     public AuthenticationResponse completeGoogleRegistration(CompleteGoogleRegistrationRequest request) {
+        log.info("Complete Google registration started");
+
         var googleInfo = jwtService.verifyGoogleTempToken(request.getTempToken());
 
         if (!validationUtils.isValidPhone(request.getPhone())) {
@@ -223,12 +237,14 @@ public class AuthService {
             throw new AppException(ErrorCode.GOOGLE_ACCOUNT_ALREADY_LINKED);
         }
 
+
         UserServiceClient.CreateUserRequest createRequest = new UserServiceClient.CreateUserRequest(
                 request.getPhone(),
                 googleInfo.getEmail(),
                 googleInfo.getGoogleId(),
                 googleInfo.getName(),
-                googleInfo.getPicture()
+                defaultAvatarUrl,
+                defaultCoverPhotoUrl
         );
 
         UserServiceClient.UserDto user = userServiceClient.createUser(createRequest);
@@ -237,17 +253,29 @@ public class AuthService {
         return createAuthResponse(user, request, LoginMethod.GOOGLE);
     }
 
-
     @Transactional
     public AuthenticationResponse verify2FAOtp(String tempToken, String otpCode,
                                                String deviceId, DeviceType deviceType,
-                                               String ipAddress, String deviceInfo) {
+                                               String ipAddress, String deviceInfo,
+                                               boolean isBackupCode) {
+        log.info("Verifying 2FA - isBackupCode: {}", isBackupCode);
+
         var userInfo = jwtService.verifyTempToken(tempToken);
         String userId = userInfo.get("userId");
-
         UserServiceClient.UserDto user = userServiceClient.getUserById(userId);
 
-        validateOtpViaNotificationService(user.getPhone(), null, otpCode, OtpType.TWO_FACTOR_AUTH);
+        if (isBackupCode) {
+
+            boolean valid = userServiceClient.validateAndConsumeBackupCode(userId, otpCode);
+            if (!valid) {
+                log.warn("Invalid backup code for userId: {}", userId);
+                throw new AppException(ErrorCode.INVALID_BACKUP_CODE);
+            }
+            log.info("Backup code validated for userId: {}", userId);
+        } else {
+
+            validateOtpViaNotificationService(null, user.getEmail(), otpCode, OtpType.TWO_FACTOR_AUTH);
+        }
 
         LoginMethod loginMethod = LoginMethod.valueOf(
                 userInfo.getOrDefault("loginMethod", "LOCAL")
@@ -256,28 +284,30 @@ public class AuthService {
         String token = jwtService.generateToken(user);
         String refreshToken = jwtService.generateRefreshToken();
 
-        User userEntity = User.builder().id(user.getId()).build();
-        sessionService.createUserSession(
-                userEntity, deviceId, deviceType, null,
-                ipAddress, deviceInfo, token, refreshToken, loginMethod
+        userSyncService.ensureUserExists(user);
+        userServiceClient.createSession(
+                user.getId(), deviceId, null,
+                ipAddress, deviceInfo,
+                token, refreshToken,
+                loginMethod.name(),
+                deviceType != null ? deviceType.name() : "UNKNOWN"
         );
-
         logLoginHistory(user, ipAddress, deviceInfo, LoginStatus.SUCCESS, loginMethod, null);
         sendWelcomeEmailIfNeeded(user);
         userServiceClient.updateLastLogin(userId);
         notificationPublisher.publishUserLoginEvent(userId, loginMethod.name().toLowerCase());
 
+
         return AuthenticationResponse.builder()
-                .token(token)
-                .refreshToken(refreshToken)
-                .authenticated(true)
-                .requires2FA(false)
-                .requiresPhoneSetup(false)
+                .token(token).refreshToken(refreshToken)
+                .authenticated(true).requires2FA(false).requiresPhoneSetup(false)
                 .build();
     }
 
     @Transactional
     public OtpResponse request2FAOtp(Request2FAOtpRequest request) {
+        log.info("Request 2FA OTP for phone: {}", request.getPhone());
+
         if (!validationUtils.isValidPhone(request.getPhone())) {
             throw new AppException(ErrorCode.INVALID_PHONE_FORMAT);
         }
@@ -295,6 +325,8 @@ public class AuthService {
 
     @Transactional
     public void logout(LogoutRequest request) throws ParseException, JOSEException {
+        log.info("Logout request received");
+
         try {
             var signToken = jwtService.verifyToken(request.getToken(), true);
 
@@ -313,13 +345,19 @@ public class AuthService {
             if (request.getDeviceId() != null) {
                 sessionService.revokeSessionByDevice(userId, request.getDeviceId());
             }
+
+            log.info("Logout successful for userId: {}", userId);
         } catch (AppException exception) {
-            // Log but don't throw
+            log.warn("Logout failed with AppException: {}", exception.getMessage());
+        } catch (Exception e) {
+            log.error("Unexpected error during logout", e);
         }
     }
 
     @Transactional
     public AuthenticationResponse refreshToken(RefreshRequest request) throws ParseException, JOSEException {
+        log.info("Token refresh requested");
+
         try {
             var signJWT = jwtService.verifyToken(request.getToken(), true);
 
@@ -351,9 +389,10 @@ public class AuthService {
             String refreshToken = jwtService.generateRefreshToken();
 
             if (request.getDeviceId() != null) {
-                User userEntity = User.builder().id(userId).build();
-                sessionService.updateSessionTokens(request.getDeviceId(), userEntity, token, refreshToken);
+                sessionService.updateSessionTokens(request.getDeviceId(), userId, token, refreshToken);
             }
+
+            log.info("Token refreshed successfully for userId: {}", userId);
 
             return AuthenticationResponse.builder()
                     .token(token)
@@ -364,13 +403,15 @@ public class AuthService {
                     .build();
 
         } catch (ParseException | JOSEException e) {
+            log.warn("Token refresh failed");
             throw new AppException(ErrorCode.UNAUTHENTICATED);
         }
     }
 
-
     @Transactional
     public OtpResponse requestEmailOtpLogin(RequestEmailLoginOtpRequest request) {
+        log.info("Request email OTP login for email: {}", request.getEmail());
+
         if (!validationUtils.isValidEmail(request.getEmail())) {
             throw new AppException(ErrorCode.INVALID_EMAIL_FORMAT);
         }
@@ -396,6 +437,8 @@ public class AuthService {
 
     @Transactional
     public AuthenticationResponse verifyEmailOtpLogin(VerifyEmailLoginOtpRequest request) {
+        log.info("Verifying email OTP login for email: {}", request.getEmail());
+
         if (!validationUtils.isValidEmail(request.getEmail())) {
             throw new AppException(ErrorCode.INVALID_EMAIL_FORMAT);
         }
@@ -404,6 +447,7 @@ public class AuthService {
 
         UserServiceClient.UserDto user = userServiceClient.getUserByEmail(request.getEmail());
 
+        log.info("Email OTP login successful for userId: {}", user.getId());
         return createAuthResponse(user, request, LoginMethod.OTP);
     }
 
@@ -412,6 +456,8 @@ public class AuthService {
     }
 
     private OtpResponse sendTwoFactorOtp(UserServiceClient.UserDto user, String ipAddress, String location) {
+        log.info("Sending 2FA OTP to userId: {}", user.getId());
+
         notificationPublisher.sendOtpEmail(
                 user.getEmail(),
                 user.getFullName(),
@@ -431,14 +477,21 @@ public class AuthService {
     private void sendWelcomeEmailIfNeeded(UserServiceClient.UserDto user) {
         if (Boolean.TRUE.equals(user.getIsFirstLogin()) && !Boolean.TRUE.equals(user.getWelcomeEmailSent())) {
             try {
+                String email = user.getEmail();
+                if (email == null) {
+                    UserServiceClient.UserDto freshUser = userServiceClient.getUserById(user.getId());
+                    email = freshUser.getEmail();
+                }
+
                 notificationPublisher.sendWelcomeEmailAsync(
                         user.getId(),
-                        user.getEmail(),
+                        email,
                         user.getFullName(),
                         user.getPhone(),
                         true,
                         user.getGoogleId() != null
                 );
+                log.debug("Welcome email sent for first login, userId: {}", user.getId());
             } catch (Exception e) {
                 log.error("Failed to send welcome email event for userId={}", user.getId(), e);
             }
@@ -447,12 +500,14 @@ public class AuthService {
 
     private void validateUserStatus(UserServiceClient.UserDto user, String ipAddress, String deviceInfo) {
         if (user.getDeletedAt() != null) {
+            log.warn("Deleted account login attempt, userId: {}", user.getId());
             logLoginHistory(user, ipAddress, deviceInfo,
                     LoginStatus.FAILED, LoginMethod.LOCAL, "Account deleted");
             throw new AppException(ErrorCode.ACCOUNT_DELETED);
         }
 
         if (!Boolean.TRUE.equals(user.getIsActive())) {
+            log.warn("Inactive account login attempt, userId: {}", user.getId());
             logLoginHistory(user, ipAddress, deviceInfo,
                     LoginStatus.FAILED, LoginMethod.LOCAL, "Account not active");
             throw new AppException(ErrorCode.USER_NOT_ACTIVE);
@@ -460,6 +515,7 @@ public class AuthService {
 
         if (Boolean.TRUE.equals(user.getIsBlocked())) {
             if (user.getBlockedUntil() != null && user.getBlockedUntil().isAfter(LocalDateTime.now())) {
+                log.warn("Blocked account login attempt, userId: {}", user.getId());
                 logLoginHistory(user, ipAddress, deviceInfo,
                         LoginStatus.FAILED, LoginMethod.LOCAL, "Account blocked");
                 throw new AppException(ErrorCode.USER_BLOCKED);
@@ -468,25 +524,29 @@ public class AuthService {
     }
 
     private AuthenticationResponse createAuthResponse(UserServiceClient.UserDto user, Object request, LoginMethod loginMethod) {
+        log.info("Creating full auth response for userId: {}", user.getId());
+
         String token = jwtService.generateToken(user);
         String refreshToken = jwtService.generateRefreshToken();
 
-        String deviceId = extractField(request, "getDeviceId");
-        DeviceType deviceType = extractDeviceType(request);
+        String deviceId   = extractField(request, "getDeviceId");
         String deviceName = extractField(request, "getDeviceName");
-        String ipAddress = extractField(request, "getIpAddress");
+        String ipAddress  = extractField(request, "getIpAddress");
         String deviceInfo = extractField(request, "getDeviceInfo");
+        DeviceType deviceType = extractDeviceType(request);
 
-        User userEntity = User.builder().id(user.getId()).build();
-        sessionService.createUserSession(
-                userEntity, deviceId, deviceType, deviceName,
-                ipAddress, deviceInfo, token, refreshToken, loginMethod
+        userSyncService.ensureUserExists(user);
+
+        userServiceClient.createSession(
+                user.getId(), deviceId, deviceName,
+                ipAddress, deviceInfo,
+                token, refreshToken,
+                loginMethod.name(),
+                deviceType.name()
         );
 
         logLoginHistory(user, ipAddress, deviceInfo, LoginStatus.SUCCESS, loginMethod, null);
-
         sendWelcomeEmailIfNeeded(user);
-
         userServiceClient.updateLastLogin(user.getId());
         notificationPublisher.publishUserLoginEvent(user.getId(), loginMethod.name().toLowerCase());
 
@@ -502,9 +562,8 @@ public class AuthService {
     private void logLoginHistory(UserServiceClient.UserDto user, String ipAddress, String userAgent,
                                  LoginStatus status, LoginMethod loginMethod, String additionalInfo) {
         try {
-            User userEntity = User.builder().id(user.getId()).build();
             LoginHistory loginHistory = LoginHistory.builder()
-                    .user(userEntity)
+                    .userId(user.getId())
                     .ipAddress(ipAddress)
                     .deviceType(extractDeviceTypeFromUserAgent(userAgent))
                     .userAgent(userAgent)
@@ -515,6 +574,7 @@ public class AuthService {
                     .build();
 
             loginHistoryRepository.save(loginHistory);
+            log.debug("Login history saved for userId: {} | Status: {}", user.getId(), status);
         } catch (Exception e) {
             log.error("Failed to save login history", e);
         }
@@ -563,7 +623,7 @@ public class AuthService {
             Map<String, Object> body = new HashMap<>();
             if (phone != null) body.put("phone", phone);
             if (email != null) body.put("email", email);
-            body.put("otpCode", otpCode);
+            body.put("code", otpCode);
             body.put("otpType", otpType.name());
 
             restTemplate.exchange(
@@ -573,6 +633,7 @@ public class AuthService {
                     Void.class
             );
         } catch (org.springframework.web.client.HttpClientErrorException e) {
+            log.warn("OTP validation failed - invalid OTP");
             throw new AppException(ErrorCode.OTP_INVALID);
         } catch (Exception e) {
             log.error("OTP validation failed: {}", e.getMessage());
@@ -580,11 +641,7 @@ public class AuthService {
         }
     }
 
-    private void validateTwoFactorOtp(String phone, String otpCode) {
-        validateOtpViaNotificationService(phone, null, otpCode, OtpType.TWO_FACTOR_AUTH);
-    }
-
-    private String generateAndCacheOtpCode() {
-        return null;
+    private void validateTwoFactorOtp(UserServiceClient.UserDto user, String otpCode) {
+        validateOtpViaNotificationService(null, user.getEmail(), otpCode, OtpType.TWO_FACTOR_AUTH);
     }
 }

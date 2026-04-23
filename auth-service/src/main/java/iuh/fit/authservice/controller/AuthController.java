@@ -35,7 +35,7 @@ public class AuthController {
         controllerUtils.enrichWithClientInfo(request, httpRequest);
         AuthenticationResponse response = authService.localLogin(request);
 
-        if (response.isRequires2FA()) {
+        if (response.getRequires2FA()) {
             return ApiResponse.<AuthenticationResponse>builder()
                     .result(response)
                     .message("Two-factor authentication required. Please enter OTP sent to your email.")
@@ -56,14 +56,14 @@ public class AuthController {
         controllerUtils.enrichWithClientInfo(request, httpRequest);
         AuthenticationResponse response = authService.googleAuth(request);
 
-        if (response.isRequiresPhoneSetup()) {
+        if (response.getRequiresPhoneSetup()) {
             return ApiResponse.<AuthenticationResponse>builder()
                     .result(response)
                     .message("Please provide your phone number to complete registration")
                     .build();
         }
 
-        if (response.isRequires2FA()) {
+        if (response.getRequires2FA()) {
             return ApiResponse.<AuthenticationResponse>builder()
                     .result(response)
                     .message("Two-factor authentication required. Please enter OTP sent to your email.")
@@ -117,7 +117,8 @@ public class AuthController {
                 request.getDeviceId(),
                 request.getDeviceType() != null ? request.getDeviceType() : null,
                 request.getIpAddress(),
-                request.getDeviceInfo()
+                request.getDeviceInfo(),
+                request.getIsBackupCode()
         );
 
         return ApiResponse.<AuthenticationResponse>builder()

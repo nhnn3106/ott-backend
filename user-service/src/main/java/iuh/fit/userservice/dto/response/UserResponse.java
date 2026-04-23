@@ -3,6 +3,7 @@ package iuh.fit.userservice.dto.response;
 import iuh.fit.userservice.entity.enums.AccountType;
 import lombok.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -17,10 +18,20 @@ public class UserResponse {
     private String fullName;
     private String avatarUrl;
     private AccountType accountType;
-    private boolean isPhoneVerified;
-    private boolean isEmailVerified;
-    private boolean hasPassword;
-    private boolean hasGoogleLinked;
-    private boolean is2FAEnabled;
+    private Boolean isPhoneVerified;
+    private Boolean isEmailVerified;
+    private Boolean hasPassword;
+    private Boolean hasGoogleLinked;
+    private Boolean is2FAEnabled;
     private LocalDateTime createdAt;
+    private String coverUrl;
+
+    private Boolean isActive;
+    private Boolean isBlocked;
+    private LocalDateTime blockedUntil;
+    private String blockedReason;
+    private LocalDateTime deletedAt;
+    private Boolean isFirstLogin;
+    private Boolean welcomeEmailSent;
+    private LocalDateTime lastLoginAt;
 }

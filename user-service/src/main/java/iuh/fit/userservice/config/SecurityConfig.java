@@ -34,10 +34,12 @@ public class SecurityConfig {
             "/users/register/otp",
             "/users/register",
             "/users/account/password/forgot/request",
+            "/users/account/password/forgot/otp/verify",
             "/users/account/password/forgot/verify",
             "/otp/link/phone",
             "/otp/link/email",
-            "/users/profile/{userId}"
+            "/users/profile/{userId}",
+            "/internal/**"
     };
 
     @Bean
@@ -54,7 +56,7 @@ public class SecurityConfig {
                                 .jwtAuthenticationConverter(jwtAuthenticationConverter())
                         )
                 )
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+
                 .csrf(AbstractHttpConfigurer::disable);
         return http.build();
     }
@@ -77,19 +79,6 @@ public class SecurityConfig {
         converter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
         converter.setPrincipalClaimName("userId");
         return converter;
-    }
-
-    @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(Arrays.asList("http://localhost:*", "http://127.0.0.1:*"));
-        config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
-        config.setAllowedHeaders(Arrays.asList("*"));
-        config.setAllowCredentials(true);
-        config.setMaxAge(3600L);
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", config);
-        return source;
     }
 
     @Bean

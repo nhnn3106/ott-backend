@@ -52,17 +52,21 @@ public class NotificationPublisher {
 
     public void sendOtpEmail(String email, String fullName, String otpCode,
                              OtpType otpType, String ipAddress, String location) {
+        log.info("Sending OTP email to: {} | Type: {}", email, otpType);
+
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.set("X-Internal-Key", internalApiKey);
             headers.set("Content-Type", "application/json");
 
             Map<String, Object> body = new java.util.HashMap<>();
-            body.put("email", email);
-            body.put("fullName", fullName != null ? fullName : "User");
+            body.put("toEmail", email);
+            body.put("toName", fullName != null ? fullName : "User");
             body.put("otpType", otpType.name());
             body.put("ipAddress", ipAddress != null ? ipAddress : "");
             body.put("location", location != null ? location : "");
+
+            body.put("otpCode", "");
 
             if (otpCode != null) {
                 body.put("otpCode", otpCode);
@@ -74,15 +78,18 @@ public class NotificationPublisher {
                     new HttpEntity<>(body, headers),
                     Void.class
             );
+
             log.info("OTP email sent successfully to: {}", email);
         } catch (Exception e) {
-            log.error("Failed to send OTP email to {}: {}", email, e.getMessage());
+            log.error("Failed to send OTP email to {} | Type: {}", email, otpType, e);
             throw new AppException(ErrorCode.EMAIL_SEND_FAILED);
         }
     }
 
     public void sendWelcomeEmailAsync(String userId, String email, String fullName,
                                       String phone, boolean hasPassword, boolean hasGoogleLinked) {
+        log.info("Publishing welcome email event for userId: {}", userId);
+
         try {
             WelcomeEmailEvent event = WelcomeEmailEvent.builder()
                     .userId(userId)
@@ -92,15 +99,18 @@ public class NotificationPublisher {
                     .hasPassword(hasPassword)
                     .hasGoogleLinked(hasGoogleLinked)
                     .build();
+
             rabbitTemplate.convertAndSend(exchange, "notification.welcome", event);
-            log.info("Welcome email event sent for userId: {}", userId);
+            log.debug("Welcome email event published successfully for userId: {}", userId);
         } catch (Exception e) {
-            log.error("Failed to send welcome email event for userId {}: {}", userId, e.getMessage());
+            log.error("Failed to publish welcome email event for userId: {}", userId, e);
         }
     }
 
     public void sendAlertEmailAsync(String userId, String email, String fullName,
                                     String alertType, String ipAddress, String location, String deviceInfo) {
+        log.info("Publishing alert email event for userId: {} | AlertType: {}", userId, alertType);
+
         try {
             AlertEmailEvent event = AlertEmailEvent.builder()
                     .userId(userId)
@@ -112,10 +122,11 @@ public class NotificationPublisher {
                     .deviceInfo(deviceInfo)
                     .timestamp(LocalDateTime.now().format(DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm:ss")))
                     .build();
+
             rabbitTemplate.convertAndSend(exchange, "notification.alert", event);
-            log.info("Alert email event sent for userId: {}, alertType: {}", userId, alertType);
+            log.debug("Alert email event published successfully for userId: {}", userId);
         } catch (Exception e) {
-            log.error("Failed to send alert email event: {}", e.getMessage());
+            log.error("Failed to publish alert email event for userId: {} | AlertType: {}", userId, alertType, e);
         }
     }
 

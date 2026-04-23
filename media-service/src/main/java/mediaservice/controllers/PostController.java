@@ -2,6 +2,7 @@ package mediaservice.controllers;
 
 import lombok.RequiredArgsConstructor;
 import mediaservice.dtos.requests.PostRequest;
+import mediaservice.dtos.requests.AccessControlRequest;
 import mediaservice.dtos.responses.CommentResponse;
 import mediaservice.dtos.responses.PostResponse;
 import mediaservice.dtos.responses.ReactionResponse;
@@ -11,6 +12,8 @@ import mediaservice.models.enums.VisibilityType;
 import mediaservice.services.CommentService;
 import mediaservice.services.PostService;
 import mediaservice.services.ReactionService;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -31,6 +34,7 @@ public class PostController {
     private final PostService postService;
     private final ReactionService reactionService;
     private final CommentService commentService;
+    private final ObjectMapper objectMapper;
 
     /** POST /posts – tạo bài post mới kèm upload ảnh lên S3. */
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -39,9 +43,21 @@ public class PostController {
             @RequestParam("caption") String caption,
             @RequestParam(value = "visibility", defaultValue = "PUBLIC") String visibility,
             @RequestParam(value = "files", required = false) List<MultipartFile> files,
-            @RequestParam(value = "captions", required = false) List<String> captions) {
+            @RequestParam(value = "captions", required = false) List<String> captions,
+            @RequestParam(value = "accessControls", required = false) String accessControlsJson) {
         VisibilityType vis = VisibilityType.valueOf(visibility.toUpperCase());
-        return ResponseEntity.ok(postService.createPost(accountId, caption, vis, files, captions));
+        List<AccessControlRequest> accessControls = List.of();
+        if (accessControlsJson != null && !accessControlsJson.isBlank()) {
+            try {
+                accessControls = objectMapper.readValue(
+                        accessControlsJson,
+                        new TypeReference<List<AccessControlRequest>>() {}
+                );
+            } catch (Exception ignored) {
+                accessControls = List.of();
+            }
+        }
+        return ResponseEntity.ok(postService.createPost(accountId, caption, vis, files, captions, accessControls));
     }
 
     /** GET /posts  – tất cả bài post */
@@ -81,6 +97,46 @@ public class PostController {
     }
 
     /** PUT /posts/{id} – cập nhật bài post */
+    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<PostResponse> updatePostMultipart(
+            @PathVariable String id,
+            @RequestParam("accountId") String accountId,
+            @RequestParam("caption") String caption,
+            @RequestParam(value = "visibility", defaultValue = "PUBLIC") String visibility,
+            @RequestParam(value = "files", required = false) List<MultipartFile> files,
+            @RequestParam(value = "captions", required = false) List<String> captions,
+            @RequestParam(value = "accessControls", required = false) String accessControlsJson,
+            @RequestParam(value = "existingMedias", required = false) String existingMediasJson) {
+        VisibilityType vis = VisibilityType.valueOf(visibility.toUpperCase());
+        List<AccessControlRequest> accessControls = List.of();
+        if (accessControlsJson != null && !accessControlsJson.isBlank()) {
+            try {
+                accessControls = objectMapper.readValue(
+                        accessControlsJson,
+                        new TypeReference<List<AccessControlRequest>>() {}
+                );
+            } catch (Exception ignored) {
+                accessControls = List.of();
+            }
+        }
+
+        List<mediaservice.dtos.requests.MediaRequest> existingMedias = List.of();
+        if (existingMediasJson != null && !existingMediasJson.isBlank()) {
+            try {
+                existingMedias = objectMapper.readValue(
+                        existingMediasJson,
+                        new TypeReference<List<mediaservice.dtos.requests.MediaRequest>>() {}
+                );
+            } catch (Exception ignored) {
+                existingMedias = List.of();
+            }
+        }
+
+        return ResponseEntity.ok(
+                postService.updatePost(id, accountId, caption, vis, files, captions, accessControls, existingMedias)
+        );
+    }
+
     @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<PostResponse> updatePost(
             @PathVariable String id,

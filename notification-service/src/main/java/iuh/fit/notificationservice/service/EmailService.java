@@ -13,6 +13,7 @@ import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
@@ -53,6 +54,8 @@ public class EmailService {
                              OtpType otpType, String ipAddress, String location,
                              String userId) {
 
+        log.info("Preparing to send OTP email to: {} | Type: {}", toEmail, otpType);
+
         String subject = getSubjectByOtpType(otpType);
 
         EmailLog emailLog = EmailLog.builder()
@@ -73,6 +76,7 @@ public class EmailService {
             context.setVariable("websiteUrl", websiteUrl);
             context.setVariable("supportEmail", supportEmail);
             context.setVariable("otpType", getOtpTypeName(otpType));
+            context.setVariable("logoCid", "riffLogo");
             context.setVariable("timestamp", LocalDateTime.now()
                     .format(DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm:ss")));
 
@@ -80,18 +84,21 @@ public class EmailService {
             if (location != null) context.setVariable("location", location);
 
             String htmlContent = templateEngine.process("email/otp-email", context);
+
+            log.debug("OTP email template processed successfully, sending...");
+
             sendHtmlEmail(toEmail, subject, htmlContent);
 
             emailLog.setStatus(EmailStatus.SENT);
             emailLog.setSentAt(LocalDateTime.now());
-            log.info("OTP email sent to: {}", toEmail);
+            log.info("OTP email sent successfully to: {} | Type: {}", toEmail, otpType);
 
         } catch (Exception e) {
             emailLog.setStatus(EmailStatus.FAILED);
             emailLog.setErrorMessage(e.getMessage());
             emailLog.setFailedAt(LocalDateTime.now());
-            log.error("Failed to send OTP email to {}: {}", toEmail, e.getMessage());
-            throw new AppException(ErrorCode.EMAIL_SEND_FAILED, "Failed to send OTP email");
+            log.error("Failed to send OTP email to: {} | Type: {}", toEmail, otpType, e);
+            throw new AppException(ErrorCode.EMAIL_SEND_FAILED);
         } finally {
             emailLogRepository.save(emailLog);
         }
@@ -100,6 +107,13 @@ public class EmailService {
     public void sendWelcomeEmail(String toEmail, String toName, String phone,
                                  boolean hasPassword, boolean hasGoogleLinked,
                                  String userId) {
+
+        if (toEmail == null || toEmail.isBlank()) {
+            log.warn("sendWelcomeEmail called with null/empty email, skipping. userId={}", userId);
+            return;
+        }
+
+        log.info("Preparing welcome email for userId: {} | Email: {}", userId, toEmail);
 
         String subject = "Welcome to " + appName + "!";
 
@@ -122,20 +136,21 @@ public class EmailService {
             context.setVariable("supportEmail", supportEmail);
             context.setVariable("hasPassword", hasPassword);
             context.setVariable("hasGoogleLinked", hasGoogleLinked);
+            context.setVariable("logoCid", "riffLogo");
 
             String htmlContent = templateEngine.process("email/welcome-email", context);
             sendHtmlEmail(toEmail, subject, htmlContent);
 
             emailLog.setStatus(EmailStatus.SENT);
             emailLog.setSentAt(LocalDateTime.now());
-            log.info("Welcome email sent to: {}", toEmail);
+            log.info("Welcome email sent successfully to: {}", toEmail);
 
         } catch (Exception e) {
             emailLog.setStatus(EmailStatus.FAILED);
             emailLog.setErrorMessage(e.getMessage());
             emailLog.setFailedAt(LocalDateTime.now());
-            log.error("Failed to send welcome email to {}: {}", toEmail, e.getMessage());
-            throw new AppException(ErrorCode.EMAIL_SEND_FAILED, "Failed to send welcome email");
+            log.error("Failed to send welcome email to: {}", toEmail, e);
+            throw new AppException(ErrorCode.EMAIL_SEND_FAILED);
         } finally {
             emailLogRepository.save(emailLog);
         }
@@ -144,6 +159,8 @@ public class EmailService {
     public void sendAlertEmail(String toEmail, String toName, String alertType,
                                String ipAddress, String location, String deviceInfo,
                                String userId) {
+
+        log.info("Preparing security alert email to: {} | AlertType: {}", toEmail, alertType);
 
         String subject = "Security Alert - " + alertType;
 
@@ -166,6 +183,7 @@ public class EmailService {
             context.setVariable("deviceInfo", deviceInfo);
             context.setVariable("websiteUrl", websiteUrl);
             context.setVariable("supportEmail", supportEmail);
+            context.setVariable("logoCid", "riffLogo");
             context.setVariable("timestamp", LocalDateTime.now()
                     .format(DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm:ss")));
 
@@ -174,20 +192,22 @@ public class EmailService {
 
             emailLog.setStatus(EmailStatus.SENT);
             emailLog.setSentAt(LocalDateTime.now());
-            log.info("Alert email sent to: {}", toEmail);
+            log.info("Security alert email sent successfully to: {} | Type: {}", toEmail, alertType);
 
         } catch (Exception e) {
             emailLog.setStatus(EmailStatus.FAILED);
             emailLog.setErrorMessage(e.getMessage());
             emailLog.setFailedAt(LocalDateTime.now());
-            log.error("Failed to send alert email to {}: {}", toEmail, e.getMessage());
-            throw new AppException(ErrorCode.EMAIL_SEND_FAILED, "Failed to send alert email");
+            log.error("Failed to send alert email to: {} | Type: {}", toEmail, alertType, e);
+            throw new AppException(ErrorCode.EMAIL_SEND_FAILED);
         } finally {
             emailLogRepository.save(emailLog);
         }
     }
 
     private void sendHtmlEmail(String to, String subject, String htmlContent) {
+        log.debug("Sending HTML email to: {} | Subject: {}", to, subject);
+
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
@@ -195,9 +215,12 @@ public class EmailService {
             helper.setTo(to);
             helper.setSubject(subject);
             helper.setText(htmlContent, true);
+            helper.addInline("riffLogo", new ClassPathResource("static/email/logo.jpg"), "image/jpeg");
+
             mailSender.send(message);
+            log.debug("Email sent via SMTP successfully to: {}", to);
         } catch (MessagingException | java.io.UnsupportedEncodingException e) {
-            log.error("MessagingException sending to {}: {}", to, e.getMessage());
+            log.error("Failed to send HTML email to: {}", to, e);
             throw new AppException(ErrorCode.EMAIL_SEND_FAILED);
         }
     }

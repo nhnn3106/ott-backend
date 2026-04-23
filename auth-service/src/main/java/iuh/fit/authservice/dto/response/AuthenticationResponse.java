@@ -12,9 +12,9 @@ import lombok.NoArgsConstructor;
 public class AuthenticationResponse {
     private String token;
     private String refreshToken;
-    private boolean authenticated;
-    private boolean requires2FA;
-    private boolean requiresPhoneSetup;
+    private Boolean authenticated;
+    private Boolean requires2FA;
+    private Boolean requiresPhoneSetup;
     private String tempToken;
     private GoogleUserInfo googleUserInfo;
 }

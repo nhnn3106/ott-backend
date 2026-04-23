@@ -2,6 +2,7 @@ package mediaservice.services;
 
 import mediaservice.dtos.requests.RelationshipRequest;
 import mediaservice.dtos.responses.RelationshipResponse;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -25,6 +26,9 @@ public interface RelationshipService {
     /** Chấp nhận lời mời kết bạn → status = ACCEPTED. */
     RelationshipResponse acceptFriendRequest(String relationshipId);
 
+    /** Chặn người dùng → status = BLOCKED, set blockedBy. */
+    RelationshipResponse blockRelationship(String relationshipId, String blockerId);
+
     /** Từ chối lời mời kết bạn → xóa bản ghi. */
     void rejectFriendRequest(String relationshipId);
 
@@ -45,5 +49,8 @@ public interface RelationshipService {
 
     /** Lấy trạng thái quan hệ giữa hai user (null nếu không có). */
     Optional<RelationshipResponse> getRelationshipBetween(String userId1, String userId2);
+
+
+
 }
 

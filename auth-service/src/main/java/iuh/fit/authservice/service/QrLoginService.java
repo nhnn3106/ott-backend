@@ -41,7 +41,10 @@ public class QrLoginService {
 
     @Transactional
     public QrCodeResponse generateLoginQrCode(QrGenerateRequest request) {
+        log.info("Generating QR login code for deviceId: {}", request.getDeviceId());
+
         if (request.getDeviceId() == null || request.getDeviceId().trim().isEmpty()) {
+            log.warn("Invalid deviceId provided");
             throw new AppException(ErrorCode.INVALID_DEVICE_ID);
         }
 
@@ -63,25 +66,27 @@ public class QrLoginService {
                 .build();
 
         qrCode = qrCodeRepository.save(qrCode);
+        log.info("QR login code generated successfully - qrId: {}", qrId);
 
         return qrCodeMapper.toQrCodeResponse(qrCode);
     }
 
     @Transactional
     public QrStatusResponse scanQrCode(QrScanRequest request, String userId) {
+        log.info("Scanning QR code for userId: {}", userId);
+
         QrCode qrCode = verifyQrCode(request.getQrData());
 
         UserServiceClient.UserDto userDto = userServiceClient.getUserById(userId);
-
         validateUserStatus(userDto);
 
-        User user = User.builder().id(userId).build();
-        long pendingCount = qrCodeRepository.countByUserAndStatus(user, QrCodeStatus.SCANNED);
+        long pendingCount = qrCodeRepository.countByUserIdAndStatus(userId, QrCodeStatus.SCANNED);
         if (pendingCount >= MAX_PENDING_QR_LOGINS) {
+            log.warn("User {} has too many pending QR logins: {}", userId, pendingCount);
             throw new AppException(ErrorCode.TOO_MANY_PENDING_QR_LOGINS);
         }
 
-        qrCode.setUser(user);
+        qrCode.setUserId(userId);
         qrCode.setStatus(QrCodeStatus.SCANNED);
         qrCode.setScannedAt(LocalDateTime.now());
         qrCode.setScannedDeviceId(request.getDeviceId());
@@ -93,10 +98,12 @@ public class QrLoginService {
 
         QrLoginSession loginSession = QrLoginSession.builder()
                 .qrCode(qrCode)
-                .user(user)
+                .userId(userId)
                 .status(QrLoginSessionStatus.WAITING)
                 .build();
         qrLoginSessionRepository.save(loginSession);
+
+        log.info("QR code scanned successfully - qrId: {}, userId: {}", qrCode.getId(), userId);
 
         QrStatusResponse response = qrCodeMapper.toQrStatusResponse(qrCode);
         response.setMessage("QR code scanned successfully. Please confirm to login.");
@@ -105,14 +112,19 @@ public class QrLoginService {
 
     @Transactional
     public QrStatusResponse confirmQrLogin(QrConfirmRequest request, String userId) {
+        log.info("Confirming QR login - qrId: {}, userId: {}, confirmed: {}",
+                request.getQrId(), userId, request.getConfirmed());
+
         QrCode qrCode = qrCodeRepository.findById(request.getQrId())
                 .orElseThrow(() -> new AppException(ErrorCode.QR_CODE_NOT_FOUND));
 
         if (qrCode.getStatus() != QrCodeStatus.SCANNED) {
+            log.warn("Invalid QR status for confirmation: {}", qrCode.getStatus());
             throw new AppException(ErrorCode.INVALID_QR_STATUS);
         }
 
-        if (!userId.equals(qrCode.getUser().getId())) {
+        if (!userId.equals(qrCode.getUserId())) {
+            log.warn("Unauthorized QR confirmation attempt");
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
@@ -125,7 +137,8 @@ public class QrLoginService {
         QrLoginSession loginSession = qrLoginSessionRepository.findByQrCode(qrCode)
                 .orElseThrow(() -> new AppException(ErrorCode.SESSION_NOT_FOUND));
 
-        if (!request.isConfirmed()) {
+        if (!request.getConfirmed()) {
+            log.info("User rejected QR login - qrId: {}", qrCode.getId());
             qrCode.setStatus(QrCodeStatus.CANCELLED);
             qrCode = qrCodeRepository.save(qrCode);
 
@@ -143,9 +156,8 @@ public class QrLoginService {
         String token = jwtService.generateToken(userDto);
         String refreshToken = jwtService.generateRefreshToken();
 
-        User userEntity = User.builder().id(userId).build();
         UserSession session = sessionService.createUserSession(
-                userEntity,
+                userId,
                 qrCode.getDeviceId(),
                 qrCode.getDeviceType(),
                 null,
@@ -154,6 +166,18 @@ public class QrLoginService {
                 token,
                 refreshToken,
                 LoginMethod.QR_CODE
+        );
+
+        userServiceClient.createSession(
+                userId,
+                qrCode.getDeviceId(),
+                null,
+                qrCode.getIpAddress(),
+                qrCode.getDeviceInfo(),
+                token,
+                refreshToken,
+                LoginMethod.QR_CODE.name(),
+                qrCode.getDeviceType() != null ? qrCode.getDeviceType().name() : "UNKNOWN"
         );
 
         qrCode.setStatus(QrCodeStatus.CONFIRMED);
@@ -168,6 +192,8 @@ public class QrLoginService {
         userServiceClient.updateLastLogin(userId);
         notificationPublisher.publishUserLoginEvent(userId, LoginMethod.QR_CODE.name().toLowerCase());
 
+        log.info("QR login confirmed successfully - qrId: {}, userId: {}", qrCode.getId(), userId);
+
         QrStatusResponse response = qrCodeMapper.toQrStatusResponse(qrCode);
         response.setSessionToken(token);
         response.setRefreshToken(refreshToken);
@@ -178,6 +204,8 @@ public class QrLoginService {
 
     @Transactional
     public QrStatusResponse checkQrStatus(String qrId) {
+        log.debug("Checking QR status for qrId: {}", qrId);
+
         QrCode qrCode = qrCodeRepository.findById(qrId)
                 .orElseThrow(() -> new AppException(ErrorCode.QR_CODE_NOT_FOUND));
 
@@ -187,6 +215,7 @@ public class QrLoginService {
                     qrCode.getStatus() != QrCodeStatus.CONFIRMED) {
                 qrCode.setStatus(QrCodeStatus.EXPIRED);
                 qrCode = qrCodeRepository.save(qrCode);
+                log.info("QR code auto expired - qrId: {}", qrId);
             }
         }
 
@@ -205,6 +234,7 @@ public class QrLoginService {
             response.setRefreshToken(session.getRefreshToken());
             response.setExpiresAt(session.getExpiresAt());
             response.setMessage("Login successful");
+            log.info("QR login already confirmed - qrId: {}", qrId);
 
         } else if (qrCode.getStatus() == QrCodeStatus.SCANNED) {
             response.setMessage("QR code scanned. Waiting for confirmation...");
@@ -224,6 +254,8 @@ public class QrLoginService {
 
     @Transactional
     public void cancelQrCode(String qrId) {
+        log.info("Cancelling QR code - qrId: {}", qrId);
+
         QrCode qrCode = qrCodeRepository.findById(qrId)
                 .orElseThrow(() -> new AppException(ErrorCode.QR_CODE_NOT_FOUND));
 
@@ -231,10 +263,13 @@ public class QrLoginService {
                 qrCode.getStatus() == QrCodeStatus.SCANNED) {
             qrCode.setStatus(QrCodeStatus.CANCELLED);
             qrCodeRepository.save(qrCode);
+            log.info("QR code cancelled successfully - qrId: {}", qrId);
         }
     }
 
     private QrCode verifyQrCode(String qrData) {
+        log.debug("Verifying QR code data");
+
         try {
             String decodedData = new String(Base64.getDecoder().decode(qrData));
             String[] parts = decodedData.split(":");
@@ -257,6 +292,7 @@ public class QrLoginService {
                 }
 
                 qrCodeRepository.save(qrCode);
+                log.warn("Invalid QR data attempt - qrId: {}", qrId);
                 throw new AppException(ErrorCode.INVALID_QR_CODE);
             }
 
@@ -267,12 +303,14 @@ public class QrLoginService {
             }
 
             if (qrCode.getStatus() != QrCodeStatus.PENDING) {
+                log.warn("QR code already used - qrId: {}", qrId);
                 throw new AppException(ErrorCode.QR_CODE_ALREADY_USED);
             }
 
             return qrCode;
 
         } catch (IllegalArgumentException e) {
+            log.warn("Invalid Base64 QR data");
             throw new AppException(ErrorCode.INVALID_QR_CODE);
         }
     }
@@ -286,15 +324,18 @@ public class QrLoginService {
 
     private void validateUserStatus(UserServiceClient.UserDto user) {
         if (user.getDeletedAt() != null) {
+            log.warn("Deleted account attempted QR login - userId: {}", user.getId());
             throw new AppException(ErrorCode.ACCOUNT_DELETED);
         }
 
         if (!Boolean.TRUE.equals(user.getIsActive())) {
+            log.warn("Inactive account attempted QR login - userId: {}", user.getId());
             throw new AppException(ErrorCode.USER_NOT_ACTIVE);
         }
 
         if (Boolean.TRUE.equals(user.getIsBlocked())) {
             if (user.getBlockedUntil() != null && user.getBlockedUntil().isAfter(LocalDateTime.now())) {
+                log.warn("Blocked account attempted QR login - userId: {}", user.getId());
                 throw new AppException(ErrorCode.USER_BLOCKED);
             }
         }

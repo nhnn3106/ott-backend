@@ -40,12 +40,16 @@ public class NotificationController {
             throw new AppException(ErrorCode.OTP_RATE_LIMIT_EXCEEDED);
         }
 
-        otpCacheService.saveOtp(request.getToEmail(), request.getOtpType(), request.getOtpCode());
+        String otp = (request.getOtpCode() != null && !request.getOtpCode().isBlank())
+                ? request.getOtpCode()
+                : String.format("%06d", new java.util.Random().nextInt(999999));
+
+        otpCacheService.saveOtp(request.getToEmail(), request.getOtpType(), otp);
 
         emailService.sendOtpEmail(
                 request.getToEmail(),
                 request.getToName(),
-                request.getOtpCode(),
+                otp,
                 OtpType.valueOf(request.getOtpType()),
                 request.getIpAddress(),
                 request.getLocation(),
@@ -65,11 +69,12 @@ public class NotificationController {
 
         boolean valid = otpCacheService.validateOtp(request.getEmail(), request.getOtpType(), request.getCode());
 
-        if (valid) {
-            otpCacheService.deleteOtp(request.getEmail(), request.getOtpType());
+        if (!valid) {
+            return ResponseEntity.badRequest().body(Map.of("valid", false));
         }
 
-        return ResponseEntity.ok(Map.of("valid", valid));
+        otpCacheService.deleteOtp(request.getEmail(), request.getOtpType());
+        return ResponseEntity.ok(Map.of("valid", true));
     }
 
     @GetMapping("/health")
@@ -80,7 +85,7 @@ public class NotificationController {
     private void validateKey(String key) {
         if (!internalApiKey.equals(key)) {
             log.warn("Invalid internal API key attempt");
-            throw new AppException(ErrorCode.UNAUTHORIZED, "Invalid internal API key");
+            throw new AppException(ErrorCode.UNAUTHORIZED);
         }
     }
 }

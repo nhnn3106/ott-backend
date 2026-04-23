@@ -12,14 +12,17 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class Verify2FARequest {
-    @NotBlank(message = "Temp token is required")
+
+    @NotBlank(message = "TEMP_TOKEN_IS_REQUIRED")
     private String tempToken;
 
-    @NotBlank(message = "OTP is required")
+    @NotBlank(message = "OTP_IS_REQUIRED")
     private String otpCode;
 
     private String deviceId;
     private DeviceType deviceType;
     private String ipAddress;
     private String deviceInfo;
+
+    private Boolean isBackupCode = false;
 }
