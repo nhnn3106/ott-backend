@@ -32,7 +32,7 @@ public class RelationshipEventConsumer {
 
             // Map status if necessary (e.g., chat-service might use different strings)
             // But here we'll assume they match for now
-            relationshipService.syncRelationshipFromEvent(requesterId, receiverId, status);
+            relationshipService.syncRelationshipFromEvent(requesterId, receiverId, status, type);
             
         } catch (Exception e) {
             log.error("[RelationshipConsumer] Error processing event: {}", e.getMessage());

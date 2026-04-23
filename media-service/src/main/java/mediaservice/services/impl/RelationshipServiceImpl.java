@@ -231,13 +231,17 @@ public class RelationshipServiceImpl implements RelationshipService {
 
     @Override
     @Transactional
-    public void syncRelationshipFromEvent(String requesterId, String receiverId, String status) {
-        log.info("[RelationshipSync] Syncing relationship: {} -> {} status={}", requesterId, receiverId, status);
+    public void syncRelationshipFromEvent(String requesterId, String receiverId, String status, String type) {
+        log.info("[RelationshipSync] Syncing relationship: {} -> {} status={} type={}", requesterId, receiverId, status, type);
         
         Optional<Relationship> existing = relationshipRepository.findBetweenUsers(requesterId, receiverId);
         
         if (status.equals("REMOVED")) {
-            existing.ifPresent(relationshipRepository::delete);
+            existing.ifPresent(rel -> {
+                relationshipRepository.delete(rel);
+                // Phát Socket.IO để UI cập nhật ngay lập tức
+                relationshipRealtimePublisher.publishToSocketOnly(type, rel, null);
+            });
             return;
         }
 
@@ -256,10 +260,10 @@ public class RelationshipServiceImpl implements RelationshipService {
         rel.setStatus(RelationshipStatusType.valueOf(status));
         rel.setType(RelationshipType.FRIEND);
         
-        relationshipRepository.save(rel);
+        Relationship saved = relationshipRepository.save(rel);
         
-        // Phát Socket.IO để UI cập nhật ngay lập tức mà không gây vòng lặp RabbitMQ
-        relationshipRealtimePublisher.publishToSocketOnly("SYNC_UPDATE", rel, null);
+        // Phát Socket.IO với đúng type (ví dụ: REQUEST_ACCEPTED) để Frontend xử lý switch-case
+        relationshipRealtimePublisher.publishToSocketOnly(type, saved, null);
     }
 
     private Relationship buildRelationshipFromRequest(RelationshipRequest request) {
