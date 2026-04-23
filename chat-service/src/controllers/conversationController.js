@@ -105,7 +105,6 @@ exports.addMember = async (req, res) => {
   try {
     const { conversationId, userId, userIds, addedBy } = req.body;
     
-    // Support both single userId and multiple userIds
     const memberIds = userIds || (userId ? [userId] : []);
     
     if (memberIds.length === 0) {
@@ -124,12 +123,10 @@ exports.addMember = async (req, res) => {
       }
     }
 
-    const lastMsgId = "0"; // Set to "0" to allow reading old messages
-
+    const lastMsgId = "0";
     const addedMembers = [];
 
     for (const memberId of memberIds) {
-      // Check relationship status
       const RelationshipService = require("../services/relationshipService");
       const relationship = await RelationshipService.getRelationshipBetween(addedBy, memberId);
       const isFriend = relationship && relationship.status === "ACCEPTED";
@@ -139,21 +136,21 @@ exports.addMember = async (req, res) => {
         userId: memberId,
         role: "user",
         addedBy: addedBy,
-        lastMsgId, // Pass lastMsgId to hide previous messages
+        lastMsgId,
         status: isFriend ? "joined" : "invited",
       });
       addedMembers.push(member);
     }
 
-    // Update member count (only count joined members)
     const joinedMembers = addedMembers.filter(m => m.status === 'joined');
     const joinedCount = joinedMembers.length;
+    let responseMessage = null;
+
     if (joinedCount > 0) {
       await Conversation.findByIdAndUpdate(conversationId, {
         $inc: { member_count: joinedCount },
       });
 
-      // Lấy thông tin người thêm và các thành viên được thêm (chỉ lấy người đã join)
       const adder = await UserService.getUser(addedBy);
       const adderName = adder ? adder.name : "Thành viên";
       
@@ -166,7 +163,6 @@ exports.addMember = async (req, res) => {
 
       const memberNamesStr = memberDisplayNames.join(", ");
 
-      // Tạo tin nhắn thông báo hệ thống
       const notificationMessage = await MessageService.sendMessage({
         conversationId: conversation._id,
         senderId: addedBy,
@@ -184,18 +180,16 @@ exports.addMember = async (req, res) => {
         },
       });
 
-      const finalNotificationMessage = await Message.findById(notificationMessage._id).lean();
+      responseMessage = await Message.findById(notificationMessage._id).lean();
 
-      // Emit system message only to JOINED participants (invited users should NOT see messages)
       const joinedParticipants = await ParticipantService.getJoinedParticipants(conversationId);
       joinedParticipants.forEach((p) => {
         addedMembers.forEach((member) => {
           req.io.to(`user:${p.user_id}`).emit("them_nguoi_moi", member);
         });
-        req.io.to(`user:${p.user_id}`).emit("tin_nhan", finalNotificationMessage || notificationMessage);
+        req.io.to(`user:${p.user_id}`).emit("tin_nhan", responseMessage);
       });
     } else {
-      // If no one joined (all invited), just emit them_nguoi_moi to existing members
       const joinedParticipants = await ParticipantService.getJoinedParticipants(conversationId);
       joinedParticipants.forEach((p) => {
         addedMembers.forEach((member) => {
@@ -204,18 +198,16 @@ exports.addMember = async (req, res) => {
       });
     }
 
-    // Emit to new members so they can get the conversation
     const updatedConversation = await ConversationService.getConversationById(conversationId);
     memberIds.forEach((memberId) => {
       req.io.to(`user:${memberId}`).emit("tao_phong_moi", updatedConversation);
     });
     
-    console.log(
-      `${memberIds.length} members added to room ${conversationId}`,
-    );
+    console.log(`${memberIds.length} members processed for room ${conversationId}`);
 
-    res.status(200).json({ members: addedMembers, message: finalNotificationMessage || notificationMessage });
+    res.status(200).json({ members: addedMembers, message: responseMessage });
   } catch (error) {
+    console.error("Add member error:", error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -254,7 +246,6 @@ exports.dissolveGroup = async (req, res) => {
   }
 };
 
-// Update conversation (name, avatar)
 exports.updateConversation = async (req, res) => {
   try {
     const { conversationId } = req.params;
@@ -275,6 +266,7 @@ exports.updateConversation = async (req, res) => {
   } catch (error) {
     const isClientError =
       error.message.includes("không tồn tại") ||
+      error.message.includes("không có quyền") ||
       error.message.includes("Chỉ có thể");
     res.status(isClientError ? 400 : 500).json({ error: error.message });
   }

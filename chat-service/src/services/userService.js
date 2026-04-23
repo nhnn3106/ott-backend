@@ -4,12 +4,14 @@ const UserCacheService = require("./userCacheService");
 const extractAvatarPath = (avatarUrl) => {
   if (!avatarUrl) return "";
   try {
+    // If it's already a full URL, keep it!
+    if (avatarUrl.startsWith("http")) return avatarUrl;
+
     // If it's already a path, return it
     if (avatarUrl.startsWith("/")) return avatarUrl;
     
+    // For other cases, try to extract path if it looks like a URL
     const url = new URL(avatarUrl);
-    // Extract path from S3 or other full URLs
-    // e.g., https://bucket.s3.region.amazonaws.com/avatar/abc.png -> /avatar/abc.png
     return url.pathname;
   } catch (e) {
     return avatarUrl;
@@ -96,5 +98,15 @@ exports.getAllUsers = async () => {
 };
 
 exports.getUserByPhone = async (phone) => {
-  return await User.findOne({ phone: phone });
+  // Normalize phone formats for searching locally (handle 0 vs 84)
+  const variants = [phone];
+  if (phone.startsWith('0')) {
+    variants.push('84' + phone.substring(1));
+  } else if (phone.startsWith('84')) {
+    variants.push('0' + phone.substring(2));
+  }
+
+  return await User.findOne({ 
+    phone: { $in: variants } 
+  });
 };
