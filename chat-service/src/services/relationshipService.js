@@ -143,16 +143,29 @@ exports.getFriends = async (userId) => {
 };
 
 exports.unfriend = async (userId, friendId) => {
+  console.log(`[RelationshipService] Unfriending userId: ${userId}, friendId: ${friendId}`);
   const relationship = await exports.getRelationshipBetween(userId, friendId);
-  if (!relationship) throw new Error("Không tìm thấy mối quan hệ bạn bè.");
+  if (!relationship) {
+    console.error(`[RelationshipService] Relationship not found between ${userId} and ${friendId}`);
+    throw new Error("Không tìm thấy mối quan hệ bạn bè.");
+  }
   
+  console.log(`[RelationshipService] Found relationship with status: ${relationship.status}`);
   if (relationship.status !== "ACCEPTED") {
     throw new Error("Hai người hiện không là bạn bè.");
   }
 
   relationship.status = "REMOVED";
   await relationship.save();
+  console.log("[RelationshipService] DB updated to REMOVED");
 
-  await publishRelationshipEvent("UNFRIENDED", relationship);
+  try {
+    await publishRelationshipEvent("UNFRIENDED", relationship);
+    console.log("[RelationshipService] Event published successfully");
+  } catch (err) {
+    console.error("[RelationshipService] Failed to publish event, but DB was updated:", err.message);
+    // We don't rethrow here to allow the API to return success since the DB was updated
+  }
+  
   return relationship;
 };
