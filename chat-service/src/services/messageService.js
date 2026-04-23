@@ -3,6 +3,7 @@ const ConversationService = require("./conversationService");
 const { PutObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const { s3Client, bucketName } = require("../config/s3");
+const { publishMessageSentEvent } = require("./analyticsPublisher");
 
 const crypto = require("crypto");
 
@@ -103,6 +104,20 @@ exports.sendMessage = async ({
     conversationId,
     savedMessage,
   );
+
+  try {
+    await publishMessageSentEvent({
+      messageId: savedMessage.msg_id,
+      userId: senderId,
+      messageType: type,
+    });
+  } catch (error) {
+    // Do not block chat delivery when analytics pipeline is unavailable
+    console.warn(
+      "[analytics] publish message.sent failed:",
+      error?.message || error,
+    );
+  }
 
   // Gửi kèm sender_name để FE cập nhật conversation list mà không cần query thêm
   return {

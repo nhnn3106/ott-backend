@@ -122,6 +122,8 @@ public class UserService {
         user = userRepository.save(user);
         otpService.markOtpAsUsed(otpCode);
 
+        notificationPublisher.publishUserRegisteredEvent(user.getId(), "password");
+
         // Welcome email async
         notificationPublisher.sendWelcomeEmailAsync(user);
 

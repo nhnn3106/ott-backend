@@ -11,7 +11,10 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.Instant;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 
 @Service
@@ -28,6 +31,9 @@ public class NotificationPublisher {
 
     @Value("${internal.api.key}")
     private String internalApiKey;
+
+    @Value("${analytics.queue.user-registered:analytics.user.registered.queue}")
+    private String userRegisteredAnalyticsQueue;
 
     public void sendOtpEmail(String toEmail, String toName, String otpCode,
                              OtpType otpType, String ipAddress, String location,
@@ -89,6 +95,22 @@ public class NotificationPublisher {
             log.info("Alert email event published for userId: {}", user.getId());
         } catch (Exception e) {
             log.error("Failed to publish alert email event: {}", e.getMessage());
+        }
+    }
+
+    public void publishUserRegisteredEvent(String userId, String registerMethod) {
+        try {
+            Map<String, Object> event = new HashMap<>();
+            event.put("event_id", UUID.randomUUID().toString());
+            event.put("user_id", userId);
+            event.put("register_method", registerMethod);
+            event.put("timestamp", Instant.now());
+
+            rabbitTemplate.convertAndSend(userRegisteredAnalyticsQueue, event);
+            log.info("User registered analytics event published for userId={}, method={}", userId, registerMethod);
+        } catch (Exception e) {
+            // Do not break registration flow if analytics pipeline is unavailable
+            log.warn("Failed to publish user.registered analytics event for userId={}: {}", userId, e.getMessage());
         }
     }
 }

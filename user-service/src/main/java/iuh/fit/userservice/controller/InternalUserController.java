@@ -8,6 +8,7 @@ import iuh.fit.userservice.exception.AppException;
 import iuh.fit.userservice.exception.ErrorCode;
 import iuh.fit.userservice.mapper.UserMapper;
 import iuh.fit.userservice.repository.UserRepository;
+import iuh.fit.userservice.service.NotificationPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -26,6 +27,7 @@ public class InternalUserController {
 
     private final UserRepository userRepository;
     private final UserMapper userMapper;
+        private final NotificationPublisher notificationPublisher;
 
     @Value("${internal.api.key}")
     private String internalApiKey;
@@ -138,6 +140,10 @@ public class InternalUserController {
 
         user = userRepository.save(user);
         log.info("User created via internal API: {}", user.getId());
+
+        String registerMethod = (googleId != null && !googleId.isBlank()) ? "google" : "internal";
+        notificationPublisher.publishUserRegisteredEvent(user.getId(), registerMethod);
+
         return ApiResponse.<UserResponse>builder().result(userMapper.toUserResponse(user)).build();
     }
 

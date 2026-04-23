@@ -265,6 +265,7 @@ public class AuthService {
         logLoginHistory(user, ipAddress, deviceInfo, LoginStatus.SUCCESS, loginMethod, null);
         sendWelcomeEmailIfNeeded(user);
         userServiceClient.updateLastLogin(userId);
+        notificationPublisher.publishUserLoginEvent(userId, loginMethod.name().toLowerCase());
 
         return AuthenticationResponse.builder()
                 .token(token)
@@ -487,6 +488,7 @@ public class AuthService {
         sendWelcomeEmailIfNeeded(user);
 
         userServiceClient.updateLastLogin(user.getId());
+        notificationPublisher.publishUserLoginEvent(user.getId(), loginMethod.name().toLowerCase());
 
         return AuthenticationResponse.builder()
                 .token(token)

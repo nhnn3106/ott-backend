@@ -1,5 +1,15 @@
 package mediaservice.services.impl;
 
+import java.util.List;
+
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
@@ -11,23 +21,19 @@ import mediaservice.models.ImageMedia;
 import mediaservice.models.Post;
 import mediaservice.models.UserAccount;
 import mediaservice.models.VideoMedia;
-import mediaservice.models.enums.*;
+import mediaservice.models.enums.ContentStatusType;
+import mediaservice.models.enums.ReactionTargetType;
+import mediaservice.models.enums.RelationshipStatusType;
+import mediaservice.models.enums.RuleType;
+import mediaservice.models.enums.VisibilityType;
 import mediaservice.repositories.CommentRepository;
 import mediaservice.repositories.MediaRepository;
 import mediaservice.repositories.PostRepository;
 import mediaservice.repositories.ReactionRepository;
 import mediaservice.repositories.UserAccountRepository;
+import mediaservice.services.AnalyticsEventPublisher;
 import mediaservice.services.PostService;
 import mediaservice.services.S3Service;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
-
-import java.util.List;
 
 @Slf4j
 @Service
@@ -41,6 +47,7 @@ public class PostServiceImpl implements PostService {
     private final UserAccountRepository userAccountRepository;
     private final MediaRepository mediaRepository;
     private final S3Service s3Service;
+    private final AnalyticsEventPublisher analyticsEventPublisher;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -61,6 +68,8 @@ public class PostServiceImpl implements PostService {
     public PostResponse createPost(PostRequest request) {
         Post post = postMapper.toEntity(request);
         Post savedPost = postRepository.save(post);
+        String userId = savedPost.getAccount() != null ? savedPost.getAccount().getId() : null;
+        analyticsEventPublisher.publishPostCreated(savedPost.getId(), userId);
         return enrichCounts(postMapper.toResponse(savedPost), savedPost.getId());
     }
 
@@ -124,6 +133,8 @@ public class PostServiceImpl implements PostService {
         //    (tránh trả về Hibernate cache cũ không có media)
         entityManager.flush();
         entityManager.refresh(savedPost);
+
+        analyticsEventPublisher.publishPostCreated(savedPost.getId(), accountId);
 
         return enrichCounts(postMapper.toResponse(savedPost), savedPost.getId());
     }
