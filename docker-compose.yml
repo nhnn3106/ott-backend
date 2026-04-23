@@ -1,6 +1,30 @@
 version: "3.8"
 
 services:
+  analytic-postgres:
+    image: postgres:15-alpine
+    container_name: analytic-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${ANALYTIC_DB_NAME:-admin_analytic_db}
+      POSTGRES_USER: ${ANALYTIC_DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${ANALYTIC_DB_PASSWORD:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - analytic_postgres_data:/var/lib/postgresql/data
+    networks:
+      - ott-network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${ANALYTIC_DB_USERNAME:-postgres} -d ${ANALYTIC_DB_NAME:-admin_analytic_db}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   redis:
     image: redis:7-alpine
     container_name: ott-redis
@@ -117,6 +141,32 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  analytic-service:
+    build: ./analytic-service
+    container_name: ott-analytic
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8092:8092"
+    environment:
+      ANALYTIC_SERVER_PORT: ${ANALYTIC_SERVER_PORT:-8092}
+      ANALYTIC_DB_URL: jdbc:postgresql://analytic-postgres:5432/${ANALYTIC_DB_NAME:-admin_analytic_db}
+      ANALYTIC_DB_USERNAME: ${ANALYTIC_DB_USERNAME:-postgres}
+      ANALYTIC_DB_PASSWORD: ${ANALYTIC_DB_PASSWORD:-postgres}
+      ANALYTIC_RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq}
+      ANALYTIC_RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
+      ANALYTIC_RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-admin}
+      ANALYTIC_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-rabbit123}
+      ANALYTIC_ALLOWED_ORIGINS: ${ANALYTIC_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      USER_SERVICE_URL: ${USER_SERVICE_URL:-http://ott-user:8082}
+    networks:
+      - ott-network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      analytic-postgres:
+        condition: service_healthy
+
   api-gateway:
     build: ./api-gateway
     container_name: ott-gateway
@@ -133,6 +183,7 @@ services:
       - media-service
 
 volumes:
+  analytic_postgres_data:
   redis_data:
   rabbitmq_data:
 
