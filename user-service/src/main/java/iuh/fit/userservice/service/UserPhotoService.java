@@ -35,6 +35,7 @@ public class UserPhotoService {
     private final AwsS3Properties props;
     private final S3Client s3Client;
     private final UserRepository userRepository;
+    private final UserEventPublisher userEventPublisher;
 
 
     public PhotoListResponse getAllPhotos(String userId) {
@@ -106,6 +107,15 @@ public class UserPhotoService {
         }
         userValidationUtil.userRepository.save(user);
 
+        // Broadcast update
+        userEventPublisher.publishUserUpdated(iuh.fit.userservice.dto.event.UserUpdatedEvent.builder()
+                .userId(userId)
+                .avatar(user.getAvatarUrl())
+                .coverUrl(user.getCoverUrl())
+                .displayName(user.getFullName())
+                .bio(user.getBio())
+                .build());
+
         log.info("Active photo set | userId: {} | type: {} | photoId: {}", userId, type, photoId);
         return toResponse(photo);
     }
@@ -164,6 +174,15 @@ public class UserPhotoService {
             }
 
             userRepository.save(user);
+
+            // Broadcast update
+            userEventPublisher.publishUserUpdated(iuh.fit.userservice.dto.event.UserUpdatedEvent.builder()
+                    .userId(userId)
+                    .avatar(user.getAvatarUrl())
+                    .coverUrl(user.getCoverUrl())
+                    .displayName(user.getFullName())
+                    .bio(user.getBio())
+                    .build());
         }
     }
 

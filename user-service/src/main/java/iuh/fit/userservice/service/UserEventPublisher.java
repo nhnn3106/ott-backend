@@ -28,4 +28,18 @@ public class UserEventPublisher {
                     event.getUserId(), e.getMessage());
         }
     }
+
+    public void publishUserUpdated(iuh.fit.userservice.dto.event.UserUpdatedEvent event) {
+        try {
+            rabbitTemplate.convertAndSend(
+                    rabbitMQConfig.userEventsExchange,
+                    rabbitMQConfig.userUpdatedRoutingKey,
+                    event
+            );
+            log.info("Published user.updated event for userId={}", event.getUserId());
+        } catch (Exception e) {
+            log.error("Failed to publish user.updated event for userId={}: {}", 
+                    event.getUserId(), e.getMessage());
+        }
+    }
 }
