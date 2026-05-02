@@ -23,6 +23,7 @@ public class ProfileService {
     private final UserRepository userRepository;
     private final UserMapper userMapper;
     private final ValidationUtils validationUtils;
+    private final UserEventPublisher userEventPublisher;
 
 
     public UserProfileResponse getUserProfile(String userId) {
@@ -104,6 +105,16 @@ public class ProfileService {
         if (hasChanges) {
             user = userRepository.save(user);
             log.info("Profile updated successfully for userId: {}", userId);
+            
+            userEventPublisher.publishUserUpdated(
+                    iuh.fit.userservice.dto.event.UserUpdatedEvent.builder()
+                            .userId(user.getId())
+                            .fullName(user.getFullName())
+                            .avatarUrl(user.getAvatarUrl())
+                            .coverUrl(user.getCoverUrl())
+                            .bio(user.getBio())
+                            .build()
+            );
         } else {
             log.debug("No changes in profile update request for userId: {}", userId);
         }

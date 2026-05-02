@@ -25,6 +25,9 @@ public class RabbitMQConfig {
     @Value("${rabbitmq.routing-key.user-created}")
     public String userCreatedRoutingKey;
 
+    @Value("${rabbitmq.routing-key.user-updated:user.updated}")
+    public String userUpdatedRoutingKey;
+
     @Bean
     public MessageConverter jsonMessageConverter() {
         return new Jackson2JsonMessageConverter();

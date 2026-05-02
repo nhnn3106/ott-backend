@@ -41,6 +41,27 @@ exports.createUser = async (userData) => {
   return newUser;
 };
 
+exports.updateUserInfo = async (userData) => {
+  const { userId, fullName, avatarUrl, coverUrl, bio } = userData;
+
+  const updatedUser = await User.findOneAndUpdate(
+    { user_id: userId },
+    {
+      name: fullName,
+      avatar: extractAvatarPath(avatarUrl),
+      cover_url: extractAvatarPath(coverUrl),
+      bio: bio
+    },
+    { new: true }
+  );
+
+  if (updatedUser) {
+    await UserCacheService.setCachedUser(userId, updatedUser);
+  }
+
+  return updatedUser;
+};
+
 exports.syncUser = async ({ user_id, name }) => {
   const user = await User.findOneAndUpdate(
     { user_id: user_id },
