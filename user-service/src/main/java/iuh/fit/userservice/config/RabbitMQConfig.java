@@ -25,9 +25,6 @@ public class RabbitMQConfig {
     @Value("${rabbitmq.routing-key.user-created}")
     public String userCreatedRoutingKey;
 
-    @Value("${rabbitmq.queue.user-updated:user.updated.queue}")
-    public String userUpdatedQueue;
-
     @Value("${rabbitmq.routing-key.user-updated:user.updated}")
     public String userUpdatedRoutingKey;
 

@@ -11,8 +11,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class UserUpdatedEvent {
     private String userId;
-    private String avatar;
-    private String coverUrl;
-    private String displayName;
+
     private String bio;
 }

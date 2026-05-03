@@ -107,14 +107,16 @@ public class UserPhotoService {
         }
         userValidationUtil.userRepository.save(user);
 
-        // Broadcast update
-        userEventPublisher.publishUserUpdated(iuh.fit.userservice.dto.event.UserUpdatedEvent.builder()
-                .userId(userId)
-                .avatar(user.getAvatarUrl())
-                .coverUrl(user.getCoverUrl())
-                .displayName(user.getFullName())
-                .bio(user.getBio())
-                .build());
+
+        userEventPublisher.publishUserUpdated(
+                iuh.fit.userservice.dto.event.UserUpdatedEvent.builder()
+                        .userId(user.getId())
+                        .fullName(user.getFullName())
+                        .avatarUrl(user.getAvatarUrl())
+                        .coverUrl(user.getCoverUrl())
+                        .bio(user.getBio())
+                        .build()
+        );
 
         log.info("Active photo set | userId: {} | type: {} | photoId: {}", userId, type, photoId);
         return toResponse(photo);
@@ -174,15 +176,16 @@ public class UserPhotoService {
             }
 
             userRepository.save(user);
-
-            // Broadcast update
-            userEventPublisher.publishUserUpdated(iuh.fit.userservice.dto.event.UserUpdatedEvent.builder()
-                    .userId(userId)
-                    .avatar(user.getAvatarUrl())
-                    .coverUrl(user.getCoverUrl())
-                    .displayName(user.getFullName())
-                    .bio(user.getBio())
-                    .build());
+            
+            userEventPublisher.publishUserUpdated(
+                    iuh.fit.userservice.dto.event.UserUpdatedEvent.builder()
+                            .userId(user.getId())
+                            .fullName(user.getFullName())
+                            .avatarUrl(user.getAvatarUrl())
+                            .coverUrl(user.getCoverUrl())
+                            .bio(user.getBio())
+                            .build()
+            );
         }
     }
 
