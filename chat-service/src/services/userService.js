@@ -8,7 +8,7 @@ const extractAvatarPath = (avatarUrl) => {
   if (str.startsWith("/")) return str;
   
   try {
-    const url = new URL(str);
+
     return url.pathname;
   } catch (e) {
     return str;
@@ -39,16 +39,19 @@ exports.createUser = async (userData) => {
 };
 
 exports.updateUserInfo = async (userData) => {
-  const { userId, fullName, avatarUrl, coverUrl, bio } = userData;
+  const { userId, fullName, avatarUrl, coverUrl, bio, email, phone } = userData;
+
+  const updatePayload = {};
+  if (fullName !== undefined) updatePayload.name = fullName;
+  if (avatarUrl !== undefined) updatePayload.avatar = extractAvatarPath(avatarUrl);
+  if (coverUrl !== undefined) updatePayload.cover_url = extractAvatarPath(coverUrl);
+  if (bio !== undefined) updatePayload.bio = bio;
+  if (email !== undefined) updatePayload.email = email;
+  if (phone !== undefined) updatePayload.phone = phone;
 
   const updatedUser = await User.findOneAndUpdate(
     { user_id: userId },
-    {
-      name: fullName,
-      avatar: extractAvatarPath(avatarUrl),
-      cover_url: extractAvatarPath(coverUrl),
-      bio: bio
-    },
+    updatePayload,
     { new: true }
   );
 
@@ -142,7 +145,7 @@ exports.getUserByPhone = async (phone) => {
     variants.push('0' + phone.substring(2));
   }
 
-  return await User.findOne({ 
-    phone: { $in: variants } 
+  return await User.findOne({
+    phone: { $in: variants }
   });
 };

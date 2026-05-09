@@ -28,6 +28,9 @@ public class RabbitMQConfig {
     @Value("${rabbitmq.routing-key.user-updated:user.updated}")
     public String userUpdatedRoutingKey;
 
+    @Value("${rabbitmq.routing-key.user-logout:user.logout}")
+    public String userLogoutRoutingKey;
+
     @Bean
     public MessageConverter jsonMessageConverter() {
         return new Jackson2JsonMessageConverter();

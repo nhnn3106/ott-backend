@@ -13,4 +13,9 @@ public class UserUpdatedEvent {
     private String userId;
 
     private String bio;
+    private String work;
+    private String location;
+    private String relationshipStatus;
+    private String email;
+    private String phone;
 }

@@ -11,8 +11,14 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class UserUpdatedEvent {
     private String userId;
-    private String avatar;
+
+    private String fullName;
+    private String avatarUrl;
     private String coverUrl;
-    private String displayName;
     private String bio;
+    private String work;
+    private String location;
+    private String relationshipStatus;
+    private String email;
+    private String phone;
 }
