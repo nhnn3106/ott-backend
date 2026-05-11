@@ -282,6 +282,20 @@ const removeUserFromAllCalls = (userId) => {
       participants: Array.from(callState.participants),
     });
 
+    if (callState.isGroup) {
+      const updatePayload = {
+        conversationId,
+        isCalling: callState.participants.size > 0,
+        participantCount: callState.participants.size,
+      };
+      io.to(`conversation:${conversationId}`).emit("cap_nhat_trang_thai_goi_nhom", updatePayload);
+      if (callState.memberIds) {
+        callState.memberIds.forEach(uid => {
+          io.to(`user:${uid}`).emit("cap_nhat_trang_thai_goi_nhom", updatePayload);
+        });
+      }
+    }
+
     // Nếu không còn ai trong phòng và cuộc gọi chưa được trả lời -> Kết thúc hoàn toàn
     if (callState.participants.size === 0) {
       if (!callState.answeredAt && String(callState.initiatorId) === String(userId)) {
