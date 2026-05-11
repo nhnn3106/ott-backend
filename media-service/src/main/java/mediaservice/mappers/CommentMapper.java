@@ -4,10 +4,11 @@ import mediaservice.dtos.requests.CommentRequest;
 import mediaservice.dtos.responses.CommentResponse;
 import mediaservice.models.Comment;
 import org.mapstruct.*;
+import org.mapstruct.ReportingPolicy;
 
 import java.util.List;
 
-@Mapper(componentModel = "spring")
+@Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public interface CommentMapper {
 
     @Mapping(target = "accountId",          source = "account.id")

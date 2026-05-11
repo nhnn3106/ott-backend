@@ -4,10 +4,11 @@ import mediaservice.dtos.requests.ReactionRequest;
 import mediaservice.dtos.responses.ReactionResponse;
 import mediaservice.models.Reaction;
 import org.mapstruct.*;
+import org.mapstruct.ReportingPolicy;
 
 import java.util.List;
 
-@Mapper(componentModel = "spring")
+@Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public interface ReactionMapper {
 
     @Mapping(target = "accountId",      source = "account.id")
