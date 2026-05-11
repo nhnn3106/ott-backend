@@ -53,6 +53,22 @@ const ParticipantSchema = new mongoose.Schema(
         type: Date,
         default: null,
       },
+      removed_from_group_at: {
+        type: Date,
+        default: null,
+      },
+      removed_by: {
+        type: String,
+        default: null,
+      },
+      group_dissolved_at: {
+        type: Date,
+        default: null,
+      },
+      group_dissolved_by: {
+        type: String,
+        default: null,
+      },
     },
 
     nickname: { type: String },
@@ -69,6 +85,12 @@ const ParticipantSchema = new mongoose.Schema(
       type: String,
       enum: ["admin", "user"],
       default: "user",
+    },
+    
+    status: {
+      type: String,
+      enum: ["invited", "joined"],
+      default: "joined",
     },
   },
   {

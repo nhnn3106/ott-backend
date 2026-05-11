@@ -1,7 +1,9 @@
 package iuh.fit.userservice.service;
 
+import iuh.fit.userservice.dto.event.UserCreatedEvent;
 import iuh.fit.userservice.dto.request.RegisterRequest;
 import iuh.fit.userservice.dto.request.RequestRegisterOtpRequest;
+import iuh.fit.userservice.dto.request.UpdateContactRequest;
 import iuh.fit.userservice.dto.response.OtpResponse;
 import iuh.fit.userservice.dto.response.UserResponse;
 import iuh.fit.userservice.entity.OtpCode;
@@ -12,13 +14,16 @@ import iuh.fit.userservice.exception.AppException;
 import iuh.fit.userservice.exception.ErrorCode;
 import iuh.fit.userservice.mapper.UserMapper;
 import iuh.fit.userservice.repository.UserRepository;
+import iuh.fit.userservice.utils.UserValidationUtil;
 import iuh.fit.userservice.utils.ValidationUtils;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -38,6 +43,17 @@ public class UserService {
     NotificationPublisher notificationPublisher;
     ValidationUtils validationUtils;
     EntityManager entityManager;
+    UserValidationUtil userValidationUtil;
+    AuthServiceClient authServiceClient;
+    UserEventPublisher userEventPublisher;
+
+    @NonFinal
+    @Value("${aws.s3.default-avatar}")
+    String defaultAvatarUrl;
+
+    @NonFinal
+    @Value("${aws.s3.default-cover-photo}")
+    String defaultCoverPhotoUrl;
 
     @Transactional
     public OtpResponse requestRegisterOtp(RequestRegisterOtpRequest request) {
@@ -49,7 +65,8 @@ public class UserService {
             throw new AppException(ErrorCode.FULL_NAME_REQUIRED);
 
         String sanitizedName = validationUtils.sanitizeString(request.getFullName());
-        if (sanitizedName.length() > 100) throw new AppException(ErrorCode.INVALID_FULL_NAME);
+        if (sanitizedName.length() > 100)
+            throw new AppException(ErrorCode.INVALID_FULL_NAME);
 
         if (userRepository.existsByPhoneAndDeletedAtIsNull(request.getPhone()))
             throw new AppException(ErrorCode.PHONE_ALREADY_EXISTS);
@@ -83,26 +100,28 @@ public class UserService {
             throw new AppException(ErrorCode.FULL_NAME_REQUIRED);
 
         String sanitizedName = validationUtils.sanitizeString(request.getFullName());
-        if (sanitizedName.length() > 100) throw new AppException(ErrorCode.INVALID_FULL_NAME);
+        if (sanitizedName.length() > 100)
+            throw new AppException(ErrorCode.INVALID_FULL_NAME);
 
         if (userRepository.existsByPhoneAndDeletedAtIsNull(request.getPhone()))
             throw new AppException(ErrorCode.PHONE_ALREADY_EXISTS);
         if (userRepository.existsByEmailAndDeletedAtIsNull(request.getEmail()))
             throw new AppException(ErrorCode.EMAIL_ALREADY_EXISTS);
 
-        // Handle soft-deleted account trùng phone
         Optional<User> deletedByPhone = userRepository.findByPhone(request.getPhone());
         if (deletedByPhone.isPresent() && deletedByPhone.get().getDeletedAt() != null) {
             User deletedUser = deletedByPhone.get();
-            LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);
-            if (deletedUser.getDeletedAt().isAfter(thirtyDaysAgo)) {
-                throw new AppException(ErrorCode.ACCOUNT_CAN_BE_RESTORED,
-                        "Your account was recently deleted and can still be restored.");
-            } else {
-                log.info("🗑️ Hard deleting old account to release phone: {}", deletedUser.getId());
-                userRepository.delete(deletedUser);
-                entityManager.flush();
-            }
+            log.info("Hard deleting soft-deleted user by phone to allow new registration: {}", deletedUser.getId());
+            userRepository.delete(deletedUser);
+            entityManager.flush();
+        }
+
+        Optional<User> deletedByEmail = userRepository.findByEmail(request.getEmail());
+        if (deletedByEmail.isPresent() && deletedByEmail.get().getDeletedAt() != null) {
+            User deletedUser = deletedByEmail.get();
+            log.info("Hard deleting soft-deleted user by email to allow new registration: {}", deletedUser.getId());
+            userRepository.delete(deletedUser);
+            entityManager.flush();
         }
 
         OtpCode otpCode = otpService.validateOtp(
@@ -117,14 +136,81 @@ public class UserService {
                 .isEmailVerified(true).emailVerifiedAt(now)
                 .isActive(true).isBlocked(false)
                 .isFirstLogin(true).welcomeEmailSent(false)
+                .avatarUrl(defaultAvatarUrl)
+                .coverUrl(defaultCoverPhotoUrl)
                 .build();
 
         user = userRepository.save(user);
         otpService.markOtpAsUsed(otpCode);
 
+        authServiceClient.syncUser(user);
+
+        notificationPublisher.publishUserRegisteredEvent(user.getId(), "password");
+
         // Welcome email async
         notificationPublisher.sendWelcomeEmailAsync(user);
 
+        // Publish event for Chat service (One time, with phone)
+        userEventPublisher.publishUserCreated(UserCreatedEvent.builder()
+                .userId(user.getId())
+                .username(user.getFullName())
+                .avatar(user.getAvatarUrl())
+                .coverUrl(user.getCoverUrl())
+                .bio(user.getBio())
+                .email(user.getEmail())
+                .phone(user.getPhone())
+                .build());
+
         return userMapper.toUserResponse(user);
+    }
+
+    private String buildUsername(User user) {
+        String base = null;
+        if (user.getEmail() != null && user.getEmail().contains("@")) {
+            base = user.getEmail().substring(0, user.getEmail().indexOf('@'));
+        } else if (user.getFullName() != null) {
+            base = user.getFullName();
+        }
+
+        if (base == null || base.isBlank()) {
+            return "user";
+        }
+
+        String normalized = validationUtils.sanitizeString(base)
+                .replace(" ", "")
+                .toLowerCase();
+
+        if (normalized.isBlank()) {
+            return "user";
+        }
+
+        return normalized.length() > 50 ? normalized.substring(0, 50) : normalized;
+    }
+
+    public void updateContact(String userId, UpdateContactRequest request) {
+        User user = userValidationUtil.getUserById(userId);
+        if (request.getNewPhone() != null) {
+            user.setPhone(request.getNewPhone());
+            user.setPhoneChangedAt(LocalDateTime.now());
+        }
+        if (request.getNewEmail() != null) {
+            user.setEmail(request.getNewEmail());
+            user.setEmailChangedAt(LocalDateTime.now());
+        }
+        userRepository.save(user);
+
+        userEventPublisher.publishUserUpdated(
+                iuh.fit.userservice.dto.event.UserUpdatedEvent.builder()
+                        .userId(user.getId())
+                        .fullName(user.getFullName())
+                        .avatarUrl(user.getAvatarUrl())
+                        .coverUrl(user.getCoverUrl())
+                        .bio(user.getBio())
+                        .work(user.getWork())
+                        .location(user.getLocation())
+                        .relationshipStatus(user.getRelationshipStatus())
+                        .email(user.getEmail())
+                        .phone(user.getPhone())
+                        .build());
     }
 }

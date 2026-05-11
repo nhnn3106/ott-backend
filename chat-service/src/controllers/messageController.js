@@ -6,6 +6,7 @@ exports.generatePresignedUrl = async (req, res) => {
     const { fileName, fileType } = req.body;
 
     const data = await MessageService.generatePresignedUrl(fileName, fileType);
+    console.log("Controller received data from service:", data);
 
     res.status(200).json(data);
   } catch (error) {
@@ -15,8 +16,17 @@ exports.generatePresignedUrl = async (req, res) => {
 
 exports.sendMessage = async (req, res) => {
   try {
-    const { conversationId, senderId, content, type, size, replyToMsgId } =
-      req.body;
+    const {
+      conversationId,
+      senderId,
+      content,
+      type,
+      size,
+      replyToMsgId,
+      pollQuestion,
+      pollMultipleChoice,
+      pollOptions,
+    } = req.body;
 
     const savedMessage = await MessageService.sendMessage({
       conversationId,
@@ -25,19 +35,116 @@ exports.sendMessage = async (req, res) => {
       type,
       size,
       replyToMsgId,
+      pollQuestion,
+      pollMultipleChoice,
+      pollOptions,
     });
 
-    // Emit đến user room riêng của từng participant thay vì conversation room
-    // → nhận được ngay cả khi chưa join conversation room, xử lý được conversation mới
+    // Emit đến user room riêng của từng participant đã joined (invited users không nhận tin nhắn)
     const participants =
-      await ParticipantService.getParticipants(conversationId);
+      await ParticipantService.getJoinedParticipants(conversationId);
     participants.forEach((p) => {
       req.io.to(`user:${p.user_id}`).emit("tin_nhan", savedMessage);
     });
 
+    // Nếu là poll, tự động tạo thêm 1 tin system thông báo
+    if (type === "poll" && pollQuestion) {
+      try {
+        const sysMsg = await MessageService.sendMessage({
+          conversationId,
+          senderId,
+          content: `${savedMessage.sender_name} đã tạo cuộc bình chọn: ${pollQuestion}`,
+          type: "system_poll",
+          size: 0,
+        });
+        participants.forEach((p) => {
+          req.io.to(`user:${p.user_id}`).emit("tin_nhan", sysMsg);
+        });
+      } catch (sysErr) {
+        console.warn("Không thể tạo thông báo poll:", sysErr.message);
+      }
+    }
+
     res.status(201).json(savedMessage);
   } catch (error) {
     if (error.message === "Tin nhắn trả lời không hợp lệ") {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.votePoll = async (req, res) => {
+  try {
+    const { msgId } = req.params;
+    const { conversationId, userId, optionIds } = req.body;
+
+    const result = await MessageService.votePoll({
+      conversationId,
+      msgId,
+      userId,
+      optionIds,
+    });
+
+    const participants =
+      await ParticipantService.getParticipants(conversationId);
+    participants.forEach((p) => {
+      req.io.to(`user:${p.user_id}`).emit("tin_nhan_cap_nhat", result);
+      if (result.systemMessage) {
+        req.io.to(`user:${p.user_id}`).emit("tin_nhan", result.systemMessage);
+      }
+    });
+
+    res.status(200).json(result);
+  } catch (error) {
+    if (
+      error.message === "Tin nhắn không tồn tại" ||
+      error.message === "Tin nhắn không phải là khảo sát" ||
+      error.message === "Khảo sát này chỉ cho phép chọn 1 đáp án" ||
+      error.message === "Khảo sát đã bị xóa hoặc thu hồi"
+    ) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.forwardMessage = async (req, res) => {
+  try {
+    const { originalMsgId, conversationId, targetConversationIds, senderId } = req.body;
+
+    if (!originalMsgId || !conversationId || !targetConversationIds || !targetConversationIds.length || !senderId) {
+      return res.status(400).json({ error: "Thiếu thông tin bắt buộc để chuyển tiếp" });
+    }
+
+    const forwardedMessages = await MessageService.forwardMessage({
+      originalMsgId,
+      conversationId,
+      targetConversationIds,
+      senderId,
+    });
+
+    // Emit đến user room riêng của từng participant trong mỗi conversation được forward tới
+    for (let i = 0; i < targetConversationIds.length; i++) {
+      const targetConversationId = targetConversationIds[i];
+      const savedMessage = forwardedMessages[i];
+
+      if (savedMessage) {
+        const participants = await ParticipantService.getParticipants(targetConversationId);
+        participants.forEach((p) => {
+          req.io.to(`user:${p.user_id}`).emit("tin_nhan", savedMessage);
+        });
+      }
+    }
+
+    res.status(200).json({ results: forwardedMessages });
+  } catch (error) {
+    if (
+      error.message === "Tin nhắn gốc không tồn tại" ||
+      error.message === "Không thể chuyển tiếp tin nhắn đã bị xóa hoặc thu hồi" ||
+      error.message === "Loại tin nhắn này chưa hỗ trợ chuyển tiếp"
+    ) {
       return res.status(400).json({ error: error.message });
     }
     res.status(500).json({ error: error.message });
@@ -118,6 +225,11 @@ exports.revokeMessage = async (req, res) => {
       await ParticipantService.getParticipants(conversationId);
     participants.forEach((p) => {
       req.io.to(`user:${p.user_id}`).emit("tin_nhan_thu_hoi", revokedMessage);
+      if (revokedMessage.systemMessage) {
+        req.io
+          .to(`user:${p.user_id}`)
+          .emit("tin_nhan", revokedMessage.systemMessage);
+      }
     });
 
     res.status(200).json(revokedMessage);
@@ -166,7 +278,7 @@ exports.pinMessage = async (req, res) => {
     const { msgId } = req.params;
     const { conversationId, userId, isPinned } = req.body;
 
-    const updatedMessage = await MessageService.pinMessage({
+    const result = await MessageService.pinMessage({
       conversationId,
       msgId,
       userId,
@@ -177,10 +289,15 @@ exports.pinMessage = async (req, res) => {
     const participants =
       await ParticipantService.getParticipants(conversationId);
     participants.forEach((p) => {
-      req.io.to(`user:${p.user_id}`).emit("tin_nhan_pin", updatedMessage);
+      req.io
+        .to(`user:${p.user_id}`)
+        .emit("tin_nhan_pin", result.updatedMessage);
+      if (result.systemMessage) {
+        req.io.to(`user:${p.user_id}`).emit("tin_nhan", result.systemMessage);
+      }
     });
 
-    res.status(200).json(updatedMessage);
+    res.status(200).json(result);
   } catch (error) {
     if (
       error.message === "Tin nhắn không tồn tại" ||
@@ -197,8 +314,12 @@ exports.pinMessage = async (req, res) => {
 exports.getPinnedMessages = async (req, res) => {
   try {
     const { conversationId } = req.params;
+    const { userId } = req.query;
 
-    const messages = await MessageService.getPinnedMessages(conversationId);
+    const messages = await MessageService.getPinnedMessages(
+      conversationId,
+      userId,
+    );
 
     res.status(200).json(messages);
   } catch (error) {

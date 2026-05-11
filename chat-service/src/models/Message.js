@@ -23,14 +23,52 @@ const MessageSchema = new mongoose.Schema(
 
     type: {
       type: String,
-      enum: ["text", "link", "image", "video", "file", "audio", "system_add"],
+      enum: [
+        "text",
+        "link",
+        "image",
+        "video",
+        "file",
+        "audio",
+        "system_add",
+        "system_block",
+        "system_leave",
+        "system_pin",
+        "system_unpin",
+        "call_start",
+        "call_join",
+        "call_end",
+        "call_missed",
+        "call_cancel",
+        "call_no_answer",
+        "poll",
+        "system_poll",
+        "system_transfer_owner",
+        "system_role_change",
+        "system_friend_request",
+      ],
       default: "text",
     },
 
     content: [{ type: String }],
     size: { type: Number, default: 0 },
+    system_meta: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
 
     reply_to_msg_id: { type: String, default: null },
+
+    // Poll fields
+    poll_question: { type: String, default: null },
+    poll_multiple_choice: { type: Boolean, default: false },
+    poll_options: [
+      {
+        id: { type: String },
+        name: { type: String },
+        voters: [{ type: String, ref: "User" }],
+      },
+    ],
 
     reactions: [
       {

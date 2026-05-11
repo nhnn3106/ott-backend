@@ -55,10 +55,13 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
 
             "/riff/api/users/account/password/forgot/request",
             "/riff/api/users/account/password/forgot/verify",
+            "/riff/api/users/account/password/forgot/otp/verify",
 
 
             "/actuator/**",
-            "/riff/api/actuator/**"
+            "/riff/api/actuator/**",
+            "/socket.io/**",
+            "/riff/api/chat/socket.io/**"   
     );
 
     private static final List<String> BLOCKED_EXTERNAL = Arrays.asList(

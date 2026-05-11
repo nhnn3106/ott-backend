@@ -80,9 +80,101 @@ const buildReplyPreview = (message, senderName = "") => {
   };
 };
 
+const sanitizeAvatarValue = (value) => {
+  const avatar = String(value || "").trim();
+  if (!avatar) return "";
+  if (/^data:image\//i.test(avatar)) return "";
+  return avatar;
+};
+
 class MessageRepository {
-  isVisibleToUser(message, userId) {
+  async hydrateSenderInfo(messages = []) {
+    const senderIds = [
+      ...new Set(
+        messages
+          .map((message) => String(message?.sender_id || ""))
+          .filter(Boolean),
+      ),
+    ];
+
+    if (!senderIds.length) {
+      return messages;
+    }
+
+    const senders = await User.find({ user_id: { $in: senderIds } })
+      .select("user_id name avatar")
+      .lean();
+    const senderMap = new Map(
+      senders.map((sender) => [String(sender.user_id || ""), sender]),
+    );
+
+    return messages.map((message) => {
+      const sender = senderMap.get(String(message.sender_id || ""));
+      return {
+        ...message,
+        sender_name: sender?.name || message.sender_name || "",
+        sender_avatar: sanitizeAvatarValue(
+          sender?.avatar || message.sender_avatar || "",
+        ),
+      };
+    });
+  }
+
+  getMessageStableId(message) {
+    return String(message?.msg_id || message?._id || "").trim();
+  }
+
+  getLatestMessageId(messages) {
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return "";
+    }
+
+    let latest = "";
+    for (const message of messages) {
+      const currentId = this.getMessageStableId(message);
+      if (!currentId) continue;
+      if (!latest) {
+        latest = currentId;
+        continue;
+      }
+
+      try {
+        if (BigInt(currentId) > BigInt(latest)) {
+          latest = currentId;
+        }
+      } catch {
+        if (currentId > latest) {
+          latest = currentId;
+        }
+      }
+    }
+
+    return latest;
+  }
+
+  async getLatestVisibleMessageId(conversationId, userId) {
+    const latest = await Message.findOne({
+      conversation_id: conversationId,
+      is_deleted: false,
+      ...(userId ? { deleted_for: { $ne: userId } } : {}),
+    })
+      .sort({ msg_id: -1 })
+      .select("msg_id _id")
+      .lean();
+
+    return this.getMessageStableId(latest);
+  }
+
+  isVisibleToUser(message, userId, deletedMsgId = "0") {
     if (message.is_deleted) return false;
+    
+    // Check if message is older than the user's join point (or clear chat point)
+    if (deletedMsgId && deletedMsgId !== "0" && message.msg_id) {
+      if (BigInt(message.msg_id) <= BigInt(deletedMsgId)) {
+        return false;
+      }
+    }
+
     if (!userId) return true;
 
     const deletedFor = Array.isArray(message.deleted_for)
@@ -91,7 +183,18 @@ class MessageRepository {
     return !deletedFor.includes(userId);
   }
 
-  async hydrateReplyPreviews(conversationId, messages) {
+  async getDeletedMsgId(conversationId, userId) {
+    if (!userId) return "0";
+    try {
+      const Participant = require("../models/Participant");
+      const participant = await Participant.findOne({ conversation_id: conversationId, user_id: userId }).select('deleted_msg_id').lean();
+      return participant?.deleted_msg_id || "0";
+    } catch (e) {
+      return "0";
+    }
+  }
+
+  async hydrateReplyPreviews(conversationId, messages, userId) {
     const replyIds = [
       ...new Set(
         messages
@@ -125,16 +228,78 @@ class MessageRepository {
     );
 
     const referencedMap = new Map(
-      referencedMessages.map((m) => [
-        m.msg_id,
-        buildReplyPreview(m, senderNameMap.get(m.sender_id) || ""),
-      ]),
+      referencedMessages.map((m) => {
+        const preview = buildReplyPreview(
+          m,
+          senderNameMap.get(m.sender_id) || "",
+        );
+
+        // Hide reply preview content when target message is deleted for this user.
+        if (!this.isVisibleToUser(m, userId)) {
+          return [
+            m.msg_id,
+            {
+              ...preview,
+              is_deleted: true,
+            },
+          ];
+        }
+
+        return [m.msg_id, preview];
+      }),
     );
 
     return messages.map((m) => ({
       ...m,
       reply_to: referencedMap.get(m.reply_to_msg_id) || null,
     }));
+  }
+
+  async hydrateLiveReactions(conversationId, messages) {
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return messages;
+    }
+
+    const messageIds = [
+      ...new Set(
+        messages
+          .map((message) => String(message?.msg_id || "").trim())
+          .filter(Boolean),
+      ),
+    ];
+
+    if (messageIds.length === 0) {
+      return messages;
+    }
+
+    const reactionDocs = await Message.find({
+      conversation_id: conversationId,
+      msg_id: { $in: messageIds },
+    })
+      .select("msg_id reactions")
+      .lean();
+
+    const reactionMap = new Map(
+      reactionDocs.map((doc) => [
+        String(doc.msg_id || ""),
+        Array.isArray(doc.reactions) ? doc.reactions : [],
+      ]),
+    );
+
+    return messages.map((message) => {
+      const msgId = String(message?.msg_id || "");
+      if (!reactionMap.has(msgId)) {
+        return {
+          ...message,
+          reactions: Array.isArray(message?.reactions) ? message.reactions : [],
+        };
+      }
+
+      return {
+        ...message,
+        reactions: reactionMap.get(msgId),
+      };
+    });
   }
 
   /**
@@ -184,6 +349,8 @@ class MessageRepository {
    */
   async getConversationMessages(conversationId, limit = 20, userId) {
     try {
+      const deletedMsgId = await this.getDeletedMsgId(conversationId, userId);
+
       // Step 1: Check Redis cache
       const cachedExists =
         await messageCacheService.cacheExists(conversationId);
@@ -197,11 +364,38 @@ class MessageRepository {
             `✓ CACHE HIT: ${messages.length} messages for ${conversationId}`,
           );
           const visibleMessages = messages.filter((m) =>
-            this.isVisibleToUser(m, userId),
+            this.isVisibleToUser(m, userId, deletedMsgId),
           );
-          return await this.hydrateReplyPreviews(
-            conversationId,
-            visibleMessages,
+
+          if (visibleMessages.length > 0) {
+            const cacheLatestId = this.getLatestMessageId(visibleMessages);
+            const dbLatestId = await this.getLatestVisibleMessageId(
+              conversationId,
+              userId,
+            );
+
+            if (!dbLatestId || cacheLatestId === dbLatestId) {
+              const liveReactionMessages = await this.hydrateLiveReactions(
+                conversationId,
+                visibleMessages,
+              );
+              const hydratedSenders =
+                await this.hydrateSenderInfo(liveReactionMessages);
+
+              return await this.hydrateReplyPreviews(
+                conversationId,
+                hydratedSenders,
+                userId,
+              );
+            }
+
+            logger.warn(
+              `↺ CACHE STALE: ${conversationId} cache latest ${cacheLatestId} != db latest ${dbLatestId}. Fallback DB`,
+            );
+          }
+
+          logger.info(
+            `↺ CACHE FALLBACK: cache has no visible messages for user ${userId || "anonymous"}, querying MongoDB`,
           );
         }
       }
@@ -209,11 +403,17 @@ class MessageRepository {
       // Step 2: Cache miss - fetch from MongoDB
       logger.info(`✗ CACHE MISS: Fetching from MongoDB for ${conversationId}`);
 
-      const messages = await Message.find({
+      const query = {
         conversation_id: conversationId,
         is_deleted: false,
         ...(userId ? { deleted_for: { $ne: userId } } : {}),
-      })
+      };
+
+      if (deletedMsgId !== "0") {
+        query.msg_id = { $gt: deletedMsgId };
+      }
+
+      const messages = await Message.find(query)
         .sort({ createdAt: -1 })
         .limit(limit)
         .lean();
@@ -225,16 +425,24 @@ class MessageRepository {
 
       // Step 3: Reverse to get oldest → newest order
       const orderedMessages = messages.reverse();
+      const hydratedWithSender = await this.hydrateSenderInfo(orderedMessages);
+
+      // Always hydrate reply preview so payload is consistent between cache-hit and cache-miss paths.
+      const hydratedMessages = await this.hydrateReplyPreviews(
+        conversationId,
+        hydratedWithSender,
+        userId,
+      );
 
       // Step 4: Cache the results
       await messageCacheService.addMultipleMessages(
         conversationId,
-        orderedMessages,
+        hydratedMessages,
       );
 
       logger.info(`✓ Cached ${orderedMessages.length} messages from MongoDB`);
 
-      return orderedMessages;
+      return hydratedMessages;
     } catch (error) {
       logger.error("Error getting messages:", error);
       throw error;
@@ -309,6 +517,7 @@ class MessageRepository {
       const hydratedMessages = await this.hydrateReplyPreviews(
         conversationId,
         orderedMessages,
+        userId,
       );
 
       return {
@@ -339,17 +548,25 @@ class MessageRepository {
         `📥 Loading older messages for ${conversationId}, before msg_id: ${beforeMsgId}`,
       );
 
+      const deletedMsgId = await this.getDeletedMsgId(conversationId, userId);
+
       // msg_id is stored as string (Snowflake). Keep string comparison to avoid
       // precision loss when converting large IDs to Number.
       const beforeId = String(beforeMsgId);
 
-      // Fetch from MongoDB (messages with msg_id < beforeMsgId)
-      const messages = await Message.find({
+      const query = {
         conversation_id: conversationId,
         is_deleted: false,
         ...(userId ? { deleted_for: { $ne: userId } } : {}),
         msg_id: { $lt: beforeId },
-      })
+      };
+
+      if (deletedMsgId !== "0") {
+        query.msg_id = { $lt: beforeId, $gt: deletedMsgId };
+      }
+
+      // Fetch from MongoDB (messages with msg_id < beforeMsgId)
+      const messages = await Message.find(query)
         .sort({ msg_id: -1 }) // newest first (largest ID first)
         .limit(limit + 1) // +1 to check if more exist
         .lean();
@@ -371,14 +588,20 @@ class MessageRepository {
       // Reverse to get oldest → newest
       const orderedMessages = result.reverse();
 
+      const hydratedMessages = await this.hydrateReplyPreviews(
+        conversationId,
+        orderedMessages,
+        userId,
+      );
+
       logger.info(
         `✓ Loaded ${orderedMessages.length} older messages from DB (hasMore: ${hasMore})`,
       );
 
       // Store hasMore for response
-      orderedMessages._hasMore = hasMore;
+      hydratedMessages._hasMore = hasMore;
 
-      return orderedMessages;
+      return hydratedMessages;
     } catch (error) {
       logger.error("Error getting older messages:", error);
       throw error;
@@ -400,9 +623,15 @@ class MessageRepository {
         `📤 Loading newer messages for ${conversationId}, after msg_id: ${afterMsgId}`,
       );
 
+      const deletedMsgId = await this.getDeletedMsgId(conversationId, userId);
+
       // msg_id is stored as string (Snowflake). Keep string comparison to avoid
       // precision loss when converting large IDs to Number.
-      const afterId = String(afterMsgId);
+      let afterId = String(afterMsgId);
+      
+      if (deletedMsgId !== "0" && BigInt(deletedMsgId) > BigInt(afterId)) {
+         afterId = deletedMsgId;
+      }
 
       const messages = await Message.find({
         conversation_id: conversationId,
@@ -421,7 +650,7 @@ class MessageRepository {
 
       logger.info(`✓ Loaded ${messages.length} newer messages from DB`);
 
-      return messages;
+      return await this.hydrateReplyPreviews(conversationId, messages, userId);
     } catch (error) {
       logger.error("Error getting newer messages:", error);
       throw error;
@@ -525,21 +754,45 @@ class MessageRepository {
         throw new Error("Message not found");
       }
 
-      // Check if reaction already exists
-      const reactionIndex = message.reactions.findIndex(
-        (r) => r.user_id === userId && r.type === emoji,
-      );
+      if (!Array.isArray(message.reactions)) {
+        message.reactions = [];
+      }
 
-      if (reactionIndex === -1) {
-        // Add new reaction
-        message.reactions.push({ user_id: userId, type: emoji });
+      const normalizedEmoji = String(emoji || "").trim();
+      if (!normalizedEmoji) {
+        throw new Error("Invalid reaction");
+      }
+
+      const currentReactionIndex = message.reactions.findIndex(
+        (r) => r.user_id === userId,
+      );
+      const currentReactionType =
+        currentReactionIndex >= 0
+          ? String(message.reactions[currentReactionIndex]?.type || "")
+          : "";
+
+      if (currentReactionIndex >= 0) {
+        if (message.reactions[currentReactionIndex].type === normalizedEmoji) {
+          // Tap same emoji again -> remove reaction.
+          message.reactions.splice(currentReactionIndex, 1);
+        } else {
+          // Replace with new emoji.
+          message.reactions[currentReactionIndex] = {
+            user_id: userId,
+            type: normalizedEmoji,
+          };
+        }
+      } else {
+        message.reactions.push({ user_id: userId, type: normalizedEmoji });
       }
 
       // Save to MongoDB
       await message.save();
       const updated = message.toObject();
 
-      logger.info(`😊 Reaction ${emoji} added to message ${messageId}`);
+      logger.info(
+        `😊 Reaction ${normalizedEmoji} updated on message ${messageId}`,
+      );
 
       // Update Redis cache
       await messageCacheService.updateMessage(

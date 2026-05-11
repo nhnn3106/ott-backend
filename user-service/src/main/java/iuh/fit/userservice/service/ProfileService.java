@@ -23,6 +23,7 @@ public class ProfileService {
     private final UserRepository userRepository;
     private final UserMapper userMapper;
     private final ValidationUtils validationUtils;
+    private final UserEventPublisher userEventPublisher;
 
     public UserProfileResponse getUserProfile(String userId) {
         log.debug("Fetching profile for userId: {}", userId);
@@ -85,6 +86,24 @@ public class ProfileService {
             hasChanges = true;
         }
 
+        if (request.getWork() != null) {
+            String work = validationUtils.sanitizeString(request.getWork());
+            user.setWork(work);
+            hasChanges = true;
+        }
+
+        if (request.getLocation() != null) {
+            String location = validationUtils.sanitizeString(request.getLocation());
+            user.setLocation(location);
+            hasChanges = true;
+        }
+
+        if (request.getRelationshipStatus() != null) {
+            String status = validationUtils.sanitizeString(request.getRelationshipStatus());
+            user.setRelationshipStatus(status);
+            hasChanges = true;
+        }
+
         if (request.getDateOfBirth() != null) {
             if (request.getDateOfBirth().isAfter(java.time.LocalDate.now())) {
                 log.warn("Invalid date of birth (future date) for userId: {}", userId);
@@ -99,27 +118,33 @@ public class ProfileService {
             hasChanges = true;
         }
 
-        if (request.getAvatarUrl() != null) {
-            if (!isValidUrl(request.getAvatarUrl())) {
-                log.warn("Invalid avatar URL for userId: {}", userId);
-                throw new AppException(ErrorCode.INVALID_AVATAR_URL);
-            }
-            user.setAvatarUrl(request.getAvatarUrl());
-            hasChanges = true;
-        }
-
-        if (request.getCoverUrl() != null) {
-            if (!isValidUrl(request.getCoverUrl())) {
-                log.warn("Invalid cover URL for userId: {}", userId);
-                throw new AppException(ErrorCode.INVALID_COVER_URL);
-            }
-            user.setCoverUrl(request.getCoverUrl());
-            hasChanges = true;
-        }
-
         if (hasChanges) {
             user = userRepository.save(user);
+
+            // Broadcast update
+            userEventPublisher.publishUserUpdated(iuh.fit.userservice.dto.event.UserUpdatedEvent.builder()
+                    .userId(userId)
+                    .avatar(user.getAvatarUrl())
+                    .coverUrl(user.getCoverUrl())
+                    .displayName(user.getFullName())
+                    .bio(user.getBio())
+                    .build());
+
             log.info("Profile updated successfully for userId: {}", userId);
+
+            userEventPublisher.publishUserUpdated(
+                    iuh.fit.userservice.dto.event.UserUpdatedEvent.builder()
+                            .userId(user.getId())
+                            .fullName(user.getFullName())
+                            .avatarUrl(user.getAvatarUrl())
+                            .coverUrl(user.getCoverUrl())
+                            .bio(user.getBio())
+                            .work(user.getWork())
+                            .location(user.getLocation())
+                            .relationshipStatus(user.getRelationshipStatus())
+                            .email(user.getEmail())
+                            .phone(user.getPhone())
+                            .build());
         } else {
             log.debug("No changes in profile update request for userId: {}", userId);
         }
@@ -150,7 +175,9 @@ public class ProfileService {
     }
 
     private boolean isValidUrl(String url) {
-        if (url == null || url.trim().isEmpty()) return false;
+        if (url == null || url.trim().isEmpty())
+            return false;
         return url.matches("^(https?://)?([a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,}(/.*)?$");
     }
+
 }

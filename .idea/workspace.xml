@@ -6,13 +6,24 @@
   <component name="ChangeListManager">
     <list default="true" id="1bb96e93-77b6-4b77-b543-9908f50ffd65" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/api-gateway/src/main/java/iuh/fit/apigateway/filter/AuthenticationFilter.java" beforeDir="false" afterPath="$PROJECT_DIR$/api-gateway/src/main/java/iuh/fit/apigateway/filter/AuthenticationFilter.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/service/AuthService.java" beforeDir="false" afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/service/AuthService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/service/UserServiceClient.java" beforeDir="false" afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/service/UserServiceClient.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/controller/InternalUserController.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/controller/InternalUserController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/repository/TwoFactorAuthRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/repository/TwoFactorAuthRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/repository/UserRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/repository/UserRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/TwoFactorAuthService.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/TwoFactorAuthService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/chat-service/src/consumers/userConsumer.js" beforeDir="false" afterPath="$PROJECT_DIR$/chat-service/src/consumers/userConsumer.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/chat-service/src/models/User.js" beforeDir="false" afterPath="$PROJECT_DIR$/chat-service/src/models/User.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/chat-service/src/services/userService.js" beforeDir="false" afterPath="$PROJECT_DIR$/chat-service/src/services/userService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/media-service/src/main/java/mediaservice/configs/RabbitMQConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/media-service/src/main/java/mediaservice/configs/RabbitMQConfig.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/media-service/src/main/java/mediaservice/dtos/events/UserCreatedEvent.java" beforeDir="false" afterPath="$PROJECT_DIR$/media-service/src/main/java/mediaservice/dtos/events/UserCreatedEvent.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/media-service/src/main/java/mediaservice/services/UserCreatedEventConsumer.java" beforeDir="false" afterPath="$PROJECT_DIR$/media-service/src/main/java/mediaservice/services/UserCreatedEventConsumer.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/media-service/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/media-service/src/main/resources/application.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/notification-service/target/classes/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/target/classes/application.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/event/UserCreatedEvent.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/event/UserCreatedEvent.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/event/UserUpdatedEvent.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/event/UserUpdatedEvent.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/request/UpdateProfileRequest.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/request/UpdateProfileRequest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/response/UserProfileResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/response/UserProfileResponse.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/entity/User.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/entity/User.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/mapper/UserMapper.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/mapper/UserMapper.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/AccountService.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/AccountService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/ProfileService.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/ProfileService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/UserPhotoService.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/UserPhotoService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/UserService.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/UserService.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -26,18 +37,21 @@
       <entry key="_D:/DaiHoc/CongNgheMoi/project/ott-backend/user-service" value="3AipVqDYLl1ic5BQzlH6DfNNW3t" />
     </persistenceIdMap>
   </component>
+  <component name="CopilotUserSelectedChatMode">
+    <option name="chatModeId" value="Agent" />
+  </component>
   <component name="CopilotUserSelectedModel">
     <selectedModels>
       <entry key="edit-panel" value="GPT-5 mini" />
-      <entry key="chat-panel" value="Claude Sonnet 4.5" />
-      <entry key="agent-panel" value="Claude Sonnet 4.5" />
+      <entry key="chat-panel" value="GPT-5.3-Codex" />
+      <entry key="agent-panel" value="GPT-5.3-Codex" />
     </selectedModels>
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
       <list>
-        <option value="Enum" />
         <option value="Interface" />
+        <option value="Enum" />
         <option value="Class" />
       </list>
     </option>
@@ -107,6 +121,9 @@
     &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
     &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
     &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;project.structure.last.edited&quot;: &quot;Modules&quot;,
+    &quot;project.structure.proportion&quot;: &quot;0.0&quot;,
+    &quot;project.structure.side.proportion&quot;: &quot;0.0&quot;,
     &quot;run.configurations.included.in.services&quot;: &quot;true&quot;,
     &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,
     &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;,
@@ -303,7 +320,22 @@
       <workItem from="1774685277956" duration="4424000" />
       <workItem from="1775281929075" duration="22864000" />
       <workItem from="1775332808378" duration="2258000" />
-      <workItem from="1775418131287" duration="18574000" />
+      <workItem from="1775418131287" duration="30950000" />
+      <workItem from="1775541924504" duration="44570000" />
+      <workItem from="1775634324753" duration="10048000" />
+      <workItem from="1775657019491" duration="6191000" />
+      <workItem from="1775745997120" duration="22417000" />
+      <workItem from="1775800627852" duration="3602000" />
+      <workItem from="1775889553381" duration="1602000" />
+      <workItem from="1776069402586" duration="867000" />
+      <workItem from="1776071269112" duration="639000" />
+      <workItem from="1776800349795" duration="2225000" />
+      <workItem from="1776962077439" duration="2064000" />
+      <workItem from="1777040898814" duration="100000" />
+      <workItem from="1777746323768" duration="3329000" />
+      <workItem from="1777965002833" duration="1648000" />
+      <workItem from="1777999745346" duration="76000" />
+      <workItem from="1778078000607" duration="15963000" />
     </task>
     <servers />
   </component>

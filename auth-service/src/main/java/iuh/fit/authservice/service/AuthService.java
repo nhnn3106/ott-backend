@@ -71,14 +71,26 @@ public class AuthService {
 
     @Transactional
     public AuthenticationResponse localLogin(LocalLoginRequest request) {
-        log.info("Local login attempt started for phone: {}", request.getPhone());
+        String identifier = request.getIdentifier();
+        log.info("Local login attempt started for identifier: {}", identifier);
 
-        if (!validationUtils.isValidPhone(request.getPhone())) {
-            log.warn("Invalid phone format: {}", request.getPhone());
-            throw new AppException(ErrorCode.INVALID_PHONE_FORMAT);
+
+        boolean isEmail = identifier != null && identifier.contains("@");
+        UserServiceClient.UserDto user;
+
+        if (isEmail) {
+            if (!validationUtils.isValidEmail(identifier)) {
+                log.warn("Invalid email format: {}", identifier);
+                throw new AppException(ErrorCode.INVALID_EMAIL_FORMAT);
+            }
+            user = userServiceClient.getUserByEmail(identifier);
+        } else {
+            if (!validationUtils.isValidPhone(identifier)) {
+                log.warn("Invalid phone format: {}", identifier);
+                throw new AppException(ErrorCode.INVALID_PHONE_FORMAT);
+            }
+            user = userServiceClient.getUserByPhone(identifier);
         }
-
-        UserServiceClient.UserDto user = userServiceClient.getUserByPhone(request.getPhone());
 
         String passwordHash = userServiceClient.getPasswordHash(user.getId());
         if (passwordHash == null) {
@@ -285,11 +297,18 @@ public class AuthService {
         String refreshToken = jwtService.generateRefreshToken();
 
         userSyncService.ensureUserExists(user);
-        sessionService.createUserSession(user.getId(), deviceId, deviceType, null,
-                ipAddress, deviceInfo, token, refreshToken, loginMethod);
+        userServiceClient.createSession(
+                user.getId(), deviceId, null,
+                ipAddress, deviceInfo,
+                token, refreshToken,
+                loginMethod.name(),
+                deviceType != null ? deviceType.name() : "UNKNOWN"
+        );
         logLoginHistory(user, ipAddress, deviceInfo, LoginStatus.SUCCESS, loginMethod, null);
         sendWelcomeEmailIfNeeded(user);
         userServiceClient.updateLastLogin(userId);
+        notificationPublisher.publishUserLoginEvent(userId, loginMethod.name().toLowerCase());
+
 
         return AuthenticationResponse.builder()
                 .token(token).refreshToken(refreshToken)
@@ -299,13 +318,23 @@ public class AuthService {
 
     @Transactional
     public OtpResponse request2FAOtp(Request2FAOtpRequest request) {
-        log.info("Request 2FA OTP for phone: {}", request.getPhone());
+        String identifier = request.getIdentifier();
+        log.info("Request 2FA OTP for identifier: {}", identifier);
 
-        if (!validationUtils.isValidPhone(request.getPhone())) {
-            throw new AppException(ErrorCode.INVALID_PHONE_FORMAT);
+        boolean isEmail = identifier != null && identifier.contains("@");
+        UserServiceClient.UserDto user;
+
+        if (isEmail) {
+            if (!validationUtils.isValidEmail(identifier)) {
+                throw new AppException(ErrorCode.INVALID_EMAIL_FORMAT);
+            }
+            user = userServiceClient.getUserByEmail(identifier);
+        } else {
+            if (!validationUtils.isValidPhone(identifier)) {
+                throw new AppException(ErrorCode.INVALID_PHONE_FORMAT);
+            }
+            user = userServiceClient.getUserByPhone(identifier);
         }
-
-        UserServiceClient.UserDto user = userServiceClient.getUserByPhone(request.getPhone());
 
         validateUserStatus(user, request.getIpAddress(), null);
 
@@ -541,6 +570,7 @@ public class AuthService {
         logLoginHistory(user, ipAddress, deviceInfo, LoginStatus.SUCCESS, loginMethod, null);
         sendWelcomeEmailIfNeeded(user);
         userServiceClient.updateLastLogin(user.getId());
+        notificationPublisher.publishUserLoginEvent(user.getId(), loginMethod.name().toLowerCase());
 
         return AuthenticationResponse.builder()
                 .token(token)

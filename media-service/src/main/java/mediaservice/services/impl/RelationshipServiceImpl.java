@@ -1,6 +1,7 @@
 package mediaservice.services.impl;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import mediaservice.dtos.requests.RelationshipRequest;
 import mediaservice.dtos.responses.RelationshipResponse;
 import mediaservice.mappers.RelationshipMapper;
@@ -8,6 +9,7 @@ import mediaservice.models.Relationship;
 import mediaservice.models.UserAccount;
 import mediaservice.models.enums.RelationshipStatusType;
 import mediaservice.models.enums.RelationshipType;
+import mediaservice.realtime.RelationshipRealtimePublisher;
 import mediaservice.repositories.RelationshipRepository;
 import mediaservice.repositories.UserAccountRepository;
 import mediaservice.services.RelationshipService;
@@ -20,6 +22,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class RelationshipServiceImpl implements RelationshipService {
@@ -27,6 +30,7 @@ public class RelationshipServiceImpl implements RelationshipService {
     private final RelationshipRepository relationshipRepository;
     private final RelationshipMapper relationshipMapper;
     private final UserAccountRepository userAccountRepository;
+    private final RelationshipRealtimePublisher relationshipRealtimePublisher;
 
     // ── CRUD cơ bản ────────────────────────────────────────────────────────
 
@@ -87,21 +91,27 @@ public class RelationshipServiceImpl implements RelationshipService {
         if (requesterId.equals(receiverId)) {
             throw new IllegalArgumentException("Không thể tự kết bạn với chính mình.");
         }
-        // Kiểm tra đã tồn tại chưa
+
         relationshipRepository.findBetweenUsers(requesterId, receiverId).ifPresent(r -> {
-            throw new IllegalStateException("Đã tồn tại quan hệ giữa hai người dùng này.");
+            if (r.getStatus() == RelationshipStatusType.ACCEPTED) {
+                throw new IllegalStateException("Đã tồn tại quan hệ giữa hai người dùng này.");
+            }
         });
 
         UserAccount requester = findUserOrThrow(requesterId);
-        UserAccount receiver  = findUserOrThrow(receiverId);
+        UserAccount receiver = findUserOrThrow(receiverId);
 
-        Relationship rel = new Relationship();
+        Relationship rel = relationshipRepository.findBetweenUsers(requesterId, receiverId)
+                .orElse(new Relationship());
+
         rel.setRequester(requester);
         rel.setReceiver(receiver);
         rel.setStatus(RelationshipStatusType.PENDING);
         rel.setType(RelationshipType.FRIEND);
 
-        return relationshipMapper.toResponse(relationshipRepository.save(rel));
+        Relationship saved = relationshipRepository.save(rel);
+        relationshipRealtimePublisher.publishAfterCommit("REQUEST_SENT", saved, requesterId);
+        return relationshipMapper.toResponse(saved);
     }
 
     @Override
@@ -113,7 +123,24 @@ public class RelationshipServiceImpl implements RelationshipService {
         }
         rel.setStatus(RelationshipStatusType.ACCEPTED);
         rel.setAcceptedAt(LocalDateTime.now());
-        return relationshipMapper.toResponse(relationshipRepository.save(rel));
+
+        Relationship saved = relationshipRepository.save(rel);
+        String actorId = rel.getReceiver() != null ? rel.getReceiver().getId() : null;
+        relationshipRealtimePublisher.publishAfterCommit("REQUEST_ACCEPTED", saved, actorId);
+        return relationshipMapper.toResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public RelationshipResponse blockRelationship(String relationshipId, String blockerId) {
+        Relationship rel = findOrThrow(relationshipId);
+        UserAccount blocker = findUserOrThrow(blockerId);
+        rel.setStatus(RelationshipStatusType.BLOCKED);
+        rel.setBlockedBy(blocker);
+
+        Relationship saved = relationshipRepository.save(rel);
+        relationshipRealtimePublisher.publishAfterCommit("BLOCKED", saved, blockerId);
+        return relationshipMapper.toResponse(saved);
     }
 
     @Override
@@ -123,6 +150,12 @@ public class RelationshipServiceImpl implements RelationshipService {
         if (rel.getStatus() != RelationshipStatusType.PENDING) {
             throw new IllegalStateException("Lời mời không ở trạng thái chờ.");
         }
+        String actorId = rel.getReceiver() != null ? rel.getReceiver().getId() : null;
+        
+        // Cập nhật status thành REMOVED trước khi gửi để các service khác biết đường mà xóa
+        rel.setStatus(RelationshipStatusType.REMOVED);
+        relationshipRealtimePublisher.publishAfterCommit("REQUEST_REJECTED", rel, actorId);
+        
         relationshipRepository.delete(rel);
     }
 
@@ -133,6 +166,12 @@ public class RelationshipServiceImpl implements RelationshipService {
         if (rel.getStatus() != RelationshipStatusType.PENDING) {
             throw new IllegalStateException("Chỉ có thể hủy lời mời đang ở trạng thái chờ.");
         }
+        String actorId = rel.getRequester() != null ? rel.getRequester().getId() : null;
+        
+        // Thống nhất dùng REQUEST_CANCELLED (2 chữ L)
+        rel.setStatus(RelationshipStatusType.REMOVED);
+        relationshipRealtimePublisher.publishAfterCommit("REQUEST_CANCELLED", rel, actorId);
+        
         relationshipRepository.delete(rel);
     }
 
@@ -143,6 +182,10 @@ public class RelationshipServiceImpl implements RelationshipService {
         if (rel.getStatus() != RelationshipStatusType.ACCEPTED) {
             throw new IllegalStateException("Hai người dùng này chưa là bạn bè.");
         }
+        
+        rel.setStatus(RelationshipStatusType.REMOVED);
+        relationshipRealtimePublisher.publishAfterCommit("UNFRIENDED", rel, null);
+        
         relationshipRepository.delete(rel);
     }
 
@@ -186,7 +229,43 @@ public class RelationshipServiceImpl implements RelationshipService {
                 .orElseThrow(() -> new RuntimeException("User not found with id: " + userId));
     }
 
-    /** Dùng cho createRelationship CRUD thông thường (request có requesterId/receiverId). */
+    @Override
+    @Transactional
+    public void syncRelationshipFromEvent(String requesterId, String receiverId, String status, String type) {
+        log.info("[RelationshipSync] Syncing relationship: {} -> {} status={} type={}", requesterId, receiverId, status, type);
+        
+        Optional<Relationship> existing = relationshipRepository.findBetweenUsers(requesterId, receiverId);
+        
+        if (status.equals("REMOVED")) {
+            existing.ifPresent(rel -> {
+                relationshipRepository.delete(rel);
+                // Phát Socket.IO để UI cập nhật ngay lập tức
+                relationshipRealtimePublisher.publishToSocketOnly(type, rel, null);
+            });
+            return;
+        }
+
+        Relationship rel = existing.orElse(new Relationship());
+        
+        UserAccount requester = userAccountRepository.findById(requesterId).orElse(null);
+        UserAccount receiver = userAccountRepository.findById(receiverId).orElse(null);
+        
+        if (requester == null || receiver == null) {
+            log.warn("[RelationshipSync] Missing users for sync: requester={}, receiver={}", requesterId, receiverId);
+            return;
+        }
+
+        rel.setRequester(requester);
+        rel.setReceiver(receiver);
+        rel.setStatus(RelationshipStatusType.valueOf(status));
+        rel.setType(RelationshipType.FRIEND);
+        
+        Relationship saved = relationshipRepository.save(rel);
+        
+        // Phát Socket.IO với đúng type (ví dụ: REQUEST_ACCEPTED) để Frontend xử lý switch-case
+        relationshipRealtimePublisher.publishToSocketOnly(type, saved, null);
+    }
+
     private Relationship buildRelationshipFromRequest(RelationshipRequest request) {
         Relationship rel = new Relationship();
         rel.setRequester(findUserOrThrow(request.getRequesterId()));
@@ -196,4 +275,3 @@ public class RelationshipServiceImpl implements RelationshipService {
         return rel;
     }
 }
-

@@ -4,13 +4,31 @@ const Conversation = require("../models/Conversation");
 const User = require("../models/User");
 const ConversationService = require("./conversationService");
 const messageCacheService = require("./messageCacheService");
-const { PutObjectCommand } = require("@aws-sdk/client-s3");
+const {
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
+  CopyObjectCommand,
+} = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const { s3Client, bucketName } = require("../config/s3");
+const { publishMessageSentEvent } = require("./analyticsPublisher");
 
+const fs = require("fs/promises");
+const path = require("path");
+const os = require("os");
+const { spawn } = require("child_process");
+const { pipeline } = require("stream/promises");
 const crypto = require("crypto");
 
 const REVOKED_PLACEHOLDER = "Tin nhắn đã được thu hồi";
+
+const sanitizeAvatarValue = (value) => {
+  const avatar = String(value || "").trim();
+  if (!avatar) return "";
+  if (/^data:image\//i.test(avatar)) return "";
+  return avatar;
+};
 
 const getFileNameFromKey = (key) => {
   const rawName =
@@ -19,6 +37,154 @@ const getFileNameFromKey = (key) => {
       .pop() || "File";
   const match = rawName.match(/^[a-f0-9]+_(.+)$/i);
   return match ? match[1] : rawName;
+};
+
+const getFileExtension = (value) => {
+  const fileName = getFileNameFromKey(value);
+  const match = fileName.match(/\.([a-z0-9]+)$/i);
+  return match ? match[1].toLowerCase() : "";
+};
+
+const isWebVoiceAudioKey = (key) => {
+  const extension = getFileExtension(key);
+  return ["webm", "ogg", "opus"].includes(extension);
+};
+
+const replaceKeyExtension = (key, extension) => {
+  const normalizedKey = String(key || "");
+  if (!normalizedKey) return normalizedKey;
+
+  return normalizedKey.replace(/\.[^.\/]+$/i, `.${extension}`);
+};
+
+const runFfmpegTranscode = (inputPath, outputPath) => {
+  const ffmpegPath = process.env.FFMPEG_PATH || "ffmpeg";
+
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      ffmpegPath,
+      ["-y", "-i", inputPath, "-vn", "-c:a", "aac", "-b:a", "128k", outputPath],
+      { stdio: ["ignore", "ignore", "pipe"] },
+    );
+
+    let stderr = "";
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+
+      reject(new Error(stderr || `ffmpeg exited with code ${code}`));
+    });
+  });
+};
+
+const ensureDirectory = async (directoryPath) => {
+  await fs.mkdir(directoryPath, { recursive: true });
+  return directoryPath;
+};
+
+const downloadS3ObjectToFile = async (key, filePath) => {
+  const response = await s3Client.send(
+    new GetObjectCommand({ Bucket: bucketName, Key: key }),
+  );
+
+  if (!response?.Body) {
+    throw new Error("Không thể tải tệp từ S3");
+  }
+
+  await pipeline(response.Body, require("fs").createWriteStream(filePath));
+};
+
+const uploadFileToS3 = async (key, filePath, contentType) => {
+  const fileBuffer = await fs.readFile(filePath);
+
+  await s3Client.send(
+    new PutObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+      Body: fileBuffer,
+      ContentType: contentType,
+    }),
+  );
+};
+
+const copyS3Object = async (sourceKey) => {
+  if (!sourceKey) return sourceKey;
+
+  const rawName = sourceKey.split('/').pop() || 'File';
+  const match = rawName.match(/^[a-f0-9]+_(.+)$/i);
+  const originalFileName = match ? match[1] : rawName;
+  const uniqueId = crypto.randomBytes(8).toString('hex');
+  const pathParts = sourceKey.split('/');
+  pathParts.pop(); // Remove the old file name
+  const basePath = pathParts.join('/');
+  
+  const newKey = basePath ? `${basePath}/${uniqueId}_${originalFileName}` : `${uniqueId}_${originalFileName}`;
+
+  await s3Client.send(
+    new CopyObjectCommand({
+      Bucket: bucketName,
+      CopySource: `${bucketName}/${sourceKey}`,
+      Key: newKey,
+    })
+  );
+
+  return newKey;
+};
+
+const maybeTranscodeVoiceKey = async (key) => {
+  if (!key || !isWebVoiceAudioKey(key)) {
+    return key;
+  }
+
+  const tempRoot = await ensureDirectory(
+    path.join(os.tmpdir(), "ott-voice-transcode"),
+  );
+  const requestId = crypto.randomBytes(8).toString("hex");
+  const inputPath = path.join(
+    tempRoot,
+    `${requestId}-input.${getFileExtension(key) || "webm"}`,
+  );
+  const outputPath = path.join(tempRoot, `${requestId}-output.m4a`);
+  const outputKey = replaceKeyExtension(key, "m4a");
+
+  try {
+    await downloadS3ObjectToFile(key, inputPath);
+    await runFfmpegTranscode(inputPath, outputPath);
+    await uploadFileToS3(outputKey, outputPath, "audio/mp4");
+    await s3Client.send(
+      new DeleteObjectCommand({ Bucket: bucketName, Key: key }),
+    );
+    return outputKey;
+  } catch (error) {
+    console.warn(
+      "Voice transcode skipped or failed, keeping original file:",
+      error.message,
+    );
+    return key;
+  } finally {
+    await Promise.allSettled([fs.unlink(inputPath), fs.unlink(outputPath)]);
+  }
+};
+
+const enrichMessageWithSender = async (message) => {
+  const sender = await User.findOne({ user_id: message.sender_id })
+    .select("name avatar")
+    .lean();
+
+  return {
+    ...message,
+    sender_name: sender?.name || message.sender_name || "",
+    sender_avatar: sanitizeAvatarValue(
+      sender?.avatar || message.sender_avatar || "",
+    ),
+  };
 };
 
 const isVisibleToUser = (message, userId) => {
@@ -87,6 +253,7 @@ const buildReplyPreview = (message, senderName = "") => {
     media_count: message.type === "image" ? mediaUrls.length : undefined,
     is_deleted: !!message.is_deleted,
     is_revoked: !!message.is_revoked,
+    poll_question: message.type === "poll" ? message.poll_question : undefined,
   };
 };
 
@@ -148,8 +315,12 @@ exports.generatePresignedUrl = async (fileName, fileType) => {
   });
 
   const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 300 });
+  const fileUrl = `https://${bucketName}.s3.${process.env.AWS_REGION || "ap-southeast-1"}.amazonaws.com/${key}`;
 
-  return { uploadUrl, fileCategory, key };
+  console.log("Generated Presigned URL for:", fileName);
+  console.log("Final response object:", { uploadUrl: "...", fileCategory, key, fileUrl });
+
+  return { uploadUrl, fileCategory, key, fileUrl };
 };
 
 exports.sendMessage = async ({
@@ -159,9 +330,19 @@ exports.sendMessage = async ({
   type,
   size,
   replyToMsgId,
+  pollQuestion,
+  pollMultipleChoice,
+  pollOptions,
 }) => {
   // Nếu content đã là array (image keys) thì dùng trực tiếp, không thì wrap
   const contentArray = Array.isArray(content) ? content : [content];
+  const normalizedContent = [...contentArray];
+
+  if (type === "audio" && normalizedContent.length > 0) {
+    normalizedContent[0] = await maybeTranscodeVoiceKey(
+      String(normalizedContent[0] || ""),
+    );
+  }
 
   let replyMessage = null;
   let replySender = null;
@@ -180,13 +361,33 @@ exports.sendMessage = async ({
       .lean();
   }
 
+  const participant = await Participant.findOne({
+    conversation_id: conversationId,
+    user_id: senderId,
+  }).lean();
+
+  if (!participant) {
+    throw new Error("Bạn không thuộc cuộc hội thoại này");
+  }
+
+  if (participant?.settings?.removed_from_group_at) {
+    throw new Error("Bạn đã bị đuổi khỏi nhóm");
+  }
+
+  if (participant?.settings?.group_dissolved_at) {
+    throw new Error("Nhóm đã được giải tán");
+  }
+
   const newMessage = new Message({
     conversation_id: conversationId,
     sender_id: senderId,
-    content: contentArray,
+    content: normalizedContent,
     type: type,
     size: size,
     reply_to_msg_id: replyToMsgId || null,
+    poll_question: pollQuestion || null,
+    poll_multiple_choice: pollMultipleChoice || false,
+    poll_options: pollOptions || [],
   });
 
   const savedMessage = await newMessage.save();
@@ -195,19 +396,107 @@ exports.sendMessage = async ({
     savedMessage,
   );
 
-  // Add message to Redis cache (last 20 messages)
-  await messageCacheService.addMessage(conversationId, {
-    ...savedMessage.toObject(),
-    sender_name: updatedConversation?.last_message?.sender_name || "",
-    reply_to: buildReplyPreview(replyMessage, replySender?.name || ""),
-  });
+  try {
+    await publishMessageSentEvent({
+      messageId: savedMessage.msg_id,
+      userId: senderId,
+      messageType: type,
+    });
+  } catch (error) {
+    // Do not block chat delivery when analytics pipeline is unavailable
+    console.warn(
+      "[analytics] publish message.sent failed:",
+      error?.message || error,
+    );
+  }
 
-  // Gửi kèm sender_name để FE cập nhật conversation list mà không cần query thêm
-  return {
+  // Add message to Redis cache (last 20 messages)
+  const sender = await User.findOne({ user_id: senderId })
+    .select("name avatar")
+    .lean();
+  const enrichedMessage = {
     ...savedMessage.toObject(),
-    sender_name: updatedConversation?.last_message?.sender_name || "",
+    sender_name:
+      sender?.name || updatedConversation?.last_message?.sender_name || "",
+    sender_avatar: sanitizeAvatarValue(sender?.avatar || ""),
     reply_to: buildReplyPreview(replyMessage, replySender?.name || ""),
   };
+
+  await messageCacheService.addMessage(conversationId, enrichedMessage);
+
+  // Gửi kèm sender_name để FE cập nhật conversation list mà không cần query thêm
+  return enrichedMessage;
+};
+
+exports.forwardMessage = async ({
+  originalMsgId,
+  conversationId,
+  targetConversationIds,
+  senderId,
+}) => {
+  const originalMessage = await Message.findOne({
+    msg_id: originalMsgId,
+    conversation_id: conversationId,
+  }).lean();
+
+  if (!originalMessage) {
+    throw new Error("Tin nhắn gốc không tồn tại");
+  }
+
+  if (originalMessage.is_deleted || originalMessage.is_revoked) {
+    throw new Error("Không thể chuyển tiếp tin nhắn đã bị xóa hoặc thu hồi");
+  }
+
+  const { type, content, size } = originalMessage;
+  
+  if (!["text", "link", "image", "video", "file", "audio"].includes(type)) {
+    throw new Error("Loại tin nhắn này chưa hỗ trợ chuyển tiếp");
+  }
+
+  // Tiền xử lý nội dung để tạo bản sao độc lập nếu là file
+  const originalContentArray = Array.isArray(content) ? content : [content];
+  let forwardedContent = [...originalContentArray];
+
+  // Nếu là file/media, cần copy S3 object để tin chuyển tiếp không phụ thuộc tin gốc
+  if (["image", "video", "file", "audio"].includes(type)) {
+    try {
+      forwardedContent = await Promise.all(
+        originalContentArray.map(async (key) => {
+          if (!key) return key;
+          // Loại trừ trường hợp url bên ngoài hoặc dữ liệu dạng base64/không phải key s3
+          if (/^(https?:\/\/|www\.|data:)/i.test(key)) {
+             return key;
+          }
+          return await copyS3Object(key);
+        })
+      );
+    } catch (err) {
+      console.error("Lỗi khi copy S3 object cho chuyển tiếp:", err);
+      // Fallback: nếu lỗi copy, xài lại key gốc (dù đây là behavior cũ không mong muốn, nhưng giúp app ko crash)
+      forwardedContent = [...originalContentArray];
+    }
+  }
+
+  const results = [];
+  
+  // Gửi tin nhắn đến từng conversation đích
+  for (const targetConversationId of targetConversationIds) {
+    try {
+      const savedMessage = await exports.sendMessage({
+        conversationId: targetConversationId,
+        senderId,
+        content: forwardedContent,
+        type,
+        size: size || 0,
+        replyToMsgId: null, // Tin chuyển tiếp không giữ reply context
+      });
+      results.push(savedMessage);
+    } catch (error) {
+      console.error(`Lỗi chuyển tiếp tin nhằn đến nhóm ${targetConversationId}:`, error);
+    }
+  }
+  
+  return results;
 };
 
 exports.getMessageHistory = async (
@@ -215,6 +504,18 @@ exports.getMessageHistory = async (
   deletedMsgId = "0",
   userId,
 ) => {
+  // If user is invited but not yet joined, they shouldn't see messages
+  if (userId) {
+    const participant = await Participant.findOne({
+      conversation_id: conversationId,
+      user_id: userId,
+    }).lean();
+    
+    if (participant && participant.status === "invited") {
+      return []; // Return empty history for invited users
+    }
+  }
+
   const messages = await Message.find({ conversation_id: conversationId }).sort(
     {
       msg_id: 1,
@@ -236,8 +537,30 @@ exports.getMessageHistory = async (
     ),
   ];
 
+  const senderIds = [
+    ...new Set(
+      filteredMessages.map((m) => String(m.sender_id || "")).filter(Boolean),
+    ),
+  ];
+  const senders = senderIds.length
+    ? await User.find({ user_id: { $in: senderIds } })
+        .select("user_id name avatar")
+        .lean()
+    : [];
+  const senderMap = new Map(
+    senders.map((sender) => [String(sender.user_id || ""), sender]),
+  );
+
   if (replyIds.length === 0) {
-    return filteredMessages.map((m) => ({ ...m.toObject(), reply_to: null }));
+    return filteredMessages.map((m) => {
+      const sender = senderMap.get(String(m.sender_id || ""));
+      return {
+        ...m.toObject(),
+        sender_name: sender?.name || "",
+        sender_avatar: sanitizeAvatarValue(sender?.avatar || ""),
+        reply_to: null,
+      };
+    });
   }
 
   const referencedMessages = await Message.find({
@@ -267,6 +590,10 @@ exports.getMessageHistory = async (
 
   return filteredMessages.map((m) => ({
     ...m.toObject(),
+    sender_name: senderMap.get(String(m.sender_id || ""))?.name || "",
+    sender_avatar: sanitizeAvatarValue(
+      senderMap.get(String(m.sender_id || ""))?.avatar || "",
+    ),
     reply_to: referencedMap.get(m.reply_to_msg_id) || null,
   }));
 };
@@ -287,7 +614,7 @@ exports.revokeMessage = async ({ conversationId, msgId, userId }) => {
 
   if (message.is_revoked) {
     const sender = await User.findOne({ user_id: message.sender_id })
-      .select("name")
+      .select("name avatar")
       .lean();
 
     return {
@@ -296,6 +623,7 @@ exports.revokeMessage = async ({ conversationId, msgId, userId }) => {
       conversation_id: message.conversation_id,
       sender_id: message.sender_id,
       sender_name: sender?.name || "",
+      sender_avatar: sanitizeAvatarValue(sender?.avatar || ""),
       type: message.type,
       content: message.content,
       is_revoked: true,
@@ -307,6 +635,23 @@ exports.revokeMessage = async ({ conversationId, msgId, userId }) => {
     };
   }
 
+  const wasPinned = Boolean(message.is_pinned);
+
+  const oldContent = message.content || [];
+  const msgType = message.type;
+
+  if (['image', 'video', 'audio', 'file'].includes(msgType)) {
+    const keysToDelete = Array.isArray(oldContent) ? oldContent : [oldContent];
+    for (const key of keysToDelete) {
+      if (!key || /^(https?:\/\/|www\.|data:)/i.test(key)) continue;
+      try {
+        await s3Client.send(new DeleteObjectCommand({ Bucket: bucketName, Key: key }));
+      } catch(err) {
+        console.error("Lỗi xóa file S3 khi thu hồi:", err);
+      }
+    }
+  }
+
   message.is_revoked = true;
   message.content = [REVOKED_PLACEHOLDER];
   message.reactions = [];
@@ -316,16 +661,44 @@ exports.revokeMessage = async ({ conversationId, msgId, userId }) => {
 
   const revokedMessage = await message.save();
   const sender = await User.findOne({ user_id: revokedMessage.sender_id })
-    .select("name")
+    .select("name avatar")
     .lean();
   const updatedLastMessage = await syncConversationLastMessageOnRevoke(
     conversationId,
     revokedMessage,
   );
 
+  let systemMessage = null;
+  if (wasPinned) {
+    const actorName = sender?.name || "Một thành viên";
+    const systemDoc = new Message({
+      conversation_id: conversationId,
+      sender_id: userId,
+      type: "system_unpin",
+      content: [`${actorName} đã gỡ ghim một tin nhắn`],
+      size: 0,
+    });
+
+    const savedSystemMessage = await systemDoc.save();
+    await ConversationService.updateLastMessage(
+      conversationId,
+      savedSystemMessage,
+    );
+    await messageCacheService.addMessage(conversationId, {
+      ...savedSystemMessage.toObject(),
+      sender_name: actorName,
+    });
+
+    systemMessage = {
+      ...savedSystemMessage.toObject(),
+      sender_name: actorName,
+    };
+  }
+
   await messageCacheService.updateMessage(conversationId, msgId, {
     ...revokedMessage.toObject(),
     sender_name: sender?.name || "",
+    sender_avatar: sanitizeAvatarValue(sender?.avatar || ""),
   });
 
   return {
@@ -334,6 +707,7 @@ exports.revokeMessage = async ({ conversationId, msgId, userId }) => {
     conversation_id: revokedMessage.conversation_id,
     sender_id: revokedMessage.sender_id,
     sender_name: sender?.name || "",
+    sender_avatar: sanitizeAvatarValue(sender?.avatar || ""),
     type: revokedMessage.type,
     content: revokedMessage.content,
     is_revoked: true,
@@ -343,6 +717,7 @@ exports.revokeMessage = async ({ conversationId, msgId, userId }) => {
     createdAt: revokedMessage.createdAt,
     updatedAt: revokedMessage.updatedAt,
     last_message: updatedLastMessage,
+    systemMessage,
   };
 };
 
@@ -408,16 +783,30 @@ exports.reactToMessage = async ({
     throw new Error("Reaction không hợp lệ");
   }
 
-  const existingReactionIndex = message.reactions.findIndex(
-    (reaction) =>
-      reaction.user_id === userId && reaction.type === normalizedReaction,
-  );
+  if (!Array.isArray(message.reactions)) {
+    message.reactions = [];
+  }
 
-  if (existingReactionIndex >= 0) {
-    // Bấm lại cùng emoji thì bỏ reaction đó.
-    message.reactions.splice(existingReactionIndex, 1);
+  const currentReactionIndex = message.reactions.findIndex(
+    (reaction) => reaction.user_id === userId,
+  );
+  const currentReaction =
+    currentReactionIndex >= 0 ? message.reactions[currentReactionIndex] : null;
+
+  if (currentReactionIndex >= 0) {
+    const currentReactionType = String(currentReaction?.type || "");
+
+    if (currentReactionType === normalizedReaction) {
+      // Bấm lại cùng emoji thì bỏ reaction đó.
+      message.reactions.splice(currentReactionIndex, 1);
+    } else {
+      // Mỗi user chỉ giữ 1 reaction, đổi sang emoji mới.
+      message.reactions[currentReactionIndex] = {
+        user_id: userId,
+        type: normalizedReaction,
+      };
+    }
   } else {
-    // Cho phép 1 user có nhiều emoji reaction trên cùng 1 tin nhắn.
     message.reactions.push({
       user_id: userId,
       type: normalizedReaction,
@@ -426,11 +815,26 @@ exports.reactToMessage = async ({
 
   const updatedMessage = await message.save();
 
+  const sender = await User.findOne({ user_id: updatedMessage.sender_id })
+    .select("name avatar")
+    .lean();
+  const cachedMessage = {
+    ...updatedMessage.toObject(),
+    sender_name: sender?.name || updatedMessage.sender_name || "",
+    sender_avatar: sanitizeAvatarValue(
+      sender?.avatar || updatedMessage.sender_avatar || "",
+    ),
+  };
+
+  await messageCacheService.updateMessage(conversationId, msgId, cachedMessage);
+
   return {
     _id: updatedMessage._id,
     msg_id: updatedMessage.msg_id,
     conversation_id: updatedMessage.conversation_id,
     reactions: updatedMessage.reactions,
+    sender_name: cachedMessage.sender_name,
+    sender_avatar: cachedMessage.sender_avatar,
   };
 };
 
@@ -460,13 +864,58 @@ exports.pinMessage = async ({ conversationId, msgId, userId, isPinned }) => {
     }
   }
 
+  const wasPinned = Boolean(message.is_pinned);
+
   message.is_pinned = isPinned;
   message.pinned_at = isPinned ? new Date() : null;
   message.pinned_by = isPinned ? userId : null;
 
   const updatedMessage = await message.save();
 
-  return {
+  let systemMessage = null;
+  if (wasPinned !== Boolean(isPinned)) {
+    const actor = await User.findOne({ user_id: userId }).select("name").lean();
+    const actorName = actor?.name || "Một thành viên";
+    const systemType = isPinned ? "system_pin" : "system_unpin";
+    const systemContent = [
+      isPinned
+        ? `${actorName} đã ghim một tin nhắn`
+        : `${actorName} đã gỡ ghim một tin nhắn`,
+    ];
+
+    const systemDoc = new Message({
+      conversation_id: conversationId,
+      sender_id: userId,
+      type: systemType,
+      content: systemContent,
+      size: 0,
+    });
+
+    const savedSystemMessage = await systemDoc.save();
+    await ConversationService.updateLastMessage(
+      conversationId,
+      savedSystemMessage,
+    );
+    await messageCacheService.addMessage(conversationId, {
+      ...savedSystemMessage.toObject(),
+      sender_name: actorName,
+    });
+
+    systemMessage = {
+      ...savedSystemMessage.toObject(),
+      sender_name: actorName,
+    };
+  }
+
+  const updatedSender = await User.findOne({
+    user_id: updatedMessage.sender_id,
+  })
+    .select("name avatar")
+    .lean();
+  const senderName = updatedSender?.name || "";
+  const senderAvatar = sanitizeAvatarValue(updatedSender?.avatar || "");
+
+  const flatUpdatedMessage = {
     _id: updatedMessage._id,
     msg_id: updatedMessage.msg_id,
     conversation_id: updatedMessage.conversation_id,
@@ -476,12 +925,20 @@ exports.pinMessage = async ({ conversationId, msgId, userId, isPinned }) => {
     type: updatedMessage.type,
     content: updatedMessage.content,
     sender_id: updatedMessage.sender_id,
+    sender_name: senderName,
+    sender_avatar: senderAvatar,
     createdAt: updatedMessage.createdAt,
+  };
+
+  return {
+    ...flatUpdatedMessage,
+    updatedMessage: flatUpdatedMessage,
+    systemMessage,
   };
 };
 
 // Get pinned messages for a conversation
-exports.getPinnedMessages = async (conversationId) => {
+exports.getPinnedMessages = async (conversationId, userId) => {
   const messages = await Message.find({
     conversation_id: conversationId,
     is_pinned: true,
@@ -490,23 +947,32 @@ exports.getPinnedMessages = async (conversationId) => {
     .limit(3)
     .lean();
 
+  const visibleMessages = (Array.isArray(messages) ? messages : []).filter(
+    (message) => !message.is_deleted,
+  );
+
   const senderIds = [
-    ...new Set(messages.map((message) => String(message.sender_id || ""))),
+    ...new Set(
+      visibleMessages.map((message) => String(message.sender_id || "")),
+    ),
   ].filter(Boolean);
 
   const senders = senderIds.length
     ? await User.find({ user_id: { $in: senderIds } })
-        .select("user_id name")
+        .select("user_id name avatar")
         .lean()
     : [];
 
   const senderNameMap = new Map(
-    senders.map((sender) => [String(sender.user_id || ""), sender.name || ""]),
+    senders.map((sender) => [String(sender.user_id || ""), sender]),
   );
 
-  return messages.map((message) => ({
+  return visibleMessages.map((message) => ({
     ...message,
-    sender_name: senderNameMap.get(String(message.sender_id || "")) || "",
+    sender_name: senderNameMap.get(String(message.sender_id || ""))?.name || "",
+    sender_avatar: sanitizeAvatarValue(
+      senderNameMap.get(String(message.sender_id || ""))?.avatar || "",
+    ),
   }));
 };
 
@@ -606,7 +1072,7 @@ exports.getMediaGallery = async (conversationId, limit = 20, skip = 0) => {
 
   const senderList = senderIds.size
     ? await User.find({ user_id: { $in: Array.from(senderIds) } })
-        .select("user_id name")
+        .select("user_id name avatar")
         .lean()
     : [];
   const senderNameMap = new Map(
@@ -621,6 +1087,12 @@ exports.getMediaGallery = async (conversationId, limit = 20, skip = 0) => {
     .map((item) => ({
       ...item,
       sender_name: senderNameMap.get(String(item.sender_id || "")) || "",
+      sender_avatar: sanitizeAvatarValue(
+        senderList.find(
+          (sender) =>
+            String(sender.user_id || "") === String(item.sender_id || ""),
+        )?.avatar || "",
+      ),
     }));
 
   const hasMore = mediaPool.length > safeSkip + safeLimit;
@@ -704,12 +1176,12 @@ exports.getFileMessages = async (conversationId, limit = 20, skip = 0) => {
 
 // Extract and get links from messages
 exports.getLinkMessages = async (conversationId, limit = 20, skip = 0) => {
-  // URL regex pattern
-  const urlPattern = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
+  const urlPatternGlobal = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
+  const urlPatternTest = /https?:\/\/[^\s<>"{}|\\^`[\]]+/i;
 
   const messages = await Message.find({
     conversation_id: conversationId,
-    type: "text",
+    type: { $in: ["text", "link"] },
     is_deleted: false,
     is_revoked: false,
   }).sort({ createdAt: -1 });
@@ -719,7 +1191,7 @@ exports.getLinkMessages = async (conversationId, limit = 20, skip = 0) => {
     const content = Array.isArray(msg.content)
       ? msg.content.join(" ")
       : msg.content;
-    return urlPattern.test(content);
+    return urlPatternTest.test(String(content || ""));
   });
 
   // Extract links from messages
@@ -727,7 +1199,7 @@ exports.getLinkMessages = async (conversationId, limit = 20, skip = 0) => {
     const content = Array.isArray(msg.content)
       ? msg.content.join(" ")
       : msg.content;
-    const links = content.match(urlPattern) || [];
+    const links = String(content || "").match(urlPatternGlobal) || [];
 
     return {
       _id: msg._id,
@@ -940,7 +1412,7 @@ exports.searchEverything = async ({
       conversation_id: String(msg.conversation_id),
       sender_id: msg.sender_id,
       sender_name: sender?.name || msg.sender_id,
-      sender_avatar: sender?.avatar || "",
+      sender_avatar: sanitizeAvatarValue(sender?.avatar || ""),
       type: msg.type,
       preview: getMessagePreview(msg),
       createdAt: msg.createdAt,
@@ -1002,5 +1474,102 @@ exports.searchEverything = async ({
       messages.length +
       files.length +
       media.length,
+  };
+};
+
+// Vote for a poll
+exports.votePoll = async ({ conversationId, msgId, userId, optionIds }) => {
+  const message = await Message.findOne({
+    msg_id: msgId,
+    conversation_id: conversationId,
+  });
+
+  if (!message) {
+    throw new Error("Tin nhắn không tồn tại");
+  }
+
+  if (message.type !== "poll") {
+    throw new Error("Tin nhắn không phải là khảo sát");
+  }
+
+  if (message.is_deleted || message.is_revoked) {
+    throw new Error("Khảo sát đã bị xóa hoặc thu hồi");
+  }
+
+  const voter = await User.findOne({ user_id: userId }).select("name").lean();
+  const voterName = voter?.name || "Một thành viên";
+
+  // Check if they were already in any option
+  const wasVoted = message.poll_options.some((opt) =>
+    opt.voters.some((v) => String(v) === String(userId))
+  );
+
+  // Remove user from all options first
+  message.poll_options.forEach((opt) => {
+    opt.voters = opt.voters.filter((voterId) => String(voterId) !== String(userId));
+  });
+
+  // Then add user to selected options
+  const selectedOptionNames = [];
+  if (Array.isArray(optionIds) && optionIds.length > 0) {
+    if (!message.poll_multiple_choice && optionIds.length > 1) {
+      throw new Error("Khảo sát này chỉ cho phép chọn 1 đáp án");
+    }
+
+    message.poll_options.forEach((opt) => {
+      if (optionIds.includes(String(opt.id))) {
+        opt.voters.push(userId);
+        selectedOptionNames.push(opt.name);
+      }
+    });
+  }
+
+  const updatedMessage = await message.save();
+
+  // Create system notification
+  let systemMessage = null;
+  if (selectedOptionNames.length > 0) {
+    const actionText = wasVoted 
+      ? `${voterName} đã thay đổi bình chọn` 
+      : `${voterName} đã bình chọn cho "${selectedOptionNames.join(", ")}"`;
+
+    const systemDoc = new Message({
+      conversation_id: conversationId,
+      sender_id: userId,
+      type: "system_poll",
+      content: [actionText],
+      size: 0,
+    });
+
+    const savedSystemMessage = await systemDoc.save();
+    
+    // Enrich system message for broadcast
+    systemMessage = {
+      ...savedSystemMessage.toObject(),
+      sender_name: voterName,
+    };
+
+    // Update conversation last message and cache
+    await ConversationService.updateLastMessage(conversationId, savedSystemMessage);
+    await messageCacheService.addMessage(conversationId, systemMessage);
+  }
+
+  const sender = await User.findOne({ user_id: updatedMessage.sender_id })
+    .select("name avatar")
+    .lean();
+  
+  const cachedMessage = {
+    ...updatedMessage.toObject(),
+    sender_name: sender?.name || updatedMessage.sender_name || "",
+    sender_avatar: sanitizeAvatarValue(
+      sender?.avatar || updatedMessage.sender_avatar || "",
+    ),
+  };
+
+  await messageCacheService.updateMessage(conversationId, msgId, cachedMessage);
+
+  return {
+    ...cachedMessage,
+    systemMessage,
   };
 };

@@ -22,13 +22,14 @@ import java.util.Set;
 @DiscriminatorColumn(name = "type", discriminatorType = DiscriminatorType.STRING)
 public abstract class Account {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
+//    @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
 
     private String username;
     private String displayName;
 
     private String email;
+    private String phoneNumber;
 
     private String avatarUrl;
     private String coverUrl;
