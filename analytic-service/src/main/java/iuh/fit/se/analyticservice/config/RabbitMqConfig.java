@@ -7,6 +7,7 @@ import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.QueueBuilder;
+import org.springframework.amqp.core.TopicExchange;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -18,12 +19,21 @@ public class RabbitMqConfig {
     public static final String USER_REGISTERED_QUEUE = "analytics.user.registered.queue";
     public static final String MESSAGE_SENT_QUEUE = "analytics.message.sent.queue";
     public static final String POST_CREATED_QUEUE = "analytics.post.created.queue";
+    public static final String USER_EVENTS_EXCHANGE = "user.events";
+    public static final String USER_ROUTING_KEY_PATTERN = "user.#";
+    public static final String USER_LOGIN_ROUTING_KEY = "user.login";
+    public static final String USER_REGISTERED_ROUTING_KEY = "user.registered";
     public static final String ANALYTICS_DLX = "analytics.dlx";
 
     public static final String USER_LOGIN_DLQ = "analytics.user.login.dlq";
     public static final String USER_REGISTERED_DLQ = "analytics.user.registered.dlq";
     public static final String MESSAGE_SENT_DLQ = "analytics.message.sent.dlq";
     public static final String POST_CREATED_DLQ = "analytics.post.created.dlq";
+
+    @Bean
+    public TopicExchange userEventsExchange() {
+        return new TopicExchange(USER_EVENTS_EXCHANGE, true, false);
+    }
 
     @Bean
     public Queue userLoginQueue() {
@@ -37,6 +47,16 @@ public class RabbitMqConfig {
         return QueueBuilder.durable(USER_REGISTERED_QUEUE)
                 .withArguments(dlqArguments(USER_REGISTERED_DLQ))
                 .build();
+    }
+
+    @Bean
+    public Binding userLoginBinding(@Qualifier("userLoginQueue") Queue userLoginQueue, TopicExchange userEventsExchange) {
+        return BindingBuilder.bind(userLoginQueue).to(userEventsExchange).with(USER_LOGIN_ROUTING_KEY);
+    }
+
+    @Bean
+    public Binding userRegisteredBinding(@Qualifier("userRegisteredQueue") Queue userRegisteredQueue, TopicExchange userEventsExchange) {
+        return BindingBuilder.bind(userRegisteredQueue).to(userEventsExchange).with(USER_REGISTERED_ROUTING_KEY);
     }
 
     @Bean
