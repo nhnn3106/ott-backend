@@ -358,7 +358,7 @@ io.on("connection", (socket) => {
 
       let livekitToken = null;
       if (isGroup) {
-        livekitToken = livekitService.generateToken(conversationId, callerId);
+        livekitToken = await livekitService.generateToken(conversationId, callerId);
       }
 
       io.to(`call:${conversationId}`).emit("nguoi_dung_tham_gia_goi", {
@@ -446,7 +446,7 @@ io.on("connection", (socket) => {
       const isGroup = conversation && conversation.type === "group";
       let livekitToken = null;
       if (isGroup) {
-        livekitToken = livekitService.generateToken(conversationId, userId);
+        livekitToken = await livekitService.generateToken(conversationId, userId);
       }
 
       io.to(`call:${conversationId}`).emit("nguoi_dung_tham_gia_goi", {
