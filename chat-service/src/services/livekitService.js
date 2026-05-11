@@ -6,7 +6,7 @@ const { AccessToken } = require("livekit-server-sdk");
  * @param {string} participantName - The user's name or ID.
  * @returns {string} The generated token.
  */
-exports.generateToken = (roomName, participantName) => {
+exports.generateToken = async (roomName, participantName) => {
   const apiKey = process.env.LIVEKIT_API_KEY?.trim();
   const apiSecret = process.env.LIVEKIT_API_SECRET?.trim();
 
@@ -31,5 +31,5 @@ exports.generateToken = (roomName, participantName) => {
     canPublishData: true,
   });
 
-  return at.toJwt();
+  return await at.toJwt();
 };
