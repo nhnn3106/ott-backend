@@ -13,6 +13,7 @@ const { initAllConsumers } = require("./consumers");
 const Conversation = require("./models/Conversation");
 const livekitService = require("./services/livekitService");
 const { activeCalls } = require("./services/callStateService");
+const presenceService = require("./services/presenceService");
 connectDB();
 const app = express();
 const server = http.createServer(app);
@@ -346,10 +347,19 @@ io.on("connection", (socket) => {
   });
 
   // Mỗi user join 1 room riêng theo userId — dùng để nhận tin nhắn và hội thoại mới
-  socket.on("tham_gia_user_room", (userId) => {
+  socket.on("tham_gia_user_room", async (userId) => {
     socket.data.userId = userId;
     socket.join(`user:${userId}`);
     console.log(`User ${userId} da vao phong ca nhan`);
+
+    // ── PRESENCE: Đánh dấu user online ──────────────────────────
+    const isFirstSession = await presenceService.handleConnect(userId, socket.id);
+    if (isFirstSession) {
+      // Lấy danh sách bạn bè/thành viên nhóm để notify
+      const friends = await getPresenceFriends(userId);
+      await presenceService.broadcastOnline(io, userId, friends);
+    }
+    // ────────────────────────────────────────────────────────────
 
     // Gửi trạng thái các cuộc gọi đang diễn ra cho người dùng vừa kết nối (Sidebar sync)
     for (const [conversationId, callState] of activeCalls.entries()) {
@@ -362,6 +372,22 @@ io.on("connection", (socket) => {
       }
     }
   });
+
+  // ── PRESENCE: Client hỏi trạng thái nhiều user ──────────────
+  socket.on("hoi_trang_thai_hoat_dong", async ({ userIds }) => {
+    if (!Array.isArray(userIds) || userIds.length === 0) return;
+    try {
+      const statusMap = await presenceService.getBulkOnlineStatus(userIds);
+      const result = [];
+      statusMap.forEach((online, uid) => {
+        result.push({ userId: uid, isOnline: online });
+      });
+      socket.emit("ket_qua_trang_thai_hoat_dong", result);
+    } catch (err) {
+      console.error("[Presence] hoi_trang_thai_hoat_dong error:", err.message);
+    }
+  });
+  // ────────────────────────────────────────────────────────────
 
   // Kiểm tra xem người nhận có đang bận không TRƯỚC khi mở cửa sổ gọi
   socket.on("kiem_tra_ban_goi", async ({ conversationId, callerId }) => {
@@ -857,6 +883,14 @@ io.on("connection", (socket) => {
       return;
     }
 
+    // ── PRESENCE: Cập nhật Redis khi socket ngắt ────────────────
+    const { isFullyOffline } = await presenceService.handleDisconnect(userId, socket.id);
+    if (isFullyOffline) {
+      // Dùng debounce để tránh nhấp nháy trạng thái khi mạng chập chờn
+      presenceService.scheduleOfflineBroadcast(io, userId, getPresenceFriends);
+    }
+    // ────────────────────────────────────────────────────────────
+
     // Kiểm tra xem user còn socket nào khác đang online không (ví dụ: tab CallPage hoặc tab chat khác)
     const activeSockets = await io.in(`user:${userId}`).fetchSockets();
 
@@ -868,6 +902,66 @@ io.on("connection", (socket) => {
     }
   });
 });
+
+// ============================================================
+// PRESENCE HELPER: Lấy danh sách bạn bè / thành viên nhóm
+// để biết cần notify ai khi user online/offline.
+// ============================================================
+const getPresenceFriends = async (userId) => {
+  try {
+    const participants = await ParticipantService.getConversationsByUserId(userId);
+    const friendSet = new Set();
+    for (const p of participants) {
+      // conversation_id có thể là ObjectId hoặc populated document
+      const convId = p.conversation_id?._id
+        ? p.conversation_id._id.toString()
+        : p.conversation_id?.toString();
+
+      if (!convId) continue;
+
+      const convParticipants = await ParticipantService.getParticipants(convId);
+      convParticipants.forEach((cp) => {
+        if (String(cp.user_id) !== String(userId)) {
+          friendSet.add(String(cp.user_id));
+        }
+      });
+    }
+    return Array.from(friendSet);
+  } catch (err) {
+    console.error("[Presence] getPresenceFriends error:", err.message);
+    return [];
+  }
+};
+
+
+// ========== PRESENCE REST API (để query trạng thái) ==========
+app.get("/api/presence/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const online = await presenceService.isOnline(userId);
+    res.json({ userId, isOnline: online });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/presence/bulk", async (req, res) => {
+  try {
+    const { userIds } = req.body;
+    if (!Array.isArray(userIds)) {
+      return res.status(400).json({ error: "userIds must be an array" });
+    }
+    const statusMap = await presenceService.getBulkOnlineStatus(userIds);
+    const result = {};
+    statusMap.forEach((online, uid) => {
+      result[uid] = online;
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+// ============================================================
 
 // ========== MESSAGE ROUTES ==========
 app.use("/api", messageRoutes);
