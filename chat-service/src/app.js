@@ -379,8 +379,8 @@ io.on("connection", (socket) => {
     try {
       const statusMap = await presenceService.getBulkOnlineStatus(userIds);
       const result = [];
-      statusMap.forEach((online, uid) => {
-        result.push({ userId: uid, isOnline: online });
+      statusMap.forEach((statusObj, uid) => {
+        result.push({ userId: uid, ...statusObj });
       });
       socket.emit("ket_qua_trang_thai_hoat_dong", result);
     } catch (err) {
@@ -953,8 +953,8 @@ app.post("/api/presence/bulk", async (req, res) => {
     }
     const statusMap = await presenceService.getBulkOnlineStatus(userIds);
     const result = {};
-    statusMap.forEach((online, uid) => {
-      result[uid] = online;
+    statusMap.forEach((statusObj, uid) => {
+      result[uid] = statusObj;
     });
     res.json(result);
   } catch (err) {

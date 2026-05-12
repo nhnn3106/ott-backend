@@ -137,7 +137,7 @@ const isOnline = async (userId) => {
 
 /**
  * Lấy trạng thái online của nhiều user cùng lúc (dùng pipeline để tối ưu).
- * Trả về Map<userId, boolean>.
+ * Trả về Map<userId, { isOnline: boolean, lastSeenAt: Date | null }>.
  */
 const getBulkOnlineStatus = async (userIds) => {
   const result = new Map();
@@ -149,13 +149,36 @@ const getBulkOnlineStatus = async (userIds) => {
       pipeline.sCard(presenceKey(uid));
     }
     const counts = await pipeline.exec();
+    
+    const offlineUserIds = [];
     userIds.forEach((uid, idx) => {
-      result.set(uid, (counts[idx] || 0) > 0);
+      const isOnline = (counts[idx] || 0) > 0;
+      if (isOnline) {
+        result.set(uid, { isOnline: true, lastSeenAt: new Date() });
+      } else {
+        offlineUserIds.push(uid);
+      }
     });
+
+    if (offlineUserIds.length > 0) {
+      const users = await User.find(
+        { _id: { $in: offlineUserIds } },
+        "last_active_at"
+      ).lean();
+      
+      const userMap = new Map(users.map((u) => [String(u._id), u.last_active_at]));
+      
+      for (const uid of offlineUserIds) {
+        result.set(uid, {
+          isOnline: false,
+          lastSeenAt: userMap.get(uid) || null,
+        });
+      }
+    }
   } catch (err) {
     console.error("[Presence] getBulkOnlineStatus error:", err.message);
     // Fallback: tất cả offline
-    userIds.forEach((uid) => result.set(uid, false));
+    userIds.forEach((uid) => result.set(uid, { isOnline: false, lastSeenAt: null }));
   }
   return result;
 };
