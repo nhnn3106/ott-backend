@@ -14,6 +14,10 @@ const Conversation = require("./models/Conversation");
 const livekitService = require("./services/livekitService");
 const { activeCalls } = require("./services/callStateService");
 const presenceService = require("./services/presenceService");
+const {
+  publishMessageDelivered,
+  publishMessageSeen,
+} = require("./events/chatEvents");
 connectDB();
 const app = express();
 const server = http.createServer(app);
@@ -388,6 +392,42 @@ io.on("connection", (socket) => {
     }
   });
   // ────────────────────────────────────────────────────────────
+
+  const publishReceiptFromSocket = async (publisher, payload = {}) => {
+    const conversationId = payload.conversationId;
+    const userId = payload.userId || socket.data.userId;
+    const msgId = payload.msgId;
+
+    if (!conversationId || !userId || !msgId) return;
+
+    try {
+      await publisher({
+        conversationId,
+        userId,
+        msgId,
+        deviceId: payload.deviceId || socket.id,
+      });
+    } catch (error) {
+      console.error("[chat receipt] publish failed:", error.message);
+      socket.emit("message_receipt_error", {
+        conversationId,
+        msgId,
+        error: error.message,
+      });
+    }
+  };
+
+  socket.on("message_delivered", (payload) => {
+    publishReceiptFromSocket(publishMessageDelivered, payload);
+  });
+
+  socket.on("messages_delivered_up_to", (payload) => {
+    publishReceiptFromSocket(publishMessageDelivered, payload);
+  });
+
+  socket.on("message_seen_up_to", (payload) => {
+    publishReceiptFromSocket(publishMessageSeen, payload);
+  });
 
   // Kiểm tra xem người nhận có đang bận không TRƯỚC khi mở cửa sổ gọi
   socket.on("kiem_tra_ban_goi", async ({ conversationId, callerId }) => {
