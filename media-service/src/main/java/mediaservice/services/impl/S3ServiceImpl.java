@@ -77,7 +77,7 @@ public class S3ServiceImpl implements S3Service {
      * Pass fileSize = -1 when size is unknown.
      */
     private String uploadFile(InputStream inputStream, String fileName, String contentType,
-                              String folder, long fileSize, boolean keepFileName) {
+            String folder, long fileSize, boolean keepFileName) {
         try {
             // Generate unique filename
             String fileExtension = getFileExtension(fileName);
@@ -98,14 +98,13 @@ public class S3ServiceImpl implements S3Service {
                     bucketName,
                     fileKey,
                     inputStream,
-                    metadata
-            );
+                    metadata);
 
             Upload upload = transferManager.upload(putObjectRequest);
             upload.waitForCompletion();
 
             log.info("File uploaded successfully: {}", fileKey);
-            return fileKey;  // Return relative key; PostMapper converts to full URL
+            return fileKey; // Return relative key; PostMapper converts to full URL
 
         } catch (AmazonServiceException e) {
             log.error("Error uploading file to S3: {}", e.getMessage(), e);
@@ -145,10 +144,10 @@ public class S3ServiceImpl implements S3Service {
             expTimeMillis += 1000L * 60 * expirationMinutes;
             expiration.setTime(expTimeMillis);
 
-            GeneratePresignedUrlRequest generatePresignedUrlRequest =
-                    new GeneratePresignedUrlRequest(bucketName, fileKey)
-                            .withMethod(HttpMethod.GET)
-                            .withExpiration(expiration);
+            GeneratePresignedUrlRequest generatePresignedUrlRequest = new GeneratePresignedUrlRequest(bucketName,
+                    fileKey)
+                    .withMethod(HttpMethod.GET)
+                    .withExpiration(expiration);
 
             URL url = amazonS3.generatePresignedUrl(generatePresignedUrlRequest);
             return url.toString();
@@ -230,4 +229,3 @@ public class S3ServiceImpl implements S3Service {
         return "";
     }
 }
-

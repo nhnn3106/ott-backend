@@ -8,7 +8,8 @@ public interface S3Service {
 
     /**
      * Upload file to S3
-     * @param file MultipartFile to upload
+     * 
+     * @param file   MultipartFile to upload
      * @param folder Folder path in S3 bucket (e.g., "images", "videos")
      * @return URL of uploaded file
      */
@@ -16,8 +17,9 @@ public interface S3Service {
 
     /**
      * Upload file to S3 with a fixed file name (no UUID override).
-     * @param file MultipartFile to upload
-     * @param folder Folder path in S3 bucket (e.g., "stories")
+     * 
+     * @param file     MultipartFile to upload
+     * @param folder   Folder path in S3 bucket (e.g., "stories")
      * @param fileName Desired file name including extension
      * @return S3 key of uploaded file
      */
@@ -25,16 +27,18 @@ public interface S3Service {
 
     /**
      * Upload file from InputStream to S3
+     * 
      * @param inputStream InputStream of file
-     * @param fileName Original filename
+     * @param fileName    Original filename
      * @param contentType Content type of file
-     * @param folder Folder path in S3 bucket
+     * @param folder      Folder path in S3 bucket
      * @return URL of uploaded file
      */
     String uploadFile(InputStream inputStream, String fileName, String contentType, String folder);
 
     /**
      * Delete file from S3
+     * 
      * @param fileUrl URL or key of file to delete
      * @return true if successful
      */
@@ -42,7 +46,8 @@ public interface S3Service {
 
     /**
      * Get presigned URL for temporary access
-     * @param fileKey S3 object key
+     * 
+     * @param fileKey           S3 object key
      * @param expirationMinutes Expiration time in minutes
      * @return Presigned URL
      */
@@ -50,6 +55,7 @@ public interface S3Service {
 
     /**
      * Check if file exists
+     * 
      * @param fileKey S3 object key
      * @return true if file exists
      */
@@ -57,9 +63,9 @@ public interface S3Service {
 
     /**
      * Get full URL from file key
+     * 
      * @param fileKey S3 object key (e.g., "posts/uuid.jpg")
      * @return Full URL
      */
     String getFullUrl(String fileKey);
 }
-

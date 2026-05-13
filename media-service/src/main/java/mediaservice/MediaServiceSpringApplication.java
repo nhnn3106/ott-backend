@@ -9,6 +9,8 @@ import org.springframework.amqp.rabbit.annotation.EnableRabbit;
 import mediaservice.configs.MediaCompressionProperties;
 import mediaservice.configs.MediaDeleteProperties;
 import mediaservice.configs.MediaUploadProperties;
+import jakarta.annotation.PostConstruct;
+import java.util.TimeZone;
 
 @SpringBootApplication
 @EnableRabbit
@@ -22,6 +24,12 @@ import mediaservice.configs.MediaUploadProperties;
 public class MediaServiceSpringApplication {
     public static void main(String[] args) {
         SpringApplication.run(MediaServiceSpringApplication.class, args);
+    }
+
+    @PostConstruct
+    public void init() {
+        // Set default timezone to Vietnam (GMT+7)
+        TimeZone.setDefault(TimeZone.getTimeZone("Asia/Ho_Chi_Minh"));
     }
 
 }
