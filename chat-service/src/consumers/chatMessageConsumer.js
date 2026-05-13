@@ -237,6 +237,7 @@ const handleStatusChanged = async (io, payload) => {
       conversationId: payload.conversationId,
       userId: payload.changedUserId,
       msgId: payload.msgId,
+      receiptType: "seen",
       participant: payload.participant,
     });
   }
