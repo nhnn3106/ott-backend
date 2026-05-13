@@ -50,7 +50,7 @@ public abstract class Content {
     )
     private Set<HashTag> hashTags;
 
-    @OneToMany(mappedBy = "content", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "content", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("orderIndex ASC")
     private List<Media> medias;
 

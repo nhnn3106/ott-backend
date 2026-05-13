@@ -179,7 +179,7 @@ public class PostServiceImpl implements PostService {
 
                 if (isVideo) {
                     VideoMedia media = new VideoMedia();
-                    media.setUrl(fileName);
+                    media.setUrl(s3Key);
                     media.setOrderIndex(orderIndex);
                     media.setCaption(mediaCaption);
                     media.setContent(savedPost);
@@ -188,7 +188,7 @@ public class PostServiceImpl implements PostService {
                     hasAsyncJobs = true;
                 } else {
                     ImageMedia media = new ImageMedia();
-                    media.setUrl(fileName);
+                    media.setUrl(s3Key);
                     media.setOrderIndex(orderIndex);
                     media.setCaption(mediaCaption);
                     media.setContent(savedPost);
@@ -324,42 +324,63 @@ public class PostServiceImpl implements PostService {
             post.setAccessControls(new java.util.HashSet<>());
         }
 
-        // Replace medias
-        if (post.getMedias() != null && !post.getMedias().isEmpty()) {
-            mediaRepository.deleteAll(post.getMedias());
-        }
+        // Preserve existing media objects by matching URLs
+        List<mediaservice.models.Media> currentMedias = post.getMedias() != null ? new ArrayList<>(post.getMedias()) : new ArrayList<>();
+        List<mediaservice.models.Media> nextMedias = new ArrayList<>();
 
         int orderIndex = 0;
         if (existingMedias != null && !existingMedias.isEmpty()) {
             for (MediaRequest req : existingMedias) {
                 if (req == null || req.getUrl() == null) continue;
-                String fileName = mediaUrlBuilder.extractFileName(req.getUrl());
+                
+                String reqRelativePath = resolveKey(req.getUrl(), req.getType() == MediaType.VIDEO_MEDIA ? "social/videos" : "social/posts");
                 int idx = req.getOrderIndex();
                 orderIndex = Math.max(orderIndex, idx + 1);
 
-            String defaultFolder = req.getType() == MediaType.VIDEO_MEDIA
-                ? "social/videos" : "social/posts";
-            addKey(keepKeys, resolveKey(req.getUrl(), defaultFolder));
-            addKey(keepKeys, resolveKey(req.getThumbnailUrl(), "social/videos"));
+                String defaultFolder = req.getType() == MediaType.VIDEO_MEDIA ? "social/videos" : "social/posts";
+                addKey(keepKeys, resolveKey(req.getUrl(), defaultFolder));
+                addKey(keepKeys, resolveKey(req.getThumbnailUrl(), "social/videos"));
 
-                if (req.getType() == MediaType.VIDEO_MEDIA) {
-                    VideoMedia media = new VideoMedia();
-                    media.setUrl(fileName);
-                    media.setOrderIndex(idx);
-                    media.setCaption(req.getCaption());
-                    media.setContent(post);
-                    mediaRepository.save(media);
+                // Try to find matching existing media
+                mediaservice.models.Media matched = currentMedias.stream()
+                        .filter(m -> {
+                            String mRelative = resolveKey(m.getUrl(), m instanceof VideoMedia ? "social/videos" : "social/posts");
+                            return mRelative != null && mRelative.equals(reqRelativePath);
+                        })
+                        .findFirst()
+                        .orElse(null);
+
+                if (matched != null) {
+                    matched.setOrderIndex(idx);
+                    matched.setCaption(req.getCaption());
+                    if (matched instanceof VideoMedia vm && req.getThumbnailUrl() != null) {
+                        vm.setThumbnailUrl(mediaUrlBuilder.extractFileName(req.getThumbnailUrl()));
+                    }
+                    nextMedias.add(matched);
                 } else {
-                    ImageMedia media = new ImageMedia();
-                    media.setUrl(fileName);
-                    media.setOrderIndex(idx);
-                    media.setCaption(req.getCaption());
-                    media.setContent(post);
-                    mediaRepository.save(media);
+                    // This shouldn't really happen if frontend is correct, but create new if not found
+                    String fileName = mediaUrlBuilder.extractFileName(req.getUrl());
+                    if (req.getType() == MediaType.VIDEO_MEDIA) {
+                        VideoMedia media = new VideoMedia();
+                        media.setUrl(fileName);
+                        media.setOrderIndex(idx);
+                        media.setCaption(req.getCaption());
+                        media.setContent(post);
+                        media.setThumbnailUrl(mediaUrlBuilder.extractFileName(req.getThumbnailUrl()));
+                        nextMedias.add(media);
+                    } else {
+                        ImageMedia media = new ImageMedia();
+                        media.setUrl(fileName);
+                        media.setOrderIndex(idx);
+                        media.setCaption(req.getCaption());
+                        media.setContent(post);
+                        nextMedias.add(media);
+                    }
                 }
             }
         }
 
+        // Add NEW files
         boolean hasUpdateAsyncJobs = false;
         if (files != null) {
             for (int i = 0; i < files.size(); i++) {
@@ -381,19 +402,21 @@ public class PostServiceImpl implements PostService {
 
                 if (isVideo) {
                     VideoMedia media = new VideoMedia();
-                    media.setUrl(fileName);
+                    media.setUrl(s3Key);
                     media.setOrderIndex(targetOrderIndex);
                     media.setCaption(mediaCaption);
                     media.setContent(post);
+                    nextMedias.add(media);
                     mediaRepository.save(media);
                     enqueueAsyncMediaProcessing(file, s3Key, post.getId(), "POST", "UPDATE", media.getId(), targetOrderIndex);
                     hasUpdateAsyncJobs = true;
                 } else {
                     ImageMedia media = new ImageMedia();
-                    media.setUrl(fileName);
+                    media.setUrl(s3Key);
                     media.setOrderIndex(targetOrderIndex);
                     media.setCaption(mediaCaption);
                     media.setContent(post);
+                    nextMedias.add(media);
                     mediaRepository.save(media);
                     enqueueAsyncMediaProcessing(file, s3Key, post.getId(), "POST", "UPDATE", media.getId(), targetOrderIndex);
                     hasUpdateAsyncJobs = true;
@@ -401,9 +424,12 @@ public class PostServiceImpl implements PostService {
             }
         }
 
+        // Update post medias collection
+        post.getMedias().clear();
+        post.getMedias().addAll(nextMedias);
+
         Post updatedPost = postRepository.save(post);
         entityManager.flush();
-        entityManager.refresh(updatedPost);
 
         List<String> deleteKeys = new ArrayList<>();
         for (String key : previousKeys) {

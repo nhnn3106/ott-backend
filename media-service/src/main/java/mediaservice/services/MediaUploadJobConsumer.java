@@ -41,8 +41,7 @@ public class MediaUploadJobConsumer {
                     job.getContentId(),
                     job.getOperation(),
                     List.of(new MediaRealtimeUpdate(job.getMediaId(), job.getS3Key(), job.getOrderIndex())),
-                    List.of(job.getS3Key())
-            );
+                    List.of(job.getS3Key()));
         } catch (Exception ex) {
             log.error("[MediaUpload] Failed job: {}", job, ex);
             throw ex;

@@ -116,4 +116,11 @@ public class StoryController {
             @RequestParam(defaultValue = "8") int suggestionLimit) {
         return ResponseEntity.ok(storyService.getStoriesReel(accountId, suggestionLimit));
     }
+
+    /** DELETE /stories/{id} - xoa story */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteStory(@PathVariable String id) {
+        storyService.deleteStory(id);
+        return ResponseEntity.ok().build();
+    }
 }
