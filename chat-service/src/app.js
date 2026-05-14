@@ -378,6 +378,24 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("presence_heartbeat", async (payload = {}) => {
+    const userId = payload.userId || socket.data.userId;
+    if (!userId) return;
+
+    try {
+      socket.data.userId = userId;
+      socket.join(`user:${userId}`);
+
+      const isFirstSession = await presenceService.handleConnect(userId, socket.id);
+      if (isFirstSession) {
+        const friends = await getPresenceFriends(userId);
+        await presenceService.broadcastOnline(io, userId, friends);
+      }
+    } catch (err) {
+      console.error("[Presence] presence_heartbeat error:", err.message);
+    }
+  });
+
   // ── PRESENCE: Client hỏi trạng thái nhiều user ──────────────
   socket.on("hoi_trang_thai_hoat_dong", async ({ userIds }) => {
     if (!Array.isArray(userIds) || userIds.length === 0) return;
@@ -1018,4 +1036,6 @@ app.get("/", (req, res) => res.send("Chat Service dang chay..."));
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`Chat Service dang chay tren port ${PORT}`);
+  presenceService.cleanupStalePresenceOnStartup();
+  presenceService.startPresenceReconciler();
 });
