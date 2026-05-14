@@ -181,6 +181,7 @@ const createCallNotificationMessage = async ({
   if (!conversationId || !senderId || !type || !content) return;
 
   try {
+    console.log(`[CALL] create notification: conversationId=${conversationId}, senderId=${senderId}, type=${type}, content=${content}`);
     const message = await MessageService.sendMessage({
       conversationId,
       senderId,
@@ -189,6 +190,7 @@ const createCallNotificationMessage = async ({
       size: 0,
     });
 
+    console.log(`[CALL] notification created: conversationId=${conversationId}, msgId=${message?.msg_id || ""}, type=${type}`);
     await emitMessageToConversationParticipants(conversationId, message);
   } catch (error) {
     console.error("Khong the tao thong bao cuoc goi:", error.message);
@@ -292,6 +294,9 @@ const emitCallOutcomeForState = async ({
   if (!callState || callState.isOutcomeEmitted) return;
 
   callState.isOutcomeEmitted = true;
+  console.log(
+    `[CALL] outcome: conversationId=${conversationId}, outcome=${outcome}, answeredAt=${callState.answeredAt || ""}, hadMultipleParticipants=${!!callState.hadMultipleParticipants}, durationSeconds=${durationSeconds ?? ""}`,
+  );
   await emitCallOutcomeMessage({
     conversationId,
     senderId: senderId || callState.initiatorId || "",
@@ -901,11 +906,28 @@ io.on("connection", (socket) => {
     endCallRoom(conversationId, userId);
   });
 
-  socket.on("ket_thuc_goi", async ({ conversationId, userId, wasConnected, durationSeconds }) => {
-    if (!conversationId) return;
+  socket.on("ket_thuc_goi", async ({ conversationId, userId, wasConnected, durationSeconds }, ack) => {
+    const acknowledge = (payload = {}) => {
+      if (typeof ack === "function") {
+        ack(payload);
+      }
+    };
+
+    if (!conversationId) {
+      acknowledge({ ok: false, reason: "missing_conversation" });
+      return;
+    }
 
     const callState = activeCalls.get(conversationId);
-    if (!callState) return;
+    if (!callState) {
+      console.warn(`[CALL] ket_thuc_goi ignored: no active call for conversationId=${conversationId}, userId=${userId || ""}`);
+      acknowledge({ ok: false, reason: "call_not_found" });
+      return;
+    }
+
+    console.log(
+      `[CALL] ket_thuc_goi received: conversationId=${conversationId}, userId=${userId || ""}, wasConnected=${!!wasConnected}, durationSeconds=${durationSeconds ?? ""}, participants=${callState.participants.size}, answeredAt=${callState.answeredAt || ""}, hadMultipleParticipants=${!!callState.hadMultipleParticipants}`,
+    );
 
     // Restore: Nếu là cuộc gọi nhóm, hành động "Kết thúc" của 1 người chỉ là "Rời đi"
     if (callState.isGroup) {
@@ -936,6 +958,7 @@ io.on("connection", (socket) => {
       }
 
       maybeCloseCallWhenOnlyOneLeft(conversationId, userId);
+      acknowledge({ ok: true, mode: "left_group" });
       return;
     }
 
@@ -952,6 +975,7 @@ io.on("connection", (socket) => {
     });
 
     endCallRoom(conversationId, userId || null);
+    acknowledge({ ok: true, outcome });
     console.log(`Cuoc goi ket thuc tai phong ${conversationId}`);
   });
 
