@@ -10,6 +10,8 @@ const {
   GetObjectCommand,
   DeleteObjectCommand,
   CopyObjectCommand,
+  GetObjectTaggingCommand,
+  HeadObjectCommand,
 } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const { s3Client, bucketName } = require("../config/s3");
@@ -24,6 +26,10 @@ const crypto = require("crypto");
 
 const REVOKED_PLACEHOLDER = "Tin nhắn đã được thu hồi";
 const S3_CACHE_CONTROL = "public, max-age=31536000, immutable";
+const S3_POLICY_SIGNAL_PATTERN =
+  /(violation|moderation|unsafe|malware|virus|infected|blocked|denied|explicit.?deny|quarantine|sensitive|nsfw|adult|explicit)/i;
+const S3_POLICY_CLEAN_VALUE_PATTERN =
+  /^(clean|ok|pass|passed|safe|allowed|false|0|no|none)$/i;
 
 const sanitizeS3FileName = (fileName) => {
   const baseName =
@@ -44,6 +50,90 @@ const resolveS3ContentDisposition = (fileCategory, fileName) => {
     ? "inline"
     : "attachment";
   return `${disposition}; filename="${sanitizeS3FileName(fileName)}"`;
+};
+
+const extractS3ObjectKey = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  try {
+    if (/^https?:\/\//i.test(raw)) {
+      const url = new URL(raw);
+      return decodeURIComponent(url.pathname.replace(/^\/+/, ""));
+    }
+  } catch {
+    // Fall through to raw key normalization.
+  }
+
+  return decodeURIComponent(raw.replace(/^\/+/, "").split("?")[0] || "");
+};
+
+const isPolicySignal = (key, value) => {
+  const normalizedValue = String(value ?? "").trim();
+  if (S3_POLICY_CLEAN_VALUE_PATTERN.test(normalizedValue)) return false;
+
+  return (
+    S3_POLICY_SIGNAL_PATTERN.test(String(key || "")) ||
+    S3_POLICY_SIGNAL_PATTERN.test(normalizedValue)
+  );
+};
+
+const getS3MediaWarning = async (rawKey, index) => {
+  const key = extractS3ObjectKey(rawKey);
+  if (!key) return null;
+
+  try {
+    const [headResult, tagResult] = await Promise.allSettled([
+      s3Client.send(new HeadObjectCommand({ Bucket: bucketName, Key: key })),
+      s3Client.send(new GetObjectTaggingCommand({ Bucket: bucketName, Key: key })),
+    ]);
+
+    const metadata =
+      headResult.status === "fulfilled" ? headResult.value.Metadata || {} : {};
+    const tags =
+      tagResult.status === "fulfilled" ? tagResult.value.TagSet || [] : [];
+
+    const metadataSignal = Object.entries(metadata).find(([name, value]) =>
+      isPolicySignal(name, value),
+    );
+    const tagSignal = tags.find((tag) => isPolicySignal(tag.Key, tag.Value));
+    const signal = tagSignal || metadataSignal;
+
+    if (!signal) return null;
+
+    const signalName = Array.isArray(signal) ? signal[0] : signal.Key;
+    const signalValue = Array.isArray(signal) ? signal[1] : signal.Value;
+
+    return {
+      index,
+      key,
+      source: "s3",
+      reason: String(signalValue || signalName || "policy_violation"),
+    };
+  } catch (error) {
+    console.warn(
+      "Không thể đọc metadata/tag S3 để kiểm tra media:",
+      error?.message || error,
+    );
+    return null;
+  }
+};
+
+const buildMediaPolicyMeta = async (type, contentArray) => {
+  if (!["image", "video"].includes(type)) return null;
+
+  const warnings = (
+    await Promise.all(
+      contentArray.map((key, index) => getS3MediaWarning(key, index)),
+    )
+  ).filter(Boolean);
+
+  if (!warnings.length) return null;
+
+  return {
+    media_policy_status: "flagged",
+    media_warnings: warnings,
+  };
 };
 
 const sanitizeAvatarValue = (value) => {
@@ -383,6 +473,8 @@ exports.sendMessage = async ({
     );
   }
 
+  const mediaPolicyMeta = await buildMediaPolicyMeta(type, normalizedContent);
+
   let replyMessage = null;
   let replySender = null;
   if (replyToMsgId) {
@@ -453,6 +545,7 @@ exports.sendMessage = async ({
     poll_question: pollQuestion || null,
     poll_multiple_choice: pollMultipleChoice || false,
     poll_options: pollOptions || [],
+    system_meta: mediaPolicyMeta,
   });
 
   const savedMessage = await newMessage.save();
