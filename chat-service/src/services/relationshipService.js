@@ -1,5 +1,6 @@
 const Relationship = require("../models/Relationship");
 const { publishRelationshipEvent } = require("../events/relationshipEvents");
+const { publishNotification } = require("../events/notificationEvents");
 
 exports.getRelationshipBetween = async (userId1, userId2) => {
   return await Relationship.findOne({
@@ -46,6 +47,13 @@ exports.sendFriendRequest = async (requesterId, receiverId) => {
   await relationship.save();
   try {
     await publishRelationshipEvent("REQUEST_SENT", relationship);
+    await publishNotification({
+      recipientId: receiverId,
+      senderId: requesterId,
+      type: "FRIEND_REQUEST",
+      content: "Bạn có một lời mời kết bạn mới",
+      referenceId: relationship._id.toString()
+    });
   } catch (err) {
     console.error(`[RelationshipService] Failed to publish REQUEST_SENT event: ${err.message}`);
   }
@@ -75,6 +83,13 @@ exports.acceptFriendRequest = async (relationshipId) => {
 
   try {
     await publishRelationshipEvent("REQUEST_ACCEPTED", relationship);
+    await publishNotification({
+      recipientId: relationship.requester_id,
+      senderId: relationship.receiver_id,
+      type: "FRIEND_ACCEPTED",
+      content: "Đã chấp nhận lời mời kết bạn của bạn",
+      referenceId: relationship._id.toString()
+    });
   } catch (err) {
     console.error(`[RelationshipService] Failed to publish REQUEST_ACCEPTED event: ${err.message}`);
   }

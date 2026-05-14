@@ -24,6 +24,9 @@ public class RabbitMQConfig {
     @Value("${rabbitmq.queue.alert}")
     private String alertQueue;
 
+    @Value("${rabbitmq.queue.inapp}")
+    private String inappQueue;
+
     @Value("${rabbitmq.routing-key.otp}")
     private String otpRoutingKey;
 
@@ -32,6 +35,9 @@ public class RabbitMQConfig {
 
     @Value("${rabbitmq.routing-key.alert}")
     private String alertRoutingKey;
+
+    @Value("${rabbitmq.routing-key.inapp}")
+    private String inappRoutingKey;
 
     @Bean
     public TopicExchange notificationExchange() {
@@ -57,6 +63,11 @@ public class RabbitMQConfig {
     }
 
     @Bean
+    public Queue inappQueue() {
+        return QueueBuilder.durable(inappQueue).build();
+    }
+
+    @Bean
     public Binding otpBinding() {
         return BindingBuilder.bind(otpQueue()).to(notificationExchange()).with(otpRoutingKey);
     }
@@ -69,6 +80,11 @@ public class RabbitMQConfig {
     @Bean
     public Binding alertBinding() {
         return BindingBuilder.bind(alertQueue()).to(notificationExchange()).with(alertRoutingKey);
+    }
+
+    @Bean
+    public Binding inappBinding() {
+        return BindingBuilder.bind(inappQueue()).to(notificationExchange()).with(inappRoutingKey);
     }
 
     @Bean
