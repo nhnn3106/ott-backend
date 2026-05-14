@@ -12,6 +12,7 @@ const aiRoutes = require("./routes/aiRoutes");
 const MessageService = require("./services/messageService");
 const { initAllConsumers } = require("./consumers");
 const Conversation = require("./models/Conversation");
+const Message = require("./models/Message");
 const livekitService = require("./services/livekitService");
 const { activeCalls } = require("./services/callStateService");
 const presenceService = require("./services/presenceService");
@@ -45,6 +46,13 @@ messageEventsHandler(io);
 // Note: This is suitable for single-node deployments.
 const NO_ANSWER_TIMEOUT_MS = 30000;
 const CALL_OUTCOME_DEDUPE_TTL_MS = 15000;
+const CALL_OUTCOME_RECENT_LOOKBACK_MS = 15000;
+const CALL_OUTCOME_TYPES = [
+  "call_end",
+  "call_missed",
+  "call_cancel",
+  "call_no_answer",
+];
 const recentCallOutcomeKeys = new Map();
 
 const normalizeCallType = (callType) => {
@@ -192,9 +200,72 @@ const createCallNotificationMessage = async ({
 
     console.log(`[CALL] notification created: conversationId=${conversationId}, msgId=${message?.msg_id || ""}, type=${type}`);
     await emitMessageToConversationParticipants(conversationId, message);
+    return message;
   } catch (error) {
     console.error("Khong the tao thong bao cuoc goi:", error.message);
+    return null;
   }
+};
+
+const getRecentCallOutcomeMessage = async (conversationId) => {
+  if (!conversationId) return null;
+
+  const since = new Date(Date.now() - CALL_OUTCOME_RECENT_LOOKBACK_MS);
+  return Message.findOne({
+    conversation_id: conversationId,
+    type: { $in: CALL_OUTCOME_TYPES },
+    is_deleted: false,
+    createdAt: { $gte: since },
+  })
+    .sort({ createdAt: -1 })
+    .select("msg_id type createdAt")
+    .lean();
+};
+
+const emitFallbackCallOutcomeForMissingState = async ({
+  conversationId,
+  userId,
+  callType,
+  wasConnected,
+  durationSeconds,
+}) => {
+  if (!conversationId || !userId) return false;
+
+  const dedupeKey = `missing-state:${conversationId}:${userId}`;
+  if (!claimCallOutcome(dedupeKey)) {
+    return false;
+  }
+
+  const recentCallMessage = await getRecentCallOutcomeMessage(conversationId);
+  if (recentCallMessage) {
+    console.warn(
+      `[CALL] fallback skipped: recent ${recentCallMessage.type} already exists for conversationId=${conversationId}, msgId=${recentCallMessage.msg_id || ""}`,
+    );
+    return false;
+  }
+
+  const normalizedCallType = normalizeCallType(callType);
+  const safeDurationSeconds = Number.isFinite(Number(durationSeconds))
+    ? Math.max(0, Math.floor(Number(durationSeconds)))
+    : 0;
+  const isCompleted = Boolean(wasConnected) || safeDurationSeconds > 0;
+  const messageType = isCompleted ? "call_end" : "call_missed";
+  const content = isCompleted
+    ? `Cuộc gọi ${normalizedCallType === "video" ? "video" : "thoại"} - ${formatCallDuration(safeDurationSeconds)}`
+    : `Cuộc gọi ${normalizedCallType === "video" ? "video" : "thoại"} nhỡ`;
+
+  console.warn(
+    `[CALL] fallback notification: conversationId=${conversationId}, userId=${userId}, type=${messageType}, callType=${normalizedCallType}, durationSeconds=${safeDurationSeconds}`,
+  );
+
+  const message = await createCallNotificationMessage({
+    conversationId,
+    senderId: userId,
+    type: messageType,
+    content,
+  });
+
+  return Boolean(message);
 };
 
 const scheduleNoAnswerTimeout = ({ conversationId, callerId, callType }) => {
@@ -906,7 +977,7 @@ io.on("connection", (socket) => {
     endCallRoom(conversationId, userId);
   });
 
-  socket.on("ket_thuc_goi", async ({ conversationId, userId, wasConnected, durationSeconds }, ack) => {
+  socket.on("ket_thuc_goi", async ({ conversationId, userId, callType, wasConnected, durationSeconds }, ack) => {
     const acknowledge = (payload = {}) => {
       if (typeof ack === "function") {
         ack(payload);
@@ -918,25 +989,36 @@ io.on("connection", (socket) => {
       return;
     }
 
+    const endingUserId = userId || socket.data.userId || "";
     const callState = activeCalls.get(conversationId);
     if (!callState) {
-      console.warn(`[CALL] ket_thuc_goi ignored: no active call for conversationId=${conversationId}, userId=${userId || ""}`);
-      acknowledge({ ok: false, reason: "call_not_found" });
+      console.warn(`[CALL] ket_thuc_goi missing active call: conversationId=${conversationId}, userId=${endingUserId}`);
+      const fallbackCreated = await emitFallbackCallOutcomeForMissingState({
+        conversationId,
+        userId: endingUserId,
+        callType,
+        wasConnected,
+        durationSeconds,
+      });
+      acknowledge({
+        ok: fallbackCreated,
+        reason: fallbackCreated ? "fallback_outcome_created" : "call_not_found",
+      });
       return;
     }
 
     console.log(
-      `[CALL] ket_thuc_goi received: conversationId=${conversationId}, userId=${userId || ""}, wasConnected=${!!wasConnected}, durationSeconds=${durationSeconds ?? ""}, participants=${callState.participants.size}, answeredAt=${callState.answeredAt || ""}, hadMultipleParticipants=${!!callState.hadMultipleParticipants}`,
+      `[CALL] ket_thuc_goi received: conversationId=${conversationId}, userId=${endingUserId}, callType=${callType || callState.callType || ""}, wasConnected=${!!wasConnected}, durationSeconds=${durationSeconds ?? ""}, participants=${callState.participants.size}, answeredAt=${callState.answeredAt || ""}, hadMultipleParticipants=${!!callState.hadMultipleParticipants}`,
     );
 
     // Restore: Nếu là cuộc gọi nhóm, hành động "Kết thúc" của 1 người chỉ là "Rời đi"
     if (callState.isGroup) {
-      callState.participants.delete(userId);
+      callState.participants.delete(endingUserId);
       socket.leave(`call:${conversationId}`);
 
       io.to(`call:${conversationId}`).emit("nguoi_dung_roi_goi", {
         conversationId,
-        userId,
+        userId: endingUserId,
         participants: Array.from(callState.participants),
       });
 
@@ -957,7 +1039,7 @@ io.on("connection", (socket) => {
         });
       }
 
-      maybeCloseCallWhenOnlyOneLeft(conversationId, userId);
+      maybeCloseCallWhenOnlyOneLeft(conversationId, endingUserId);
       acknowledge({ ok: true, mode: "left_group" });
       return;
     }
@@ -968,13 +1050,13 @@ io.on("connection", (socket) => {
         : "missed";
     await emitCallOutcomeForState({
       conversationId,
-      senderId: callState.initiatorId || userId || "",
+      senderId: callState.initiatorId || endingUserId,
       callState,
       outcome,
       durationSeconds,
     });
 
-    endCallRoom(conversationId, userId || null);
+    endCallRoom(conversationId, endingUserId || null);
     acknowledge({ ok: true, outcome });
     console.log(`Cuoc goi ket thuc tai phong ${conversationId}`);
   });
