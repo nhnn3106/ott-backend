@@ -37,10 +37,10 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
-  AWS_REGION: ${{ vars.AWS_REGION }}
-  AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
-  EC2_TAG_NAME: ${{ vars.EC2_TAG_NAME }}
+  AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID || secrets.AWS_ACCOUNT_ID }}
+  AWS_REGION: ${{ vars.AWS_REGION || secrets.AWS_REGION }}
+  AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN || secrets.AWS_DEPLOY_ROLE_ARN }}
+  EC2_TAG_NAME: ${{ vars.EC2_TAG_NAME || secrets.EC2_TAG_NAME }}
   IMAGE_PLATFORM: ${{ vars.IMAGE_PLATFORM || 'linux/amd64' }}
 
 jobs:
@@ -118,10 +118,16 @@ jobs:
       - name: Check required variables
         shell: bash
         run: |
-          test -n "$AWS_ACCOUNT_ID"
-          test -n "$AWS_REGION"
-          test -n "$AWS_DEPLOY_ROLE_ARN"
-          test -n "$EC2_TAG_NAME"
+          missing=0
+          for name in AWS_ACCOUNT_ID AWS_REGION AWS_DEPLOY_ROLE_ARN EC2_TAG_NAME IMAGE_PLATFORM; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::$name is missing. Add it in GitHub repo Settings -> Secrets and variables -> Actions -> Variables."
+              missing=1
+            else
+              echo "$name is set"
+            fi
+          done
+          exit "$missing"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
