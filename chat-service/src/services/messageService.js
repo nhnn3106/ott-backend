@@ -23,6 +23,28 @@ const { pipeline } = require("stream/promises");
 const crypto = require("crypto");
 
 const REVOKED_PLACEHOLDER = "Tin nhắn đã được thu hồi";
+const S3_CACHE_CONTROL = "public, max-age=31536000, immutable";
+
+const sanitizeS3FileName = (fileName) => {
+  const baseName =
+    String(fileName || "file")
+      .split(/[\\/]/)
+      .pop()
+      ?.normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9._-]/g, "_")
+      .replace(/_+/g, "_")
+      .replace(/^_+|_+$/g, "") || "file";
+
+  return baseName.slice(0, 160) || "file";
+};
+
+const resolveS3ContentDisposition = (fileCategory, fileName) => {
+  const disposition = ["image", "video", "audio"].includes(fileCategory)
+    ? "inline"
+    : "attachment";
+  return `${disposition}; filename="${sanitizeS3FileName(fileName)}"`;
+};
 
 const sanitizeAvatarValue = (value) => {
   const avatar = String(value || "").trim();
@@ -301,6 +323,10 @@ const syncConversationLastMessageOnRevoke = async (conversationId, message) => {
 };
 
 exports.generatePresignedUrl = async (fileName, fileType) => {
+  if (!fileName || !fileType) {
+    throw new Error("Thiếu tên file hoặc loại file");
+  }
+
   const now = new Date();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, "0");
@@ -314,14 +340,17 @@ exports.generatePresignedUrl = async (fileName, fileType) => {
         ? "audio"
         : "file";
 
+  const safeFileName = sanitizeS3FileName(fileName);
   const uniqueId = crypto.randomBytes(8).toString("hex");
 
-  const key = `messages/${fileCategory}/${year}/${month}/${day}/${uniqueId}_${fileName}`;
+  const key = `messages/${fileCategory}/${year}/${month}/${day}/${uniqueId}_${safeFileName}`;
 
   const command = new PutObjectCommand({
     Bucket: bucketName,
     Key: key,
     ContentType: fileType,
+    CacheControl: S3_CACHE_CONTROL,
+    ContentDisposition: resolveS3ContentDisposition(fileCategory, safeFileName),
   });
 
   const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 300 });

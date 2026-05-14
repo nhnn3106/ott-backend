@@ -22,6 +22,7 @@ const messageRepository = require("../repositories/messageRepository");
 const MessageService = require("../services/messageService");
 const messageCacheService = require("../services/messageCacheService");
 const logger = require("../utils/logger");
+const { Readable } = require("stream");
 
 router.get("/media/download", async (req, res) => {
   try {
@@ -58,16 +59,22 @@ router.get("/media/download", async (req, res) => {
     const contentType =
       upstream.headers.get("content-type") || "application/octet-stream";
 
-    const buffer = Buffer.from(await upstream.arrayBuffer());
-
     res.setHeader("Content-Type", contentType);
     res.setHeader(
       "Content-Disposition",
       `attachment; filename="${encodeURIComponent(inferredName)}"`,
     );
-    res.setHeader("Content-Length", String(buffer.length));
+    const contentLength = upstream.headers.get("content-length");
+    if (contentLength) {
+      res.setHeader("Content-Length", contentLength);
+    }
 
-    return res.status(200).send(buffer);
+    res.status(200);
+    if (upstream.body) {
+      return Readable.fromWeb(upstream.body).pipe(res);
+    }
+
+    return res.end();
   } catch (error) {
     logger.error("Error downloading media:", error);
     return res.status(500).json({
