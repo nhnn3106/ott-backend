@@ -10,7 +10,10 @@ import mediaservice.models.enums.ReactionTargetType;
 import mediaservice.models.enums.ReactionType;
 import mediaservice.repositories.AccountRepository;
 import mediaservice.repositories.ReactionRepository;
+import mediaservice.repositories.ContentRepository;
+import mediaservice.realtime.NotificationPublisher;
 import mediaservice.services.ReactionService;
+import mediaservice.models.Content;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
@@ -29,6 +32,8 @@ public class ReactionServiceImpl implements ReactionService {
     private final ReactionMapper reactionMapper;
     private final AccountRepository accountRepository;
     private final mediaservice.realtime.PostActivityPublisher postActivityPublisher;
+    private final NotificationPublisher notificationPublisher;
+    private final ContentRepository contentRepository;
 
     @Override
     @Transactional
@@ -45,6 +50,15 @@ public class ReactionServiceImpl implements ReactionService {
         ReactionResponse response = reactionMapper.toResponse(savedReaction);
         if (ReactionTargetType.POST.equals(savedReaction.getTargetType())) {
             postActivityPublisher.publish(savedReaction.getTargetId(), "REACTION", "CREATE", response);
+            
+            contentRepository.findById(request.getTargetId()).ifPresent(content -> {
+                notificationPublisher.publishNotification(
+                        content.getAccount().getId(), 
+                        request.getAccountId(), 
+                        "POST_REACTION", 
+                        account.getUsername() + " đã bày tỏ cảm xúc về bài viết của bạn.",
+                        request.getTargetId());
+            });
         }
         return response;
     }
@@ -150,6 +164,15 @@ public class ReactionServiceImpl implements ReactionService {
                 ReactionResponse response = reactionMapper.toResponse(savedReaction);
                 if (ReactionTargetType.POST.equals(targetType)) {
                     postActivityPublisher.publish(targetId, "REACTION", "CREATE", response);
+                    
+                    contentRepository.findById(targetId).ifPresent(content -> {
+                        notificationPublisher.publishNotification(
+                                content.getAccount().getId(), 
+                                accountId, 
+                                "POST_REACTION", 
+                                account.getUsername() + " đã bày tỏ cảm xúc về bài viết của bạn.",
+                                targetId);
+                    });
                 }
                 return response;
             }
@@ -164,6 +187,15 @@ public class ReactionServiceImpl implements ReactionService {
         ReactionResponse response = reactionMapper.toResponse(savedReaction);
         if (ReactionTargetType.POST.equals(targetType)) {
             postActivityPublisher.publish(targetId, "REACTION", "CREATE", response);
+            
+            contentRepository.findById(targetId).ifPresent(content -> {
+                notificationPublisher.publishNotification(
+                        content.getAccount().getId(), 
+                        accountId, 
+                        "POST_REACTION", 
+                        account.getUsername() + " đã bày tỏ cảm xúc về bài viết của bạn.",
+                        targetId);
+            });
         }
         return response;
     }

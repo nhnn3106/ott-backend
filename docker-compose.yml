@@ -109,6 +109,8 @@ services:
     ports:
       - "8090:8090"
       - "8091:8091"
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
     networks:
       - ott-network
     depends_on:

@@ -10,6 +10,7 @@ import mediaservice.models.Content;
 import mediaservice.repositories.AccountRepository;
 import mediaservice.repositories.CommentRepository;
 import mediaservice.repositories.ContentRepository;
+import mediaservice.realtime.NotificationPublisher;
 import mediaservice.services.CommentService;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -30,6 +31,7 @@ public class CommentServiceImpl implements CommentService {
     private final ContentRepository contentRepository;
     private final mediaservice.realtime.PostActivityPublisher postActivityPublisher;
     private final mediaservice.services.UserSyncService userSyncService;
+    private final NotificationPublisher notificationPublisher;
 
     @Override
     @Transactional
@@ -56,6 +58,15 @@ public class CommentServiceImpl implements CommentService {
         CommentResponse response = commentMapper.toResponse(savedComment);
         if (savedComment.getContent() != null) {
             postActivityPublisher.publish(savedComment.getContent().getId(), "COMMENT", "CREATE", response);
+            
+            // Send notification to post author
+            notificationPublisher.publishNotification(
+                    savedComment.getContent().getAccount().getId(), 
+                    request.getAccountId(), 
+                    "POST_COMMENT", 
+                    (savedComment.getAccount() != null && savedComment.getAccount().getDisplayName() != null ? savedComment.getAccount().getDisplayName() : "Ai đó") + " đã bình luận về bài viết của bạn.", 
+                    savedComment.getContent().getId()
+            );
         }
         return response;
     }

@@ -8,6 +8,7 @@ import mediaservice.models.TextItem;
 import mediaservice.models.VideoItem;
 import org.mapstruct.Mapper;
 import org.mapstruct.Named;
+import org.mapstruct.ReportingPolicy;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.HashSet;
@@ -16,7 +17,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-@Mapper(componentModel = "spring", uses = {ImageItemMapper.class, VideoItemMapper.class, TextItemMapper.class})
+@Mapper(componentModel = "spring", uses = {ImageItemMapper.class, VideoItemMapper.class, TextItemMapper.class}, unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public abstract class StoryItemMapper {
 
     @Autowired
@@ -30,11 +31,22 @@ public abstract class StoryItemMapper {
 
     public StoryItem toEntity(StoryItemRequest request) {
         if (request == null || request.getType() == null) return null;
-        return switch (request.getType()) {
+        StoryItem item = switch (request.getType()) {
             case IMAGE_ITEM -> imageItemMapper.toEntity(request.getImageItem());
             case VIDEO_ITEM -> videoItemMapper.toEntity(request.getVideoItem());
             case TEXT_ITEM  -> textItemMapper.toEntity(request.getTextItem());
         };
+        if (item != null) {
+            item.setPrimary(request.isPrimary());
+            item.setZIndex(request.getZIndex());
+            item.setPositionX(request.getPositionX());
+            item.setPositionY(request.getPositionY());
+            item.setRotation(request.getRotation());
+            item.setScale(request.getScale());
+            item.setStartTime(request.getStartTime());
+            item.setEndTime(request.getEndTime());
+        }
+        return item;
     }
 
     public StoryItemResponse toResponse(StoryItem storyItem) {
@@ -50,6 +62,16 @@ public abstract class StoryItemMapper {
             response.setType(mediaservice.models.enums.StoryItemType.TEXT_ITEM);
             response.setTextItem(textItemMapper.toResponse(textItem));
         }
+        
+        response.setPrimary(storyItem.isPrimary());
+        response.setZIndex(storyItem.getZIndex());
+        response.setPositionX(storyItem.getPositionX());
+        response.setPositionY(storyItem.getPositionY());
+        response.setRotation(storyItem.getRotation());
+        response.setScale(storyItem.getScale());
+        response.setStartTime(storyItem.getStartTime());
+        response.setEndTime(storyItem.getEndTime());
+        
         return response;
     }
 

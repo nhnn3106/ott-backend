@@ -5,6 +5,7 @@ import mediaservice.dtos.requests.StoryRequest;
 import mediaservice.dtos.responses.StoryUploadResponse;
 import mediaservice.dtos.responses.StoryReelResponse;
 import mediaservice.dtos.responses.StoryResponse;
+import mediaservice.dtos.responses.UserAccountResponse;
 import mediaservice.dtos.messages.MediaCompressionJob;
 import mediaservice.dtos.messages.MediaUploadJob;
 import mediaservice.services.MediaCompressionJobPublisher;
@@ -32,6 +33,26 @@ public class StoryController {
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<StoryResponse> createStory(@RequestBody StoryRequest request) {
         return ResponseEntity.ok(storyService.createStory(request));
+    }
+
+    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<StoryResponse> updateStory(
+            @PathVariable String id,
+            @RequestPart("request") StoryRequest request,
+            @RequestPart(value = "files", required = false) List<MultipartFile> files,
+            @RequestPart(value = "captions", required = false) List<String> captions) {
+        return ResponseEntity.ok(storyService.updateStory(id, request, files, captions));
+    }
+
+    @PutMapping("/{id}/view")
+    public ResponseEntity<Void> viewStory(@PathVariable String id, @RequestParam String accountId) {
+        storyService.viewStory(id, accountId);
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/{id}/viewers")
+    public ResponseEntity<List<UserAccountResponse>> getStoryViewers(@PathVariable String id) {
+        return ResponseEntity.ok(storyService.getStoryViewers(id));
     }
 
     /** POST /stories/upload - upload story media before creating story */
@@ -115,5 +136,12 @@ public class StoryController {
             @PathVariable String accountId,
             @RequestParam(defaultValue = "8") int suggestionLimit) {
         return ResponseEntity.ok(storyService.getStoriesReel(accountId, suggestionLimit));
+    }
+
+    /** DELETE /stories/{id} - xoa story */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteStory(@PathVariable String id) {
+        storyService.deleteStory(id);
+        return ResponseEntity.ok().build();
     }
 }

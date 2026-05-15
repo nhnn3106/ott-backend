@@ -1,6 +1,8 @@
 const User = require("../models/User");
 const userService = require("../services/userService");
 const ParticipantService = require("../services/participantService");
+const relationshipService = require("../services/relationshipService");
+const { publishNotification } = require("../events/notificationEvents");
 
 const EXCHANGE_NAME = "user.events";
 const QUEUE_CREATED = "chat_service_user_created";
@@ -56,6 +58,22 @@ const handleUserUpdated = async (channel, msg, io) => {
     // Update user info in DB
     const updatedUser = await userService.updateUserInfo(content);
     console.log(` [v] UserConsumer: Processed user update for ${userId}`);
+
+    // Notify friends
+    try {
+      const friends = await relationshipService.getFriends(userId);
+      friends.forEach(friend => {
+        publishNotification({
+          recipientId: friend.user_id,
+          senderId: userId,
+          type: "PROFILE_UPDATE",
+          content: `${content.fullName || "Bạn bè của bạn"} đã cập nhật thông tin cá nhân.`,
+          referenceId: userId
+        });
+      });
+    } catch (e) {
+      console.error("[UserConsumer] Failed to notify friends about profile update:", e);
+    }
 
     // Broadcast to the user's personal room so their clients update info
     if (io) {

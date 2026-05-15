@@ -1,5 +1,6 @@
 const MessageService = require("../services/messageService");
 const ParticipantService = require("../services/participantService");
+const { publishMessageCreated } = require("../events/chatEvents");
 
 exports.generatePresignedUrl = async (req, res) => {
   try {
@@ -40,11 +41,11 @@ exports.sendMessage = async (req, res) => {
       pollOptions,
     });
 
-    // Emit đến user room riêng của từng participant đã joined (invited users không nhận tin nhắn)
-    const participants =
-      await ParticipantService.getJoinedParticipants(conversationId);
-    participants.forEach((p) => {
-      req.io.to(`user:${p.user_id}`).emit("tin_nhan", savedMessage);
+    await publishMessageCreated({
+      conversationId,
+      msgId: savedMessage.msg_id,
+      senderId,
+      createdAt: savedMessage.createdAt || new Date().toISOString(),
     });
 
     // Nếu là poll, tự động tạo thêm 1 tin system thông báo
@@ -57,8 +58,11 @@ exports.sendMessage = async (req, res) => {
           type: "system_poll",
           size: 0,
         });
-        participants.forEach((p) => {
-          req.io.to(`user:${p.user_id}`).emit("tin_nhan", sysMsg);
+        await publishMessageCreated({
+          conversationId,
+          msgId: sysMsg.msg_id,
+          senderId,
+          createdAt: sysMsg.createdAt || new Date().toISOString(),
         });
       } catch (sysErr) {
         console.warn("Không thể tạo thông báo poll:", sysErr.message);
@@ -429,13 +433,14 @@ exports.getLinkMessages = async (req, res) => {
 exports.searchEverything = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { q = "", limit = 20, senderId } = req.query;
+    const { q = "", limit = 20, senderId, scope } = req.query;
 
     const results = await MessageService.searchEverything({
       userId,
       keyword: q,
       limit: parseInt(limit, 10),
       senderId,
+      scope: scope ? String(scope).split(",") : null,
     });
 
     res.status(200).json(results);

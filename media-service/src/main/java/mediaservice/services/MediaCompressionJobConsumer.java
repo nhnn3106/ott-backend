@@ -46,12 +46,11 @@ public class MediaCompressionJobConsumer {
             if (job.getS3Key() != null && !job.getS3Key().isBlank()) {
                 uploadToS3(job, outputPath);
                 mediaRealtimePublisher.publish(
-                    job.getContentTargetType(),
-                    job.getContentId(),
-                    job.getOperation(),
-                    List.of(new MediaRealtimeUpdate(job.getMediaId(), job.getS3Key(), job.getOrderIndex())),
-                    List.of(job.getS3Key())
-                );
+                        job.getContentTargetType(),
+                        job.getContentId(),
+                        job.getOperation(),
+                        List.of(new MediaRealtimeUpdate(job.getMediaId(), job.getS3Key(), job.getOrderIndex())),
+                        List.of(job.getS3Key()));
             }
         } catch (Exception ex) {
             log.error("[MediaCompression] Failed job: {}", job, ex);

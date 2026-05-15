@@ -1,5 +1,6 @@
 const Relationship = require("../models/Relationship");
 const { publishRelationshipEvent } = require("../events/relationshipEvents");
+const { publishNotification } = require("../events/notificationEvents");
 
 exports.getRelationshipBetween = async (userId1, userId2) => {
   return await Relationship.findOne({
@@ -24,7 +25,14 @@ exports.sendFriendRequest = async (requesterId, receiverId) => {
     if (relationship.status === "PENDING") {
       throw new Error("Đã tồn tại lời mời kết bạn.");
     }
-    // If it was REMOVED or BLOCKED, we update it
+    if (relationship.status === "BLOCKED") {
+      if (relationship.requester_id === requesterId) {
+        throw new Error("Bạn đang chặn người này. Hãy bỏ chặn trước khi kết bạn.");
+      } else {
+        throw new Error("Bạn đã bị người này chặn.");
+      }
+    }
+    // If it was REMOVED, we update it
     relationship.requester_id = requesterId;
     relationship.receiver_id = receiverId;
     relationship.status = "PENDING";
@@ -39,6 +47,13 @@ exports.sendFriendRequest = async (requesterId, receiverId) => {
   await relationship.save();
   try {
     await publishRelationshipEvent("REQUEST_SENT", relationship);
+    await publishNotification({
+      recipientId: receiverId,
+      senderId: requesterId,
+      type: "FRIEND_REQUEST",
+      content: "Bạn có một lời mời kết bạn mới",
+      referenceId: relationship._id.toString()
+    });
   } catch (err) {
     console.error(`[RelationshipService] Failed to publish REQUEST_SENT event: ${err.message}`);
   }
@@ -68,6 +83,13 @@ exports.acceptFriendRequest = async (relationshipId) => {
 
   try {
     await publishRelationshipEvent("REQUEST_ACCEPTED", relationship);
+    await publishNotification({
+      recipientId: relationship.requester_id,
+      senderId: relationship.receiver_id,
+      type: "FRIEND_ACCEPTED",
+      content: "Đã chấp nhận lời mời kết bạn của bạn",
+      referenceId: relationship._id.toString()
+    });
   } catch (err) {
     console.error(`[RelationshipService] Failed to publish REQUEST_ACCEPTED event: ${err.message}`);
   }
@@ -184,4 +206,69 @@ exports.unfriend = async (userId, friendId) => {
   }
   
   return relationship;
+};
+
+exports.blockUser = async (blockerId, blockedId) => {
+  if (blockerId === blockedId) {
+    throw new Error("Không thể tự chặn chính mình.");
+  }
+
+  let relationship = await exports.getRelationshipBetween(blockerId, blockedId);
+
+  if (relationship) {
+    relationship.requester_id = blockerId;
+    relationship.receiver_id = blockedId;
+    relationship.status = "BLOCKED";
+  } else {
+    relationship = new Relationship({
+      requester_id: blockerId,
+      receiver_id: blockedId,
+      status: "BLOCKED",
+    });
+  }
+
+  await relationship.save();
+  
+  try {
+    await publishRelationshipEvent("USER_BLOCKED", relationship);
+  } catch (err) {
+    console.error(`[RelationshipService] Failed to publish USER_BLOCKED event: ${err.message}`);
+  }
+
+  return relationship;
+};
+
+exports.unblockUser = async (blockerId, blockedId) => {
+  const relationship = await Relationship.findOne({
+    requester_id: blockerId,
+    receiver_id: blockedId,
+    status: "BLOCKED",
+  });
+
+  if (!relationship) {
+    throw new Error("Không tìm thấy yêu cầu chặn từ bạn đối với người này.");
+  }
+
+  relationship.status = "REMOVED";
+  await relationship.save();
+
+  try {
+    await publishRelationshipEvent("USER_UNBLOCKED", relationship);
+  } catch (err) {
+    console.error(`[RelationshipService] Failed to publish USER_UNBLOCKED event: ${err.message}`);
+  }
+
+  return relationship;
+};
+
+exports.checkBlockStatus = async (userId1, userId2) => {
+  const relationship = await exports.getRelationshipBetween(userId1, userId2);
+  if (!relationship || relationship.status !== "BLOCKED") {
+    return { isBlocked: false, blockerId: null };
+  }
+
+  return {
+    isBlocked: true,
+    blockerId: relationship.requester_id,
+  };
 };

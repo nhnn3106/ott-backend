@@ -5,30 +5,40 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="1bb96e93-77b6-4b77-b543-9908f50ffd65" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/api-gateway/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/api-gateway/src/main/resources/application.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/chat-service/src/consumers/index.js" beforeDir="false" afterPath="$PROJECT_DIR$/chat-service/src/consumers/index.js" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/chat-service/src/consumers/userConsumer.js" beforeDir="false" afterPath="$PROJECT_DIR$/chat-service/src/consumers/userConsumer.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/chat-service/src/models/User.js" beforeDir="false" afterPath="$PROJECT_DIR$/chat-service/src/models/User.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/chat-service/src/services/userService.js" beforeDir="false" afterPath="$PROJECT_DIR$/chat-service/src/services/userService.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/media-service/src/main/java/mediaservice/configs/RabbitMQConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/media-service/src/main/java/mediaservice/configs/RabbitMQConfig.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/media-service/src/main/java/mediaservice/dtos/events/UserCreatedEvent.java" beforeDir="false" afterPath="$PROJECT_DIR$/media-service/src/main/java/mediaservice/dtos/events/UserCreatedEvent.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/media-service/src/main/java/mediaservice/services/UserCreatedEventConsumer.java" beforeDir="false" afterPath="$PROJECT_DIR$/media-service/src/main/java/mediaservice/services/UserCreatedEventConsumer.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/chat-service/src/services/relationshipService.js" beforeDir="false" afterPath="$PROJECT_DIR$/chat-service/src/services/relationshipService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/media-service/src/main/java/mediaservice/services/impl/CommentServiceImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/media-service/src/main/java/mediaservice/services/impl/CommentServiceImpl.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/media-service/src/main/java/mediaservice/services/impl/ReactionServiceImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/media-service/src/main/java/mediaservice/services/impl/ReactionServiceImpl.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/media-service/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/media-service/src/main/resources/application.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/config/RabbitMQConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/config/RabbitMQConfig.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/consumer/NotificationConsumer.java" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/consumer/NotificationConsumer.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/notification-service/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/src/main/resources/application.properties" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/notification-service/target/classes/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/target/classes/application.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/event/UserCreatedEvent.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/event/UserCreatedEvent.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/event/UserUpdatedEvent.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/event/UserUpdatedEvent.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/request/UpdateProfileRequest.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/request/UpdateProfileRequest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/response/UserProfileResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/response/UserProfileResponse.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/entity/User.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/entity/User.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/mapper/UserMapper.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/mapper/UserMapper.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/AccountService.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/AccountService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/ProfileService.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/ProfileService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/UserPhotoService.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/UserPhotoService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/UserService.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/UserService.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="CopilotChats">
+    <option name="panelChat">
+      <chat>
+        <option name="activeSessionId" value="2ab20c87-a76c-4f3b-9006-bde4f5958b2a" />
+        <option name="sessions">
+          <session>
+            <option name="chatType" value="PANEL" />
+            <option name="id" value="2ab20c87-a76c-4f3b-9006-bde4f5958b2a" />
+            <option name="modeId" value="Agent" />
+            <option name="modelType" value="builtin_family" />
+            <option name="modelValue" value="gpt-5.2-codex" />
+            <option name="targetType" value="LOCAL" />
+          </session>
+        </option>
+        <option name="type" value="PANEL" />
+      </chat>
+    </option>
   </component>
   <component name="CopilotPersistence">
     <persistenceIdMap>
@@ -217,6 +227,14 @@
         <option name="Make" enabled="true" />
       </method>
     </configuration>
+    <configuration name="MediaServiceSpringApplication" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot" nameIsGenerated="true">
+      <option name="FRAME_DEACTIVATION_UPDATE_POLICY" value="UpdateClassesAndResources" />
+      <module name="mediaServices" />
+      <option name="SPRING_BOOT_MAIN_CLASS" value="mediaservice.MediaServiceSpringApplication" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="NotificationServiceApplication" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot" nameIsGenerated="true">
       <option name="FRAME_DEACTIVATION_UPDATE_POLICY" value="UpdateClassesAndResources" />
       <module name="notification-service" />
@@ -274,6 +292,7 @@
       </method>
     </configuration>
     <list>
+      <item itemvalue="Spring Boot.MediaServiceSpringApplication" />
       <item itemvalue="Spring Boot.ApiGatewayApplication" />
       <item itemvalue="Spring Boot.AuthServiceApplication" />
       <item itemvalue="Spring Boot.NotificationServiceApplication" />
