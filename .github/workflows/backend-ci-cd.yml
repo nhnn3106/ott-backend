@@ -251,7 +251,39 @@ jobs:
         shell: bash
         run: |
           IMAGE_URI="${{ steps.ecr.outputs.registry }}/${{ steps.meta.outputs.repo }}:${{ github.sha }}"
-          CMD="sudo AWS_REGION=$AWS_REGION /opt/ott/deploy-service.sh '${{ matrix.service }}' '$IMAGE_URI'"
+          SERVICE_NAME="${{ matrix.service }}"
+          CMD="$(cat <<'EOS'
+          set -euo pipefail
+
+          APP_DIR="/opt/ott"
+          REPO_DIR=""
+
+          for candidate in /home/ssm-user/ott-backend /home/ubuntu/ott-backend /root/ott-backend; do
+            if [ -d "$candidate/.git" ]; then
+              REPO_DIR="$candidate"
+              break
+            fi
+          done
+
+          if [ -n "$REPO_DIR" ]; then
+            git config --global --add safe.directory "$REPO_DIR" || true
+            git -C "$REPO_DIR" fetch origin main
+            git -C "$REPO_DIR" checkout main
+            git -C "$REPO_DIR" pull --ff-only origin main
+
+            sudo cp "$REPO_DIR/deploy/docker-compose.prod.yml" "$APP_DIR/docker-compose.prod.yml"
+            sudo cp "$REPO_DIR/deploy/deploy-service.sh" "$APP_DIR/deploy-service.sh"
+            sudo chmod +x "$APP_DIR/deploy-service.sh"
+          else
+            echo "No ott-backend git clone found on EC2; using existing /opt/ott deploy files."
+          fi
+
+          sudo AWS_REGION="__AWS_REGION__" /opt/ott/deploy-service.sh "__SERVICE_NAME__" "__IMAGE_URI__"
+          EOS
+          )"
+          CMD="${CMD//__AWS_REGION__/$AWS_REGION}"
+          CMD="${CMD//__SERVICE_NAME__/$SERVICE_NAME}"
+          CMD="${CMD//__IMAGE_URI__/$IMAGE_URI}"
           PARAMS="$(jq -n --arg cmd "$CMD" '{commands:[$cmd]}')"
 
           COMMAND_ID="$(aws ssm send-command \
