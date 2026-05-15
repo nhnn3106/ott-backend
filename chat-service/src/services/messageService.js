@@ -20,6 +20,7 @@ const {
 } = require("@aws-sdk/client-rekognition");
 const { s3Client, bucketName } = require("../config/s3");
 const { publishMessageSentEvent } = require("./analyticsPublisher");
+const { publishMessageForReview } = require("./chatModerationPublisher");
 
 const fs = require("fs/promises");
 const path = require("path");
@@ -649,6 +650,16 @@ exports.sendMessage = async ({
   });
 
   const savedMessage = await newMessage.save();
+
+  if (type === "text") {
+    publishMessageForReview(
+      savedMessage.msg_id,
+      senderId,
+      normalizedContent[0],
+      conversationId,
+    );
+  }
+
   const updatedConversation = await ConversationService.updateLastMessage(
     conversationId,
     savedMessage,
