@@ -53,6 +53,21 @@ touch "$IMAGES_FILE"
   aws ecr get-login-password --region "$AWS_REGION" \
     | docker login --username AWS --password-stdin "$ECR_REGISTRY"
 
+  case "$SERVICE" in
+    notification-service|user-service|media-service|chat-service)
+      echo "Ensuring shared dependencies are running: redis rabbitmq"
+      docker compose --env-file "$RUNTIME_ENV_FILE" --env-file "$IMAGES_FILE" -f "$COMPOSE_FILE" up -d redis rabbitmq
+      ;;
+    auth-service)
+      echo "Ensuring shared dependency is running: rabbitmq"
+      docker compose --env-file "$RUNTIME_ENV_FILE" --env-file "$IMAGES_FILE" -f "$COMPOSE_FILE" up -d rabbitmq
+      ;;
+    analytic-service)
+      echo "Ensuring shared dependencies are running: analytic-postgres rabbitmq"
+      docker compose --env-file "$RUNTIME_ENV_FILE" --env-file "$IMAGES_FILE" -f "$COMPOSE_FILE" up -d analytic-postgres rabbitmq
+      ;;
+  esac
+
   echo "Pulling $SERVICE -> $IMAGE_URI"
   docker compose --env-file "$RUNTIME_ENV_FILE" --env-file "$IMAGES_FILE" -f "$COMPOSE_FILE" pull "$SERVICE"
 
