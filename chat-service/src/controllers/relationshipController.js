@@ -7,6 +7,7 @@ exports.sendRequest = async (req, res) => {
     const { relationship, conversation, message } = result;
 
     // Emit socket events for new conversation and system message (not yet moved to MQ)
+    req.io.to(`user:${requesterId}`).emit("tao_phong_moi", conversation);
     req.io.to(`user:${receiverId}`).emit("tao_phong_moi", conversation);
     req.io.to(`user:${receiverId}`).emit("tin_nhan", message);
     req.io.to(`user:${requesterId}`).emit("tin_nhan", message);

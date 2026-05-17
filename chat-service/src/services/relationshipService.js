@@ -68,7 +68,13 @@ exports.sendFriendRequest = async (requesterId, receiverId) => {
     conversationId: conversation._id,
     senderId: requesterId,
     content: "Đã gửi lời mời kết bạn",
-    type: "system_friend_request"
+    type: "system_friend_request",
+    systemMeta: {
+      action: "friend_request_sent",
+      relationship_id: relationship._id.toString(),
+      requester_id: requesterId,
+      receiver_id: receiverId,
+    },
   });
 
   return { relationship, conversation, message };
@@ -106,7 +112,13 @@ exports.acceptFriendRequest = async (relationshipId) => {
     conversationId: conversation._id,
     senderId: relationship.receiver_id, // Receiver accepts, so they are the "sender" of the event
     content: "Hai bạn đã trở thành bạn bè. Hãy bắt đầu trò chuyện!",
-    type: "system_add" // Or a new type if preferred
+    type: "system_add", // Or a new type if preferred
+    systemMeta: {
+      action: "friend_request_accepted",
+      relationship_id: relationship._id.toString(),
+      requester_id: relationship.requester_id,
+      receiver_id: relationship.receiver_id,
+    },
   });
 
   return { relationship, message };
