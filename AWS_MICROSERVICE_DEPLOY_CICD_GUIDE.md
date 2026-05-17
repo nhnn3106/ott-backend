@@ -886,6 +886,29 @@ EXPO_PUBLIC_WEB_URL=https://app.example.com
 
 Voi web hien tai, `SOCKET_CHAT_SERVER_URL` duoc tinh tu `VITE_API_URL.replace("/riff/api", "")`, nen neu dat `VITE_API_URL=https://api.example.com/riff/api` thi chat socket se di vao `https://api.example.com/socket.io`, dung voi route gateway hien co.
 
+Neu deploy web len Vercel khi backend chua co HTTPS/domain rieng, dung proxy same-origin trong `ott-frontend-web/vercel.json`:
+
+```properties
+VITE_API_URL=/riff/api
+VITE_FRONTEND_URL=https://your-vercel-project.vercel.app
+VITE_LIVEKIT_URL=wss://chat-service-wplw6oap.livekit.cloud
+```
+
+Gateway/chat-service can cho phep origin local va Vercel:
+
+```properties
+FRONTEND_URL=http://localhost:5173
+FRONTEND_URL_ALT=http://127.0.0.1:5173
+FRONTEND_URL_DEPLOYED=https://*.vercel.app
+CHAT_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,https://*.vercel.app
+```
+
+Khi da co domain HTTPS that cho backend, nen doi web ve cau hinh truc tiep:
+
+```properties
+VITE_API_URL=https://api.example.com/riff/api
+```
+
 ---
 
 ## 11. Tao script deploy tung service tren EC2
