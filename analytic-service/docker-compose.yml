@@ -1,0 +1,29 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: analytic-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  analytic-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: analytic-service
+    env_file:
+      - ../.env
+    ports:
+      - "8092:8092"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy

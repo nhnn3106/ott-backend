@@ -10,6 +10,7 @@ import mediaservice.models.Content;
 import mediaservice.repositories.AccountRepository;
 import mediaservice.repositories.CommentRepository;
 import mediaservice.repositories.ContentRepository;
+import mediaservice.realtime.NotificationPublisher;
 import mediaservice.services.CommentService;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -28,6 +29,9 @@ public class CommentServiceImpl implements CommentService {
     private final CommentMapper commentMapper;
     private final AccountRepository accountRepository;
     private final ContentRepository contentRepository;
+    private final mediaservice.realtime.PostActivityPublisher postActivityPublisher;
+    private final mediaservice.services.UserSyncService userSyncService;
+    private final NotificationPublisher notificationPublisher;
 
     @Override
     @Transactional
@@ -38,7 +42,8 @@ public class CommentServiceImpl implements CommentService {
         comment.setDepth(request.getParentCommentId() == null ? 0 : 1);
 
         if (request.getAccountId() != null) {
-            Account account = accountRepository.findById(request.getAccountId()).orElse(null);
+            // Đảm bảo user đã được sync thông tin (displayName, avatar...)
+            mediaservice.models.UserAccount account = userSyncService.syncUser(request.getAccountId()).orElse(null);
             comment.setAccount(account);
         }
         if (request.getContentId() != null) {
@@ -50,7 +55,20 @@ public class CommentServiceImpl implements CommentService {
             comment.setParentComment(parent);
         }
         Comment savedComment = commentRepository.save(comment);
-        return commentMapper.toResponse(savedComment);
+        CommentResponse response = commentMapper.toResponse(savedComment);
+        if (savedComment.getContent() != null) {
+            postActivityPublisher.publish(savedComment.getContent().getId(), "COMMENT", "CREATE", response);
+            
+            // Send notification to post author
+            notificationPublisher.publishNotification(
+                    savedComment.getContent().getAccount().getId(), 
+                    request.getAccountId(), 
+                    "POST_COMMENT", 
+                    (savedComment.getAccount() != null && savedComment.getAccount().getDisplayName() != null ? savedComment.getAccount().getDisplayName() : "Ai đó") + " đã bình luận về bài viết của bạn.", 
+                    savedComment.getContent().getId()
+            );
+        }
+        return response;
     }
 
     @Override
@@ -86,7 +104,11 @@ public class CommentServiceImpl implements CommentService {
             comment.setEdited(true);
         }
         Comment updatedComment = commentRepository.save(comment);
-        return commentMapper.toResponse(updatedComment);
+        CommentResponse response = commentMapper.toResponse(updatedComment);
+        if (updatedComment.getContent() != null) {
+            postActivityPublisher.publish(updatedComment.getContent().getId(), "COMMENT", "UPDATE", response);
+        }
+        return response;
     }
 
     @Override
@@ -97,6 +119,9 @@ public class CommentServiceImpl implements CommentService {
                 .orElseThrow(() -> new RuntimeException("Comment not found with id: " + id));
         comment.setDeleted(true);
         commentRepository.save(comment);
+        if (comment.getContent() != null) {
+            postActivityPublisher.publish(comment.getContent().getId(), "COMMENT", "DELETE", commentMapper.toResponse(comment));
+        }
     }
 
     @Override

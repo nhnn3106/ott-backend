@@ -37,6 +37,8 @@ public class QrLoginService {
     private final JwtService jwtService;
     private final QrCodeMapper qrCodeMapper;
     private final UserServiceClient userServiceClient;
+    private final NotificationPublisher notificationPublisher;
+    private final iuh.fit.authservice.websocket.QrWebSocketHandler qrWebSocketHandler;
 
     @Transactional
     public QrCodeResponse generateLoginQrCode(QrGenerateRequest request) {
@@ -106,6 +108,9 @@ public class QrLoginService {
 
         QrStatusResponse response = qrCodeMapper.toQrStatusResponse(qrCode);
         response.setMessage("QR code scanned successfully. Please confirm to login.");
+        
+        qrWebSocketHandler.sendQrStatusUpdate(qrCode.getId(), response);
+        
         return response;
     }
 
@@ -148,6 +153,7 @@ public class QrLoginService {
 
             QrStatusResponse response = qrCodeMapper.toQrStatusResponse(qrCode);
             response.setMessage("Login request cancelled");
+            qrWebSocketHandler.sendQrStatusUpdate(qrCode.getId(), response);
             return response;
         }
 
@@ -167,6 +173,18 @@ public class QrLoginService {
                 LoginMethod.QR_CODE
         );
 
+        userServiceClient.createSession(
+                userId,
+                qrCode.getDeviceId(),
+                null,
+                qrCode.getIpAddress(),
+                qrCode.getDeviceInfo(),
+                token,
+                refreshToken,
+                LoginMethod.QR_CODE.name(),
+                qrCode.getDeviceType() != null ? qrCode.getDeviceType().name() : "UNKNOWN"
+        );
+
         qrCode.setStatus(QrCodeStatus.CONFIRMED);
         qrCode.setConfirmedAt(LocalDateTime.now());
         qrCode = qrCodeRepository.save(qrCode);
@@ -177,6 +195,7 @@ public class QrLoginService {
         qrLoginSessionRepository.save(loginSession);
 
         userServiceClient.updateLastLogin(userId);
+        notificationPublisher.publishUserLoginEvent(userId, LoginMethod.QR_CODE.name().toLowerCase());
 
         log.info("QR login confirmed successfully - qrId: {}, userId: {}", qrCode.getId(), userId);
 
@@ -185,6 +204,9 @@ public class QrLoginService {
         response.setRefreshToken(refreshToken);
         response.setExpiresAt(session.getExpiresAt());
         response.setMessage("Login successful");
+        
+        qrWebSocketHandler.sendQrStatusUpdate(qrCode.getId(), response);
+        
         return response;
     }
 
@@ -250,6 +272,10 @@ public class QrLoginService {
             qrCode.setStatus(QrCodeStatus.CANCELLED);
             qrCodeRepository.save(qrCode);
             log.info("QR code cancelled successfully - qrId: {}", qrId);
+            
+            QrStatusResponse response = qrCodeMapper.toQrStatusResponse(qrCode);
+            response.setMessage("Login request was cancelled.");
+            qrWebSocketHandler.sendQrStatusUpdate(qrId, response);
         }
     }
 

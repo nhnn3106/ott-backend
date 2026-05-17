@@ -15,6 +15,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.text.ParseException;
@@ -32,6 +33,10 @@ public class SessionService {
     private final QrLoginSessionRepository qrLoginSessionRepository;
     private final JwtService jwtService;
     private final EntityManager entityManager;
+    private final NotificationPublisher notificationPublisher;
+
+    @Value("${jwt.expiration:3600}")
+    private long jwtExpiration;
 
     @Transactional
     public UserSession createUserSession(String userId, String deviceId, DeviceType deviceType,
@@ -117,6 +122,8 @@ public class SessionService {
         userSessionRepository.save(session);
         invalidateSessionTokens(session);
 
+        notificationPublisher.publishUserLogoutEvent(userId, sessionId, session.getDeviceId(), "SPECIFIC", null);
+
         log.info("Session revoked successfully - sessionId: {}", sessionId);
     }
 
@@ -136,6 +143,9 @@ public class SessionService {
             entityManager.flush();
             userSessionRepository.delete(session);
             entityManager.flush();
+
+            notificationPublisher.publishUserLogoutEvent(userId, null, deviceId, "SPECIFIC", null);
+
             log.info("Session deleted by deviceId: {}, userId: {}", deviceId, userId);
         } else {
             log.debug("No active session found for deviceId: {}", deviceId);
@@ -149,40 +159,39 @@ public class SessionService {
         List<UserSession> sessions = userSessionRepository.findByUserIdAndIsActiveTrue(userId);
 
         int revokedCount = 0;
+        java.util.List<String> revokedDeviceIds = new java.util.ArrayList<>();
         for (UserSession session : sessions) {
             if (!session.getSessionToken().equals(currentSessionToken)) {
                 session.revoke("Revoked by user - all other sessions");
                 invalidateSessionTokens(session);
+                revokedDeviceIds.add(session.getDeviceId());
                 revokedCount++;
             }
         }
 
         if (revokedCount > 0) {
             userSessionRepository.saveAll(sessions);
+            notificationPublisher.publishUserLogoutEvent(userId, null, null, "OTHERS", revokedDeviceIds);
             log.info("Revoked {} other sessions for userId: {}", revokedCount, userId);
         } else {
             log.debug("No other sessions to revoke for userId: {}", userId);
         }
     }
 
-    @Transactional
     public int revokeAllUserSessions(String userId, String reason) {
-        log.info("Revoking all sessions for userId: {} | Reason: {}", userId, reason);
-
+        log.info("Internal revoke-all called for userId: {} - auth-service will delete all active sessions", userId);
+        
         List<UserSession> sessions = userSessionRepository.findByUserIdAndIsActiveTrue(userId);
-        if (sessions.isEmpty()) {
-            log.debug("No active sessions found for userId: {}", userId);
-            return 0;
-        }
-
-        sessions.forEach(session -> {
+        if (sessions.isEmpty()) return 0;
+        
+        for (UserSession session : sessions) {
             session.revoke(reason);
             invalidateSessionTokens(session);
-        });
-
+        }
         userSessionRepository.saveAll(sessions);
-        log.info("Successfully revoked {} sessions for userId: {}", sessions.size(), userId);
-
+        
+        notificationPublisher.publishUserLogoutEvent(userId, null, null, "ALL", null);
+        
         return sessions.size();
     }
 
@@ -249,5 +258,15 @@ public class SessionService {
                 .isCurrent(isCurrent)
                 .twoFactorVerified(session.getTwoFactorVerified())
                 .build();
+    }
+
+    public void invalidateTokenById(String jwtId, String reason) {
+        log.info("Invalidating token by jwtId: {}", jwtId);
+
+        LocalDateTime expiry = LocalDateTime.now().plusSeconds(jwtExpiration);
+
+        jwtService.invalidateToken(jwtId, expiry, null, "ACCESS", reason);
+
+        log.info("Token invalidated - jwtId: {}", jwtId);
     }
 }

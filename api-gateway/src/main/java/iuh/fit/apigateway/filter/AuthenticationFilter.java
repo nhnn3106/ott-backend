@@ -55,10 +55,13 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
 
             "/riff/api/users/account/password/forgot/request",
             "/riff/api/users/account/password/forgot/verify",
+            "/riff/api/users/account/password/forgot/otp/verify",
 
 
             "/actuator/**",
-            "/riff/api/actuator/**"
+            "/riff/api/actuator/**",
+            "/socket.io/**",
+            "/riff/api/chat/socket.io/**"   
     );
 
     private static final List<String> BLOCKED_EXTERNAL = Arrays.asList(
@@ -77,6 +80,11 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
         if (isBlocked(path)) {
             log.warn("Blocked external access to internal endpoint: {} {}", method, path);
             return writeErrorResponse(exchange, HttpStatus.FORBIDDEN, 1007, "Access denied");
+        }
+
+        if ("OPTIONS".equalsIgnoreCase(method)) {
+            log.debug("CORS preflight request - bypassing authentication: {} {}", method, path);
+            return chain.filter(exchange);
         }
 
         // Public endpoints - bypass auth

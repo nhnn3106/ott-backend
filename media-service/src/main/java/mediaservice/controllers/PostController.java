@@ -51,8 +51,8 @@ public class PostController {
             try {
                 accessControls = objectMapper.readValue(
                         accessControlsJson,
-                        new TypeReference<List<AccessControlRequest>>() {}
-                );
+                        new TypeReference<List<AccessControlRequest>>() {
+                        });
             } catch (Exception ignored) {
                 accessControls = List.of();
             }
@@ -60,13 +60,13 @@ public class PostController {
         return ResponseEntity.ok(postService.createPost(accountId, caption, vis, files, captions, accessControls));
     }
 
-    /** GET /posts  – tất cả bài post */
+    /** GET /posts – tất cả bài post */
     @GetMapping
     public ResponseEntity<List<PostResponse>> getAllPosts() {
         return ResponseEntity.ok(postService.getAllPosts());
     }
 
-    /** GET /posts/page  – có phân trang */
+    /** GET /posts/page – có phân trang */
     @GetMapping("/page")
     public ResponseEntity<Page<PostResponse>> getPostsPaged(
             @PageableDefault(size = 5, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
@@ -81,14 +81,11 @@ public class PostController {
         return ResponseEntity.ok(postService.findAllPostsWithAuthorized(pageable, userId));
     }
 
-
     /** GET /posts/{id} */
     @GetMapping("/{id}")
     public ResponseEntity<PostResponse> getPostById(@PathVariable String id) {
         return ResponseEntity.ok(postService.getPostById(id));
     }
-
-
 
     /** GET /posts/user/{userId} */
     @GetMapping("/user/{userId}")
@@ -97,6 +94,45 @@ public class PostController {
     }
 
     /** PUT /posts/{id} – cập nhật bài post */
+    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<PostResponse> updatePostMultipart(
+            @PathVariable String id,
+            @RequestParam("accountId") String accountId,
+            @RequestParam("caption") String caption,
+            @RequestParam(value = "visibility", defaultValue = "PUBLIC") String visibility,
+            @RequestParam(value = "files", required = false) List<MultipartFile> files,
+            @RequestParam(value = "captions", required = false) List<String> captions,
+            @RequestParam(value = "accessControls", required = false) String accessControlsJson,
+            @RequestParam(value = "existingMedias", required = false) String existingMediasJson) {
+        VisibilityType vis = VisibilityType.valueOf(visibility.toUpperCase());
+        List<AccessControlRequest> accessControls = List.of();
+        if (accessControlsJson != null && !accessControlsJson.isBlank()) {
+            try {
+                accessControls = objectMapper.readValue(
+                        accessControlsJson,
+                        new TypeReference<List<AccessControlRequest>>() {
+                        });
+            } catch (Exception ignored) {
+                accessControls = List.of();
+            }
+        }
+
+        List<mediaservice.dtos.requests.MediaRequest> existingMedias = List.of();
+        if (existingMediasJson != null && !existingMediasJson.isBlank()) {
+            try {
+                existingMedias = objectMapper.readValue(
+                        existingMediasJson,
+                        new TypeReference<List<mediaservice.dtos.requests.MediaRequest>>() {
+                        });
+            } catch (Exception ignored) {
+                existingMedias = List.of();
+            }
+        }
+
+        return ResponseEntity.ok(
+                postService.updatePost(id, accountId, caption, vis, files, captions, accessControls, existingMedias));
+    }
+
     @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<PostResponse> updatePost(
             @PathVariable String id,
@@ -130,8 +166,7 @@ public class PostController {
         return ResponseEntity.ok(Map.of(
                 "liked", liked,
                 "totalReactions", total,
-                "reaction", liked ? reaction : Map.of()
-        ));
+                "reaction", liked ? reaction : Map.of()));
     }
 
     /** GET /posts/{postId}/reactions – lấy tất cả reactions của bài post */
@@ -140,7 +175,10 @@ public class PostController {
         return ResponseEntity.ok(reactionService.getReactionsByTargetId(postId));
     }
 
-    /** GET /posts/reactions/by-account?accountId=xxx – toàn bộ reactions của một user */
+    /**
+     * GET /posts/reactions/by-account?accountId=xxx – toàn bộ reactions của một
+     * user
+     */
     @GetMapping("/reactions/by-account")
     public ResponseEntity<List<ReactionResponse>> getReactionsByAccount(
             @RequestParam String accountId) {

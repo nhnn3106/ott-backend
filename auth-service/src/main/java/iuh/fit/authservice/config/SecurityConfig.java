@@ -59,6 +59,7 @@ public class SecurityConfig {
             "/auth/logout",
             "/auth/qr/generate",
             "/auth/qr/status/**",
+            "/auth/ws/qr/**"
     };
 
     private static final String[] INTERNAL_ENDPOINTS = {
@@ -72,6 +73,7 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
                         .requestMatchers(INTERNAL_ENDPOINTS).permitAll()
                         .anyRequest().authenticated()

@@ -19,9 +19,33 @@ public class RabbitMQConfig {
     @Value("${rabbitmq.routing-key.alert}")
     public String alertRoutingKey;
 
+    @Value("${rabbitmq.exchange.user-events}")
+    public String userEventsExchange;
+
+    @Value("${rabbitmq.routing-key.user-created}")
+    public String userCreatedRoutingKey;
+
+    @Value("${rabbitmq.routing-key.user-updated:user.updated}")
+    public String userUpdatedRoutingKey;
+
+    @Value("${rabbitmq.routing-key.user-logout:user.logout}")
+    public String userLogoutRoutingKey;
+
+    @Value("${rabbitmq.queue.user-updated:user.updated.queue}")
+    public String userUpdatedQueue;
+
+    @Value("${rabbitmq.routing-key.user-status-changed}")
+    public String userStatusChangedRoutingKey;
+
     @Bean
     public MessageConverter jsonMessageConverter() {
-        return new Jackson2JsonMessageConverter();
+        Jackson2JsonMessageConverter converter = new Jackson2JsonMessageConverter();
+        org.springframework.amqp.support.converter.DefaultJackson2JavaTypeMapper typeMapper = 
+            new org.springframework.amqp.support.converter.DefaultJackson2JavaTypeMapper();
+        typeMapper.setTrustedPackages("*");
+        typeMapper.setTypePrecedence(org.springframework.amqp.support.converter.Jackson2JavaTypeMapper.TypePrecedence.INFERRED);
+        converter.setJavaTypeMapper(typeMapper);
+        return converter;
     }
 
     @Bean
@@ -29,5 +53,20 @@ public class RabbitMQConfig {
         RabbitTemplate template = new RabbitTemplate(connectionFactory);
         template.setMessageConverter(jsonMessageConverter());
         return template;
+    }
+
+    @Bean
+    public org.springframework.amqp.core.TopicExchange userEventsExchange() {
+        return new org.springframework.amqp.core.TopicExchange(userEventsExchange, true, false);
+    }
+
+    @Bean
+    public org.springframework.amqp.core.Queue userUpdatedQueue() {
+        return new org.springframework.amqp.core.Queue(userUpdatedQueue, true);
+    }
+
+    @Bean
+    public org.springframework.amqp.core.Binding userUpdatedBinding(org.springframework.amqp.core.Queue userUpdatedQueue, org.springframework.amqp.core.TopicExchange userEventsExchange) {
+        return org.springframework.amqp.core.BindingBuilder.bind(userUpdatedQueue).to(userEventsExchange).with(userUpdatedRoutingKey);
     }
 }

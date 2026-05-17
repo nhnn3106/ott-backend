@@ -13,11 +13,13 @@ public interface StoryService {
     StoryResponse getStoryById(String id);
     List<StoryResponse> getAllStories();
     Page<StoryResponse> getAllStories(Pageable pageable);
-    StoryResponse updateStory(String id, StoryRequest request);
+    StoryResponse updateStory(String id, StoryRequest request, java.util.List<org.springframework.web.multipart.MultipartFile> files, java.util.List<String> captions);
     void deleteStory(String id);
     List<StoryResponse> getStoriesByUserId(String userId);
     List<StoryResponse> getActiveStories();
     List<StoryResponse> getAuthorizedActiveStories(String accountId);
     StoryReelResponse getStoriesReel(String accountId, int suggestionLimit);
+    void viewStory(String storyId, String accountId);
+    List<mediaservice.dtos.responses.UserAccountResponse> getStoryViewers(String storyId);
 }
 

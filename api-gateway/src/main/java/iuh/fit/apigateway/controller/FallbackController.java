@@ -18,7 +18,7 @@ public class FallbackController {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(ApiResponse.<Void>builder()
                         .code(5001)
-                        .message("Auth service is currently unavailable. Please try again later.")
+                        .message("AUTH_SERVICE_UNAVAILABLE")
                         .build());
     }
 
@@ -28,7 +28,7 @@ public class FallbackController {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(ApiResponse.<Void>builder()
                         .code(5002)
-                        .message("User service is currently unavailable. Please try again later.")
+                        .message("USER_SERVICE_UNAVAILABLE")
                         .build());
     }
 
@@ -38,7 +38,27 @@ public class FallbackController {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(ApiResponse.<Void>builder()
                         .code(5003)
-                        .message("Notification service is currently unavailable. Please try again later.")
+                        .message("NOTIFICATION_SERVICE_UNAVAILABLE")
+                        .build());
+    }
+
+    @RequestMapping("/media")
+    public ResponseEntity<ApiResponse<Void>> mediaFallback() {
+        log.warn("Circuit breaker triggered for media-service");
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiResponse.<Void>builder()
+                        .code(5003)
+                        .message("MEDIA_SERVICE_UNAVAILABLE")
+                        .build());
+    }
+
+    @RequestMapping("/analytic")
+    public ResponseEntity<ApiResponse<Void>> analyticFallback() {
+        log.warn("Circuit breaker triggered for analytic-service");
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiResponse.<Void>builder()
+                        .code(5004)
+                        .message("ANALYTIC_SERVICE_UNAVAILABLE")
                         .build());
     }
 }

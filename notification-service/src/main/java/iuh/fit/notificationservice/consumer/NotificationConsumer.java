@@ -3,8 +3,10 @@ package iuh.fit.notificationservice.consumer;
 import iuh.fit.notificationservice.dto.event.AlertEmailEvent;
 import iuh.fit.notificationservice.dto.event.OtpEmailEvent;
 import iuh.fit.notificationservice.dto.event.WelcomeEmailEvent;
+import iuh.fit.notificationservice.dto.event.InAppNotificationEvent;
 import iuh.fit.notificationservice.entity.enums.OtpType;
 import iuh.fit.notificationservice.service.EmailService;
+import iuh.fit.notificationservice.service.InAppNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -16,6 +18,7 @@ import org.springframework.stereotype.Component;
 public class NotificationConsumer {
 
     private final EmailService emailService;
+    private final InAppNotificationService inAppNotificationService;
 
     @RabbitListener(queues = "${rabbitmq.queue.otp}")
     public void handleOtpEmail(OtpEmailEvent event) {
@@ -44,8 +47,8 @@ public class NotificationConsumer {
                     event.getToEmail(),
                     event.getToName(),
                     event.getPhone(),
-                    event.isHasPassword(),
-                    event.isHasGoogleLinked(),
+                    event.getHasPassword(),
+                    event.getHasGoogleLinked(),
                     event.getUserId()
             );
         } catch (Exception e) {
@@ -69,6 +72,17 @@ public class NotificationConsumer {
             );
         } catch (Exception e) {
             log.error("Failed to send alert email: {}", e.getMessage());
+            throw e;
+        }
+    }
+
+    @RabbitListener(queues = "${rabbitmq.queue.inapp}")
+    public void handleInAppNotification(InAppNotificationEvent event) {
+        log.info("[RabbitMQ] InApp Notification: to={}", event.getRecipientId());
+        try {
+            inAppNotificationService.processNotificationEvent(event);
+        } catch (Exception e) {
+            log.error("Failed to process in-app notification: {}", e.getMessage());
             throw e;
         }
     }

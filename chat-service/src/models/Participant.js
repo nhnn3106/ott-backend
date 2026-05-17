@@ -14,10 +14,21 @@ const ParticipantSchema = new mongoose.Schema(
       ref: "Conversation",
     },
 
+    last_delivered_message_id: {
+      type: String,
+      required: true,
+      default: "0",
+    },
+
+    last_delivered_at: {
+      type: Date,
+      default: null,
+    },
+
     last_read_message_id: {
       type: String,
       required: true,
-      default: 0,
+      default: "0",
     },
 
     last_read_at: {
@@ -53,6 +64,22 @@ const ParticipantSchema = new mongoose.Schema(
         type: Date,
         default: null,
       },
+      removed_from_group_at: {
+        type: Date,
+        default: null,
+      },
+      removed_by: {
+        type: String,
+        default: null,
+      },
+      group_dissolved_at: {
+        type: Date,
+        default: null,
+      },
+      group_dissolved_by: {
+        type: String,
+        default: null,
+      },
     },
 
     nickname: { type: String },
@@ -69,6 +96,12 @@ const ParticipantSchema = new mongoose.Schema(
       type: String,
       enum: ["admin", "user"],
       default: "user",
+    },
+    
+    status: {
+      type: String,
+      enum: ["invited", "joined"],
+      default: "joined",
     },
   },
   {
