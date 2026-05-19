@@ -45,6 +45,17 @@ const ensureFriendRequestSentMessage = async (
     receiverId,
   );
   const relationshipId = relationship._id.toString();
+  const relationshipIds = Array.from(
+    new Set(
+      [
+        relationshipId,
+        relationship.relationship_id,
+        relationship.id,
+      ]
+        .filter(Boolean)
+        .map((value) => String(value)),
+    ),
+  );
   const requesterName =
     String(requesterNameOverride || "").trim() ||
     await getUserDisplayName(requesterId);
@@ -56,7 +67,13 @@ const ensureFriendRequestSentMessage = async (
       conversation_id: conversation._id,
       type: "system_friend_request",
       "system_meta.action": "friend_request_sent",
-      "system_meta.relationship_id": relationshipId,
+      $or: [
+        { "system_meta.relationship_id": { $in: relationshipIds } },
+        {
+          "system_meta.requester_id": requesterId,
+          "system_meta.receiver_id": receiverId,
+        },
+      ],
     }).lean();
 
     if (message) {
@@ -65,6 +82,7 @@ const ensureFriendRequestSentMessage = async (
         : String(message.content || "");
       const nextSystemMeta = {
         ...(message.system_meta || {}),
+        relationship_id: relationshipId,
         requester_name: requesterName,
       };
       const shouldUpdateMessage =
@@ -155,6 +173,13 @@ exports.sendFriendRequest = async (requesterId, receiverId) => {
 
   await relationship.save();
   const requesterName = await getUserDisplayName(requesterId);
+  const { conversation, message } = await ensureFriendRequestSentMessage(
+    relationship,
+    requesterId,
+    receiverId,
+    { requesterName },
+  );
+
   try {
     await publishRelationshipEvent("REQUEST_SENT", relationship);
     await publishNotification({
@@ -167,13 +192,6 @@ exports.sendFriendRequest = async (requesterId, receiverId) => {
   } catch (err) {
     console.error(`[RelationshipService] Failed to publish REQUEST_SENT event: ${err.message}`);
   }
-
-  const { conversation, message } = await ensureFriendRequestSentMessage(
-    relationship,
-    requesterId,
-    receiverId,
-    { requesterName },
-  );
 
   return { relationship, conversation, message };
 };
