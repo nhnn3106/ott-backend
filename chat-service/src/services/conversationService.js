@@ -23,28 +23,42 @@ exports.createConversation = async ({
   return await newConversation.save();
 };
 
-exports.findOrCreatePrivateConversation = async (user1Id, user2Id) => {
-  const Participant = require("../models/Participant");
-  
-  // Tìm các participant của user1
-  const p1 = await Participant.find({ user_id: user1Id }).lean();
-  const conv1Ids = p1.map(p => String(p.conversation_id));
-  
-  // Tìm tất cả các participant của user2 mà thuộc các conversation của user1
+exports.findPrivateConversation = async (user1Id, user2Id) => {
+  if (!user1Id || !user2Id) return null;
+
+  const user1Participants = await Participant.find({ user_id: user1Id })
+    .select("conversation_id")
+    .lean();
+  const user1ConversationIds = user1Participants.map((item) => item.conversation_id);
+
+  if (user1ConversationIds.length === 0) return null;
+
   const commonParticipants = await Participant.find({
     user_id: user2Id,
-    conversation_id: { $in: conv1Ids }
-  }).populate("conversation_id").lean();
+    conversation_id: { $in: user1ConversationIds },
+  })
+    .select("conversation_id")
+    .lean();
+  const commonConversationIds = commonParticipants.map((item) => item.conversation_id);
 
-  // Tìm cuộc hội thoại type 'private' trong số các cuộc hội thoại chung
-  const privateParticipant = commonParticipants.find(p => 
-    p.conversation_id && 
-    p.conversation_id.type === "private" && 
-    !p.conversation_id.is_self_conversation
-  );
+  if (commonConversationIds.length === 0) return null;
 
-  if (privateParticipant) {
-    return privateParticipant.conversation_id;
+  const conversation = await Conversation.findOne({
+    _id: { $in: commonConversationIds },
+    type: "private",
+    is_self_conversation: { $ne: true },
+    is_deleted: false,
+  })
+    .select("_id")
+    .lean();
+
+  return conversation?._id || null;
+};
+
+exports.findOrCreatePrivateConversation = async (user1Id, user2Id) => {
+  const existingConversationId = await exports.findPrivateConversation(user1Id, user2Id);
+  if (existingConversationId) {
+    return await Conversation.findById(existingConversationId);
   }
 
   // Nếu không thấy, tạo mới
@@ -124,7 +138,29 @@ exports.updateLastMessage = async (conversationId, message) => {
 };
 
 exports.getConversationById = async (conversationId) => {
-  return await Conversation.findById(conversationId);
+  const conversation = await Conversation.findById(conversationId).lean();
+  if (!conversation) return null;
+
+  const ParticipantService = require("./participantService");
+  const memberDetails = await ParticipantService.getConversationMembers(conversationId);
+
+  // Format participants to match frontend expectations (flattened)
+  const formattedParticipants = memberDetails.map((member) => ({
+    _id: member.user_id,
+    user_id: member.user_id,
+    display_name: member.nickname || member.user?.name || member.user_id,
+    nickname: member.nickname || "",
+    name: member.user?.name || "",
+    avatar: member.user?.avatar || "",
+    status: member.user?.is_online ? "online" : "offline",
+    role: member.roles === "admin" ? "admin" : "member",
+    joined_at: member.joined_at,
+  }));
+
+  return {
+    ...conversation,
+    participants: formattedParticipants
+  };
 };
 
 // Update conversation name/avatar
@@ -312,15 +348,101 @@ exports.getOrCreateInviteLink = async (conversationId, requesterId, baseUrl) => 
  * Tham gia nhóm bằng invite token.
  * Nếu đã là thành viên → trả về luôn. Nếu chưa → thêm vào.
  */
+
+
+exports.blockMember = async (conversationId, userId, adminId) => {
+  const ParticipantService = require("./participantService");
+  const Participant = require("../models/Participant");
+  
+  const { conversation, isOwner } = await ParticipantService.assertGroupManager(conversationId, adminId);
+
+  // Find target participant
+  const participant = await Participant.findOne({
+    conversation_id: conversationId,
+    user_id: userId,
+  });
+
+  if (participant) {
+    // Admin (deputy) cannot block other admins
+    if (!isOwner && participant.roles === "admin") {
+      throw new Error("Phó nhóm không thể chặn phó nhóm khác");
+    }
+
+    // Cannot block owner
+    if (String(userId) === String(conversation.created_by)) {
+      throw new Error("Không thể chặn trưởng nhóm");
+    }
+
+    // Hard delete participant
+    await Participant.deleteOne({
+      conversation_id: conversationId,
+      user_id: userId,
+    });
+
+    // Update member count
+    await Conversation.findByIdAndUpdate(conversationId, {
+      $inc: { member_count: -1 },
+    });
+  }
+
+  // Add to blocked list in Conversation model
+  await Conversation.findByIdAndUpdate(conversationId, {
+    $addToSet: { blocked_user_ids: userId },
+  });
+
+  return { success: true, conversationId, userId };
+};
+
+exports.unblockMember = async (conversationId, userId, adminId) => {
+  const ParticipantService = require("./participantService");
+  await ParticipantService.assertGroupManager(conversationId, adminId);
+
+  await Conversation.findByIdAndUpdate(conversationId, {
+    $pull: { blocked_user_ids: userId },
+  });
+
+  return { success: true, conversationId, userId };
+};
+
+exports.getBlockedGroupMembers = async (conversationId, requesterId) => {
+  const ParticipantService = require("./participantService");
+  await ParticipantService.assertGroupManager(conversationId, requesterId);
+
+  const conversation = await Conversation.findById(conversationId)
+    .select("blocked_user_ids")
+    .lean();
+
+  if (!conversation) throw new Error("Nhóm không tồn tại");
+
+  const User = require("../models/User");
+  const users = await User.find({
+    user_id: { $in: conversation.blocked_user_ids || [] },
+  })
+    .select("user_id name avatar")
+    .lean();
+
+  return users;
+};
+
+/**
+ * Tham gia nhóm bằng invite token.
+ * Nếu đã là thành viên → trả về luôn. Nếu chưa → thêm vào.
+ */
 exports.joinByInviteToken = async (token, userId) => {
   const conversation = await Conversation.findOne({ invite_token: token });
   if (!conversation) throw new Error("Link mời không hợp lệ hoặc đã hết hạn");
   if (conversation.is_dissolved) throw new Error("Nhóm đã bị giải tán");
   if (conversation.status === "dissolved") throw new Error("Nhóm đã bị giải tán");
 
+  // Check if user is blocked from this group
+  if (conversation.blocked_user_ids?.includes(userId)) {
+    throw new Error("Bạn đã bị chặn khỏi nhóm này và không thể tham gia lại.");
+  }
+
   const conversationId = conversation._id.toString();
 
   // Kiểm tra đã là thành viên chưa
+  const Participant = require("../models/Participant");
   const existing = await Participant.findOne({
     conversation_id: conversationId,
     user_id: userId,

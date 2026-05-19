@@ -1,5 +1,26 @@
 const Participant = require("../models/Participant");
 const Conversation = require("../models/Conversation");
+const mongoose = require("mongoose");
+
+const normalizeMessageId = (value) => {
+  const normalized = String(value || "0").trim();
+  return /^\d+$/.test(normalized) ? normalized : "0";
+};
+
+const isMessageIdAfter = (left, right) => {
+  const safeLeft = normalizeMessageId(left);
+  const safeRight = normalizeMessageId(right);
+  try {
+    return BigInt(safeLeft) > BigInt(safeRight);
+  } catch {
+    return safeLeft > safeRight;
+  }
+};
+
+const isObjectIdLike = (value) => {
+  const normalized = String(value || "").trim();
+  return mongoose.Types.ObjectId.isValid(normalized);
+};
 
 const assertGroupManager = async (conversationId, requesterId) => {
   const conversation = await Conversation.findById(conversationId);
@@ -135,7 +156,7 @@ exports.getConversationsByUserId = async (userId) => {
 
     // Có tin nhắn mới hơn thời điểm xóa → hiển thị lại
     if (lastMsgId) {
-      return BigInt(lastMsgId) > BigInt(deletedMsgId);
+      return isMessageIdAfter(lastMsgId, deletedMsgId);
     }
 
     // Đã xóa, cuộc hội thoại không còn tin nhắn mới → ẩn
@@ -164,15 +185,76 @@ exports.getParticipantsIncludingRemoved = async (conversationId) => {
   return await Participant.find({ conversation_id: conversationId });
 };
 
+const maxMessageId = (left = "0", right = "0") => {
+  try {
+    return BigInt(String(left || "0")) >= BigInt(String(right || "0"))
+      ? String(left || "0")
+      : String(right || "0");
+  } catch {
+    return String(right || "0");
+  }
+};
+
+const shouldAdvanceMessageId = (current = "0", next = "0") => {
+  try {
+    return BigInt(String(next || "0")) > BigInt(String(current || "0"));
+  } catch {
+    return String(next || "0") !== String(current || "0");
+  }
+};
+
+exports.updateLastDelivered = async (conversationId, userId, msgId) => {
+  const participant = await Participant.findOne({
+    conversation_id: conversationId,
+    user_id: userId,
+  });
+
+  if (!participant) return null;
+
+  if (shouldAdvanceMessageId(participant.last_delivered_message_id, msgId)) {
+    participant.last_delivered_message_id = String(msgId || "0");
+    participant.last_delivered_at = new Date();
+    return await participant.save();
+  }
+
+  return participant;
+};
+
 exports.updateLastRead = async (conversationId, userId, msgId) => {
-  return await Participant.findOneAndUpdate(
-    { conversation_id: conversationId, user_id: userId },
-    {
-      last_read_message_id: msgId,
-      last_read_at: new Date(),
-    },
-    { new: true }
+  const participant = await Participant.findOne({
+    conversation_id: conversationId,
+    user_id: userId,
+  });
+
+  if (!participant) return null;
+
+  const now = new Date();
+  const nextMsgId = String(msgId || "0");
+  const readAdvanced = shouldAdvanceMessageId(
+    participant.last_read_message_id,
+    nextMsgId,
   );
+  const deliveredAdvanced = shouldAdvanceMessageId(
+    participant.last_delivered_message_id,
+    nextMsgId,
+  );
+
+  if (readAdvanced) {
+    participant.last_read_message_id = nextMsgId;
+    participant.last_read_at = now;
+  }
+
+  if (deliveredAdvanced) {
+    participant.last_delivered_message_id = maxMessageId(
+      participant.last_delivered_message_id,
+      nextMsgId,
+    );
+    participant.last_delivered_at = participant.last_delivered_at || now;
+  } else if (!participant.last_delivered_at) {
+    participant.last_delivered_at = now;
+  }
+
+  return await participant.save();
 };
 
 exports.updateConversationCategory = async (conversationId, userId, categoryId) => {
@@ -288,7 +370,7 @@ exports.getConversationMembers = async (conversationId) => {
     participants.map(async (p) => {
       // Try to find by UUID first, then by ObjectId
       let user = await User.findOne({ user_id: p.user_id }).lean();
-      if (!user) {
+      if (!user && isObjectIdLike(p.user_id)) {
         user = await User.findById(p.user_id).lean();
       }
       return {
@@ -296,6 +378,10 @@ exports.getConversationMembers = async (conversationId) => {
         user_id: p.user_id,
         roles: p.roles,
         joined_at: p.joined_at,
+        last_delivered_message_id: p.last_delivered_message_id || "0",
+        last_delivered_at: p.last_delivered_at || null,
+        last_read_message_id: p.last_read_message_id || "0",
+        last_read_at: p.last_read_at || null,
         added_by: p.added_by,
         status: p.status,
         nickname: p.nickname,

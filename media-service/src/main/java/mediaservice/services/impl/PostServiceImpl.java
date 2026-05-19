@@ -77,15 +77,24 @@ public class PostServiceImpl implements PostService {
     private final MediaUploadJobPublisher mediaUploadJobPublisher;
     private final MediaRealtimePublisher mediaRealtimePublisher;
 
+    private final mediaservice.services.UserSyncService userSyncService;
+    private final mediaservice.mappers.ContentAccessControlMapper contentAccessControlMapper;
+
     @PersistenceContext
     private EntityManager entityManager;
+
+    /* ─── helper: ensure author info is fresh ─ */
+    private UserAccount ensureUserSynced(String userId) {
+        return userSyncService.syncUser(userId)
+                .orElseGet(() -> userAccountRepository.findById(userId).orElse(null));
+    }
 
     /* ─── helper: fill totalReactions / totalComments from DB ─ */
     private PostResponse enrichCounts(PostResponse response, String postId) {
         response.setTotalReactions(
                 (int) reactionRepository.countByTargetIdAndTargetType(postId, ReactionTargetType.POST));
         response.setTotalComments(
-                (int) commentRepository.countByContent_Id(postId));
+                (int) commentRepository.countByContent_IdAndIsDeletedFalse(postId));
         // totalShares has no backing model yet → stays 0
         return response;
     }
@@ -104,6 +113,7 @@ public class PostServiceImpl implements PostService {
         Post savedPost = postRepository.save(post);
         String userId = savedPost.getAccount() != null ? savedPost.getAccount().getId() : null;
         analyticsEventPublisher.publishPostCreated(savedPost.getId(), userId);
+        publishAfterCommit(savedPost.getId(), "POST", "CREATE");
         return enrichCounts(postMapper.toResponse(savedPost), savedPost.getId());
     }
 
@@ -116,8 +126,10 @@ public class PostServiceImpl implements PostService {
                                    List<String> captions,
                                    List<AccessControlRequest> accessControls) {
         // 1. Resolve author
-        UserAccount account = userAccountRepository.findById(accountId)
-                .orElseThrow(() -> new RuntimeException("User not found: " + accountId));
+        UserAccount account = ensureUserSynced(accountId);
+        if (account == null) {
+            throw new RuntimeException("User not found or sync failed for id: " + accountId);
+        }
 
         // 2. Persist the Post
         Post post = new Post();
@@ -135,7 +147,7 @@ public class PostServiceImpl implements PostService {
             for (AccessControlRequest req : accessControls) {
                 if (req == null || req.getAccountId() == null || req.getRuleType() == null) continue;
                 if (req.getAccountId().equals(accountId)) continue;
-                UserAccount target = userAccountRepository.findById(req.getAccountId()).orElse(null);
+                UserAccount target = ensureUserSynced(req.getAccountId());
                 if (target == null) continue;
                 ContentAccessControl control = new ContentAccessControl();
                 control.setAccount(target);
@@ -168,7 +180,7 @@ public class PostServiceImpl implements PostService {
 
                 if (isVideo) {
                     VideoMedia media = new VideoMedia();
-                    media.setUrl(fileName);
+                    media.setUrl(s3Key);
                     media.setOrderIndex(orderIndex);
                     media.setCaption(mediaCaption);
                     media.setContent(savedPost);
@@ -177,7 +189,7 @@ public class PostServiceImpl implements PostService {
                     hasAsyncJobs = true;
                 } else {
                     ImageMedia media = new ImageMedia();
-                    media.setUrl(fileName);
+                    media.setUrl(s3Key);
                     media.setOrderIndex(orderIndex);
                     media.setCaption(mediaCaption);
                     media.setContent(savedPost);
@@ -254,6 +266,7 @@ public class PostServiceImpl implements PostService {
                 .orElseThrow(() -> new RuntimeException("Post not found with id: " + id));
         postMapper.updateEntity(request, post);
         Post updatedPost = postRepository.save(post);
+        publishAfterCommit(updatedPost.getId(), "POST", "UPDATE");
         return enrichCounts(postMapper.toResponse(updatedPost), updatedPost.getId());
     }
 
@@ -270,7 +283,7 @@ public class PostServiceImpl implements PostService {
                 .orElseThrow(() -> new RuntimeException("Post not found with id: " + id));
 
         List<String> previousKeys = collectPostMediaKeys(post);
-        List<String> keepKeys = new ArrayList<>();
+        java.util.Set<String> keepKeys = new java.util.HashSet<>();
 
         String ownerId = accountId != null ? accountId :
             (post.getAccount() != null ? post.getAccount().getId() : null);
@@ -297,7 +310,7 @@ public class PostServiceImpl implements PostService {
             for (AccessControlRequest req : accessControls) {
                 if (req == null || req.getAccountId() == null || req.getRuleType() == null) continue;
                 if (ownerId != null && req.getAccountId().equals(ownerId)) continue;
-                UserAccount target = userAccountRepository.findById(req.getAccountId()).orElse(null);
+                UserAccount target = ensureUserSynced(req.getAccountId());
                 if (target == null) continue;
                 ContentAccessControl control = new ContentAccessControl();
                 control.setAccount(target);
@@ -313,87 +326,153 @@ public class PostServiceImpl implements PostService {
             post.setAccessControls(new java.util.HashSet<>());
         }
 
-        // Replace medias
-        if (post.getMedias() != null && !post.getMedias().isEmpty()) {
-            mediaRepository.deleteAll(post.getMedias());
-        }
+        // 3. Process Media items in the unified list (preserving order)
+        List<mediaservice.models.Media> currentMedias = post.getMedias() != null ? new ArrayList<>(post.getMedias()) : new ArrayList<>();
+        List<mediaservice.models.Media> nextMedias = new ArrayList<>();
+        
+        int filePointer = 0;
+        boolean hasUpdateAsyncJobs = false;
 
-        int orderIndex = 0;
         if (existingMedias != null && !existingMedias.isEmpty()) {
-            for (MediaRequest req : existingMedias) {
+            for (int i = 0; i < existingMedias.size(); i++) {
+                MediaRequest req = existingMedias.get(i);
                 if (req == null || req.getUrl() == null) continue;
-                String fileName = mediaUrlBuilder.extractFileName(req.getUrl());
-                int idx = req.getOrderIndex();
-                orderIndex = Math.max(orderIndex, idx + 1);
 
-            String defaultFolder = req.getType() == MediaType.VIDEO_MEDIA
-                ? "social/videos" : "social/posts";
-            addKey(keepKeys, resolveKey(req.getUrl(), defaultFolder));
-            addKey(keepKeys, resolveKey(req.getThumbnailUrl(), "social/videos"));
+                boolean isInternal = mediaUrlBuilder.isInternalS3Url(req.getUrl());
+                int targetOrderIndex = i; // Use list position as orderIndex
 
-                if (req.getType() == MediaType.VIDEO_MEDIA) {
-                    VideoMedia media = new VideoMedia();
-                    media.setUrl(fileName);
-                    media.setOrderIndex(idx);
-                    media.setCaption(req.getCaption());
-                    media.setContent(post);
-                    mediaRepository.save(media);
+                if (isInternal) {
+                    // --- CASE A: Existing S3 Media ---
+                    String reqRelativePath = resolveKey(req.getUrl(), req.getType() == MediaType.VIDEO_MEDIA ? "social/videos" : "social/posts");
+                    addKey(keepKeys, reqRelativePath);
+                    if (req.getThumbnailUrl() != null) {
+                        addKey(keepKeys, resolveKey(req.getThumbnailUrl(), "social/videos"));
+                    }
+
+                    // Try to find matching existing media in DB
+                    mediaservice.models.Media matched = currentMedias.stream()
+                            .filter(m -> {
+                                String mRelative = resolveKey(m.getUrl(), m instanceof VideoMedia ? "social/videos" : "social/posts");
+                                return mRelative != null && mRelative.equals(reqRelativePath);
+                            })
+                            .findFirst()
+                            .orElse(null);
+
+                    if (matched != null) {
+                        log.info("[updatePost] Keeping existing media: {} at index {}", req.getUrl(), targetOrderIndex);
+                        matched.setOrderIndex(targetOrderIndex);
+                        matched.setCaption(req.getCaption());
+                        if (matched instanceof VideoMedia vm && req.getThumbnailUrl() != null) {
+                            vm.setThumbnailUrl(mediaUrlBuilder.extractFileName(req.getThumbnailUrl()));
+                        }
+                        nextMedias.add(matched);
+                    } else {
+                        log.info("[updatePost] URL is S3 but no DB record found (pasted from elsewhere?): {}. Creating new record.", req.getUrl());
+                        if (req.getType() == MediaType.VIDEO_MEDIA) {
+                            VideoMedia media = new VideoMedia();
+                            media.setUrl(reqRelativePath);
+                            media.setOrderIndex(targetOrderIndex);
+                            media.setCaption(req.getCaption());
+                            media.setContent(post);
+                            if (req.getThumbnailUrl() != null) {
+                                media.setThumbnailUrl(mediaUrlBuilder.extractFileName(req.getThumbnailUrl()));
+                            }
+                            nextMedias.add(media);
+                        } else {
+                            ImageMedia media = new ImageMedia();
+                            media.setUrl(reqRelativePath);
+                            media.setOrderIndex(targetOrderIndex);
+                            media.setCaption(req.getCaption());
+                            media.setContent(post);
+                            nextMedias.add(media);
+                        }
+                    }
                 } else {
-                    ImageMedia media = new ImageMedia();
-                    media.setUrl(fileName);
-                    media.setOrderIndex(idx);
-                    media.setCaption(req.getCaption());
-                    media.setContent(post);
-                    mediaRepository.save(media);
+                    // --- CASE B: New Media (Placeholder) ---
+                    if (files != null && filePointer < files.size()) {
+                        MultipartFile file = files.get(filePointer++);
+                        if (file.isEmpty()) continue;
+
+                        String contentType = file.getContentType() != null ? file.getContentType() : "";
+                        boolean isVideo = contentType.startsWith("video/");
+                        String folder = isVideo ? "social/videos" : "social/posts";
+
+                        String s3Key = buildS3Key(folder, file.getOriginalFilename());
+                        log.info("[updatePost] Processing placeholder #{} as new file -> {}", targetOrderIndex, s3Key);
+                        addKey(keepKeys, s3Key);
+
+                        if (isVideo) {
+                            VideoMedia media = new VideoMedia();
+                            media.setUrl(s3Key);
+                            media.setOrderIndex(targetOrderIndex);
+                            media.setCaption(req.getCaption());
+                            media.setContent(post);
+                            nextMedias.add(media);
+                            mediaRepository.save(media);
+                            enqueueAsyncMediaProcessing(file, s3Key, post.getId(), "POST", "UPDATE", media.getId(), targetOrderIndex);
+                        } else {
+                            ImageMedia media = new ImageMedia();
+                            media.setUrl(s3Key);
+                            media.setOrderIndex(targetOrderIndex);
+                            media.setCaption(req.getCaption());
+                            media.setContent(post);
+                            nextMedias.add(media);
+                            mediaRepository.save(media);
+                            enqueueAsyncMediaProcessing(file, s3Key, post.getId(), "POST", "UPDATE", media.getId(), targetOrderIndex);
+                        }
+                        hasUpdateAsyncJobs = true;
+                    } else {
+                        log.warn("[updatePost] Placeholder URL '{}' at index {} but no file available in 'files' list!", req.getUrl(), targetOrderIndex);
+                    }
                 }
             }
         }
 
-        boolean hasUpdateAsyncJobs = false;
-        if (files != null) {
-            for (int i = 0; i < files.size(); i++) {
+        // Add any leftover files that weren't matched by placeholders (fallback)
+        if (files != null && filePointer < files.size()) {
+            int currentMaxOrder = nextMedias.stream().mapToInt(mediaservice.models.Media::getOrderIndex).max().orElse(-1);
+            for (int i = filePointer; i < files.size(); i++) {
                 MultipartFile file = files.get(i);
-                if (file == null || file.isEmpty()) continue;
-                String mediaCaption = (captions != null && i < captions.size())
-                        ? (captions.get(i).isBlank() ? null : captions.get(i)) : null;
-                int targetOrderIndex = orderIndex + i;
-
+                if (file.isEmpty()) continue;
+                
+                int targetOrderIndex = ++currentMaxOrder;
                 String contentType = file.getContentType() != null ? file.getContentType() : "";
                 boolean isVideo = contentType.startsWith("video/");
                 String folder = isVideo ? "social/videos" : "social/posts";
-
                 String s3Key = buildS3Key(folder, file.getOriginalFilename());
-                String fileName = s3Key.substring(s3Key.lastIndexOf('/') + 1);
-                log.info("[updatePost] Queued media #{} -> {} (stored as: {})",
-                        targetOrderIndex, s3Key, fileName);
+                
+                log.info("[updatePost] Appending leftover file -> {} at index {}", s3Key, targetOrderIndex);
                 addKey(keepKeys, s3Key);
 
                 if (isVideo) {
                     VideoMedia media = new VideoMedia();
-                    media.setUrl(fileName);
+                    media.setUrl(s3Key);
                     media.setOrderIndex(targetOrderIndex);
-                    media.setCaption(mediaCaption);
                     media.setContent(post);
+                    nextMedias.add(media);
                     mediaRepository.save(media);
                     enqueueAsyncMediaProcessing(file, s3Key, post.getId(), "POST", "UPDATE", media.getId(), targetOrderIndex);
-                    hasUpdateAsyncJobs = true;
                 } else {
                     ImageMedia media = new ImageMedia();
-                    media.setUrl(fileName);
+                    media.setUrl(s3Key);
                     media.setOrderIndex(targetOrderIndex);
-                    media.setCaption(mediaCaption);
                     media.setContent(post);
+                    nextMedias.add(media);
                     mediaRepository.save(media);
                     enqueueAsyncMediaProcessing(file, s3Key, post.getId(), "POST", "UPDATE", media.getId(), targetOrderIndex);
-                    hasUpdateAsyncJobs = true;
                 }
+                hasUpdateAsyncJobs = true;
             }
         }
 
+        // Update post medias collection
+        post.getMedias().clear();
+        post.getMedias().addAll(nextMedias);
+
         Post updatedPost = postRepository.save(post);
         entityManager.flush();
-        entityManager.refresh(updatedPost);
 
+        log.info("[updatePost] keepKeys: {}", keepKeys);
         List<String> deleteKeys = new ArrayList<>();
         for (String key : previousKeys) {
             if (!keepKeys.contains(key)) {
@@ -523,7 +602,7 @@ public class PostServiceImpl implements PostService {
         });
     }
 
-    private void addKey(List<String> keys, String key) {
+    private void addKey(java.util.Collection<String> keys, String key) {
         if (key == null || key.isBlank()) {
             return;
         }
@@ -535,19 +614,15 @@ public class PostServiceImpl implements PostService {
             return null;
         }
 
-        String normalized = mediaUrlBuilder.isFullUrl(raw)
-                ? mediaUrlBuilder.extractRelativePath(raw)
-                : raw.trim();
+        // Always use extractRelativePath to get a clean path (no leading slash, no bucket, etc.)
+        String normalized = mediaUrlBuilder.extractRelativePath(raw);
 
-        if (normalized == null || normalized.isBlank()) {
-            return null;
+        // If it doesn't contain a folder segment, prepend the default folder
+        if (!normalized.contains("/")) {
+            return defaultFolder + "/" + normalized;
         }
 
-        if (normalized.contains("/")) {
-            return normalized;
-        }
-
-        return defaultFolder + "/" + normalized;
+        return normalized;
     }
 
     private String buildS3Key(String folder, String originalName) {

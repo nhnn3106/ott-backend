@@ -1,6 +1,7 @@
 version: "3.8"
 
 services:
+
   redis:
     image: redis:7-alpine
     container_name: ott-redis
@@ -13,7 +14,7 @@ services:
     networks:
       - ott-network
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -33,7 +34,7 @@ services:
     networks:
       - ott-network
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      test: [ "CMD", "rabbitmq-diagnostics", "ping" ]
       interval: 15s
       timeout: 10s
       retries: 5
@@ -89,6 +90,8 @@ services:
     ports:
       - "8090:8090"
       - "8091:8091"
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
     networks:
       - ott-network
     depends_on:
@@ -103,6 +106,10 @@ services:
     environment:
       PORT: ${CHAT_SERVICE_PORT}
       MONGO_URI: ${CHAT_MONGO_URI}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      FRONTEND_URL_ALT: ${FRONTEND_URL_ALT:-http://127.0.0.1:5173}
+      FRONTEND_URL_DEPLOYED: ${FRONTEND_URL_DEPLOYED:-https://*.vercel.app}
+      CHAT_ALLOWED_ORIGINS: ${CHAT_ALLOWED_ORIGINS:-}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -133,8 +140,31 @@ services:
       ANALYTIC_RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
       ANALYTIC_RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-admin}
       ANALYTIC_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-rabbit123}
-      ANALYTIC_ALLOWED_ORIGINS: ${ANALYTIC_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      ANALYTIC_ALLOWED_ORIGINS: ${ANALYTIC_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,https://riff-iuh.vercel.app}
       USER_SERVICE_URL: ${USER_SERVICE_URL:-http://ott-user:8082}
+    networks:
+      - ott-network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  moderation-service:
+    build: ./moderation-service
+    container_name: ott-moderation
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8087:8087"
+    environment:
+      SERVER_PORT: ${MODERATION_SERVER_PORT:-8087}
+      SPRING_DATASOURCE_URL: ${MODERATION_DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${MODERATION_DB_USERNAME:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${MODERATION_DB_PASSWORD:-postgres}
+      SPRING_RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq}
+      SPRING_RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-admin}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-rabbit123}
+      MODERATION_REVIEW_REQUEST_DLQ: ${MODERATION_REVIEW_REQUEST_DLQ:-moderation.review.requests.dlq}
     networks:
       - ott-network
     depends_on:
@@ -155,6 +185,8 @@ services:
       - user-service
       - notification-service
       - media-service
+      - analytic-service
+      - moderation-service
 
 volumes:
   redis_data:

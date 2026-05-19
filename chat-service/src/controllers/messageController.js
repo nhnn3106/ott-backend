@@ -1,5 +1,39 @@
 const MessageService = require("../services/messageService");
 const ParticipantService = require("../services/participantService");
+const { publishMessageCreated } = require("../events/chatEvents");
+
+const emitMessageToParticipants = async (io, conversationId, message) => {
+  if (!io || !conversationId || !message) return;
+
+  const participants = await ParticipantService.getJoinedParticipants(
+    conversationId,
+  );
+  participants.forEach((participant) => {
+    io.to(`user:${participant.user_id}`).emit("tin_nhan", message);
+  });
+};
+
+const publishMessageCreatedBestEffort = async (req, payload, message) => {
+  try {
+    await publishMessageCreated({
+      ...payload,
+      message,
+    });
+  } catch (error) {
+    console.warn(
+      "[chat-events] publish message.created failed; emitting socket fallback:",
+      error?.message || error,
+    );
+    try {
+      await emitMessageToParticipants(req.io, payload.conversationId, message);
+    } catch (fallbackError) {
+      console.warn(
+        "[chat-events] socket fallback failed:",
+        fallbackError?.message || fallbackError,
+      );
+    }
+  }
+};
 
 exports.generatePresignedUrl = async (req, res) => {
   try {
@@ -40,12 +74,12 @@ exports.sendMessage = async (req, res) => {
       pollOptions,
     });
 
-    // Emit đến user room riêng của từng participant đã joined (invited users không nhận tin nhắn)
-    const participants =
-      await ParticipantService.getJoinedParticipants(conversationId);
-    participants.forEach((p) => {
-      req.io.to(`user:${p.user_id}`).emit("tin_nhan", savedMessage);
-    });
+    await publishMessageCreatedBestEffort(req, {
+      conversationId,
+      msgId: savedMessage.msg_id,
+      senderId,
+      createdAt: savedMessage.createdAt || new Date().toISOString(),
+    }, savedMessage);
 
     // Nếu là poll, tự động tạo thêm 1 tin system thông báo
     if (type === "poll" && pollQuestion) {
@@ -57,9 +91,12 @@ exports.sendMessage = async (req, res) => {
           type: "system_poll",
           size: 0,
         });
-        participants.forEach((p) => {
-          req.io.to(`user:${p.user_id}`).emit("tin_nhan", sysMsg);
-        });
+        await publishMessageCreatedBestEffort(req, {
+          conversationId,
+          msgId: sysMsg.msg_id,
+          senderId,
+          createdAt: sysMsg.createdAt || new Date().toISOString(),
+        }, sysMsg);
       } catch (sysErr) {
         console.warn("Không thể tạo thông báo poll:", sysErr.message);
       }
@@ -101,6 +138,40 @@ exports.votePoll = async (req, res) => {
       error.message === "Tin nhắn không tồn tại" ||
       error.message === "Tin nhắn không phải là khảo sát" ||
       error.message === "Khảo sát này chỉ cho phép chọn 1 đáp án" ||
+      error.message === "Khảo sát đã bị khóa" ||
+      error.message === "Khảo sát đã bị xóa hoặc thu hồi"
+    ) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.lockPoll = async (req, res) => {
+  try {
+    const { msgId } = req.params;
+    const { conversationId, userId } = req.body;
+
+    const result = await MessageService.lockPoll({
+      conversationId,
+      msgId,
+      userId,
+    });
+
+    const participants =
+      await ParticipantService.getParticipants(conversationId);
+    participants.forEach((p) => {
+      req.io.to(`user:${p.user_id}`).emit("tin_nhan_cap_nhat", result);
+    });
+
+    res.status(200).json(result);
+  } catch (error) {
+    if (
+      error.message === "Tin nhắn không tồn tại" ||
+      error.message === "Tin nhắn không phải là khảo sát" ||
+      error.message === "Chỉ người tạo khảo sát mới có thể khóa bình chọn" ||
+      error.message === "Khảo sát đã bị khóa" ||
       error.message === "Khảo sát đã bị xóa hoặc thu hồi"
     ) {
       return res.status(400).json({ error: error.message });
@@ -429,13 +500,14 @@ exports.getLinkMessages = async (req, res) => {
 exports.searchEverything = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { q = "", limit = 20, senderId } = req.query;
+    const { q = "", limit = 20, senderId, scope } = req.query;
 
     const results = await MessageService.searchEverything({
       userId,
       keyword: q,
       limit: parseInt(limit, 10),
       senderId,
+      scope: scope ? String(scope).split(",") : null,
     });
 
     res.status(200).json(results);

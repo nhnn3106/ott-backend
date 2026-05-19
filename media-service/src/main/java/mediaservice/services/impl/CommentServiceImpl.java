@@ -10,9 +10,11 @@ import mediaservice.models.Content;
 import mediaservice.repositories.AccountRepository;
 import mediaservice.repositories.CommentRepository;
 import mediaservice.repositories.ContentRepository;
+import mediaservice.realtime.NotificationPublisher;
 import mediaservice.services.CommentService;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -29,17 +31,25 @@ public class CommentServiceImpl implements CommentService {
     private final AccountRepository accountRepository;
     private final ContentRepository contentRepository;
     private final mediaservice.realtime.PostActivityPublisher postActivityPublisher;
+    private final mediaservice.services.UserSyncService userSyncService;
+    private final NotificationPublisher notificationPublisher;
 
     @Override
     @Transactional
-    @CacheEvict(value = "comments", key = "#request.contentId")
+    @Caching(evict = {
+        @CacheEvict(value = "comments", key = "#request.contentId"),
+        @CacheEvict(value = "posts", key = "#request.contentId", condition = "#request.contentId != null"),
+        @CacheEvict(value = "allPosts", allEntries = true),
+        @CacheEvict(value = "userPosts", allEntries = true)
+    })
     public CommentResponse createComment(CommentRequest request) {
         Comment comment = new Comment();
         comment.setText(request.getText());
         comment.setDepth(request.getParentCommentId() == null ? 0 : 1);
 
         if (request.getAccountId() != null) {
-            Account account = accountRepository.findById(request.getAccountId()).orElse(null);
+            // Đảm bảo user đã được sync thông tin (displayName, avatar...)
+            mediaservice.models.UserAccount account = userSyncService.syncUser(request.getAccountId()).orElse(null);
             comment.setAccount(account);
         }
         if (request.getContentId() != null) {
@@ -54,6 +64,15 @@ public class CommentServiceImpl implements CommentService {
         CommentResponse response = commentMapper.toResponse(savedComment);
         if (savedComment.getContent() != null) {
             postActivityPublisher.publish(savedComment.getContent().getId(), "COMMENT", "CREATE", response);
+            
+            // Send notification to post author
+            notificationPublisher.publishNotification(
+                    savedComment.getContent().getAccount().getId(), 
+                    request.getAccountId(), 
+                    "POST_COMMENT", 
+                    (savedComment.getAccount() != null && savedComment.getAccount().getDisplayName() != null ? savedComment.getAccount().getDisplayName() : "Ai đó") + " đã bình luận về bài viết của bạn.", 
+                    savedComment.getContent().getId()
+            );
         }
         return response;
     }
@@ -82,7 +101,12 @@ public class CommentServiceImpl implements CommentService {
 
     @Override
     @Transactional
-    @CacheEvict(value = "comments", allEntries = true)
+    @Caching(evict = {
+        @CacheEvict(value = "comments", allEntries = true),
+        @CacheEvict(value = "posts", allEntries = true),
+        @CacheEvict(value = "allPosts", allEntries = true),
+        @CacheEvict(value = "userPosts", allEntries = true)
+    })
     public CommentResponse updateComment(String id, CommentRequest request) {
         Comment comment = commentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Comment not found with id: " + id));
@@ -100,7 +124,12 @@ public class CommentServiceImpl implements CommentService {
 
     @Override
     @Transactional
-    @CacheEvict(value = "comments", allEntries = true)
+    @Caching(evict = {
+        @CacheEvict(value = "comments", allEntries = true),
+        @CacheEvict(value = "posts", allEntries = true),
+        @CacheEvict(value = "allPosts", allEntries = true),
+        @CacheEvict(value = "userPosts", allEntries = true)
+    })
     public void deleteComment(String id) {
         Comment comment = commentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Comment not found with id: " + id));

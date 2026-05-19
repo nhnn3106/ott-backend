@@ -8,15 +8,31 @@ const Message = require("../models/Message");
 exports.createConversation = async (req, res) => {
   try {
     const { creatorId, type, memberIds, memberNames, name, avatar } = req.body;
+    if (type === "private" && memberIds && memberIds.length > 0) {
+      const targetUserId = memberIds[0];
+      const conversation = await ConversationService.findOrCreatePrivateConversation(creatorId, targetUserId);
+      const updatedConversation = await ConversationService.getConversationById(conversation._id);
+      
+      if (!updatedConversation) {
+        throw new Error("Không thể khởi tạo cuộc hội thoại");
+      }
+
+      // Emit to both users
+      [creatorId, targetUserId].forEach(userId => {
+        req.io.to(`user:${userId}`).emit("tao_phong_moi", updatedConversation);
+      });
+      
+      return res.status(200).json(updatedConversation);
+    }
+
+    // Creating a group or other type
     let role = "user";
-    
-    // Tạo conversation với đầy đủ field
     const conversation = await ConversationService.createConversation({
       creatorId,
       type,
       name: name || "",
       avatar: avatar || "",
-      memberCount: memberIds ? memberIds.length + 1 : 1,
+      memberCount: memberIds ? [...new Set(memberIds.filter(id => id !== creatorId))].length + 1 : 1,
     });
 
     if (type === "group") {
@@ -30,10 +46,11 @@ exports.createConversation = async (req, res) => {
       role: role,
     });
 
-    // Thêm các member vào nhóm và tạo tin nhắn thông báo
-    if (memberIds && Array.isArray(memberIds) && memberIds.length > 0) {
+    // Thêm các member khác vào nhóm
+    const otherMemberIds = memberIds ? [...new Set(memberIds.filter(id => id !== creatorId))] : [];
+    if (otherMemberIds.length > 0) {
       const addedParticipants = await Promise.all(
-        memberIds.map(async (userId) => {
+        otherMemberIds.map(async (userId) => {
           // Check relationship status
           const RelationshipService = require("../services/relationshipService");
           const relationship = await RelationshipService.getRelationshipBetween(creatorId, userId);
@@ -312,8 +329,12 @@ exports.joinByLink = async (req, res) => {
       const notificationMessage = await MessageService.sendMessage({
         conversationId: conversation._id,
         senderId: userId,
-        content: `${userName} đã tham gia nhóm bằng link mời`,
+        content: `${userName} đã tham gia nhóm`,
         type: "system_add",
+        systemMeta: {
+          action: "member_join",
+          user_id: userId,
+        },
       });
       const Message = require("../models/Message");
       responseMessage = await Message.findById(notificationMessage._id).lean();
@@ -333,6 +354,55 @@ exports.joinByLink = async (req, res) => {
   } catch (error) {
     const isClient = error.message.includes("hop le") || error.message.includes("giai tan");
     res.status(isClient ? 400 : 500).json({ error: error.message });
+  }
+};
+
+exports.blockMember = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { userId, adminId } = req.body;
+    if (!userId || !adminId) return res.status(400).json({ error: "userId và adminId là bắt buộc" });
+    
+    const result = await ConversationService.blockMember(conversationId, userId, adminId);
+    
+    // Emit to target user that they are removed/blocked
+    req.io.to(`user:${userId}`).emit("bi_chan_khoi_nhom", { conversationId });
+    
+    // Emit to other group members
+    const participants = await ParticipantService.getJoinedParticipants(conversationId);
+    participants.forEach(p => {
+      req.io.to(`user:${p.user_id}`).emit("nguoi_dung_bi_chan", { conversationId, userId });
+    });
+
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.unblockMember = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { userId, adminId } = req.body;
+    if (!userId || !adminId) return res.status(400).json({ error: "userId và adminId là bắt buộc" });
+
+    const result = await ConversationService.unblockMember(conversationId, userId, adminId);
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.getBlockedMembers = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { requesterId } = req.query;
+    if (!requesterId) return res.status(400).json({ error: "requesterId là bắt buộc" });
+
+    const result = await ConversationService.getBlockedGroupMembers(conversationId, requesterId);
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 };
 

@@ -5,6 +5,35 @@ const Message = require("../models/Message");
 const Participant = require("../models/Participant");
 const Conversation = require("../models/Conversation");
 const { getActiveCall } = require("../services/callStateService");
+const {
+  publishMessageDelivered,
+  publishMessageSeen,
+} = require("../events/chatEvents");
+
+const normalizeMessageId = (value) => {
+  const normalized = String(value || "0").trim();
+  return /^\d+$/.test(normalized) ? normalized : "0";
+};
+
+const maxMessageId = (left, right) => {
+  const safeLeft = normalizeMessageId(left);
+  const safeRight = normalizeMessageId(right);
+  try {
+    return BigInt(safeLeft) >= BigInt(safeRight) ? safeLeft : safeRight;
+  } catch {
+    return safeLeft >= safeRight ? safeLeft : safeRight;
+  }
+};
+
+const isMessageIdAfter = (left, right) => {
+  const safeLeft = normalizeMessageId(left);
+  const safeRight = normalizeMessageId(right);
+  try {
+    return BigInt(safeLeft) > BigInt(safeRight);
+  } catch {
+    return safeLeft > safeRight;
+  }
+};
 
 const buildConversationPreviewContent = (message) => {
   if (!message) return "";
@@ -46,12 +75,9 @@ exports.getConversationsByUserId = async (req, res) => {
           // Nếu conversation không tồn tại, bỏ qua
           if (!conversation) return null;
 
-          const lastReadMsgId = participant.last_read_message_id || "0";
-          const deletedMsgId = participant.deleted_msg_id || "0";
-          const anchorMsgId =
-            BigInt(lastReadMsgId) > BigInt(deletedMsgId)
-              ? lastReadMsgId
-              : deletedMsgId;
+          const lastReadMsgId = normalizeMessageId(participant.last_read_message_id);
+          const deletedMsgId = normalizeMessageId(participant.deleted_msg_id);
+          const anchorMsgId = maxMessageId(lastReadMsgId, deletedMsgId);
 
           // Last message hiển thị ở sidebar phải theo phạm vi nhìn thấy của chính user.
           const visibleLastMessage = await Message.findOne({
@@ -67,26 +93,16 @@ exports.getConversationsByUserId = async (req, res) => {
           try {
             if (
               visibleLastMessage?.msg_id &&
-              BigInt(visibleLastMessage.msg_id) > BigInt(anchorMsgId)
+              isMessageIdAfter(visibleLastMessage.msg_id, anchorMsgId)
             ) {
-              // For numeric comparison with large numbers in MongoDB, we need to use $where or numeric operators
-              // Since msg_id is a string, we need to compare them as BigInt in JavaScript
-              const messages = await Message.find({
+              unread_count = await Message.countDocuments({
                 conversation_id: conversation._id,
+                msg_id: { $gt: anchorMsgId },
                 is_deleted: { $ne: true },
                 is_revoked: { $ne: true },
+                sender_id: { $ne: userId },
                 deleted_for: { $ne: userId },
-              })
-                .select("msg_id")
-                .lean();
-
-              unread_count = messages.filter((m) => {
-                try {
-                  return BigInt(m.msg_id) > BigInt(anchorMsgId);
-                } catch {
-                  return false;
-                }
-              }).length;
+              });
             }
           } catch (error) {
             console.error("Error calculating unread count:", error);
@@ -138,8 +154,13 @@ exports.getConversationsByUserId = async (req, res) => {
             name: member.user?.name || "",
             avatar: member.user?.avatar || "",
             status: member.user?.is_online ? "online" : "offline",
+            membership_status: member.status || "joined",
             role: member.roles === "admin" ? "admin" : "member",
             joined_at: member.joined_at,
+            last_delivered_message_id: member.last_delivered_message_id || "0",
+            last_delivered_at: member.last_delivered_at || null,
+            last_read_message_id: member.last_read_message_id || "0",
+            last_read_at: member.last_read_at || null,
           }));
 
           return {
@@ -149,6 +170,9 @@ exports.getConversationsByUserId = async (req, res) => {
               user_id: participant.user_id,
               conversation_id: participant.conversation_id._id,
               settings: participant.settings,
+              last_delivered_message_id:
+                participant.last_delivered_message_id || "0",
+              last_delivered_at: participant.last_delivered_at || null,
               last_read_message_id: participant.last_read_message_id,
               last_read_at: participant.last_read_at,
               deleted_msg_id: participant.deleted_msg_id,
@@ -223,20 +247,91 @@ exports.updatePinStatus = async (req, res) => {
 exports.updateLastRead = async (req, res) => {
   try {
     const { conversationId, userId, msgId } = req.body;
+
     const participant = await ParticipantService.updateLastRead(
       conversationId,
       userId,
       msgId,
     );
 
-    // Emit real-time read notification to others in the conversation
-    if (req.io && conversationId) {
-      req.io.to(conversationId).emit("tin_nhan_doc", {
+    if (!participant) {
+      return res.status(404).json({ error: "Participant not found" });
+    }
+
+    const participantPayload = {
+      user_id: participant.user_id,
+      conversation_id: String(participant.conversation_id),
+      last_delivered_message_id: participant.last_delivered_message_id || "0",
+      last_delivered_at: participant.last_delivered_at || null,
+      last_read_message_id: participant.last_read_message_id || "0",
+      last_read_at: participant.last_read_at || null,
+    };
+
+    const syncPayload = {
+      conversationId,
+      userId,
+      changedUserId: userId,
+      msgId,
+      receiptType: "seen",
+      participant: participantPayload,
+    };
+
+    req.io.to(`user:${userId}`).emit("conversation_read_synced", syncPayload);
+
+    const joinedParticipants =
+      await ParticipantService.getJoinedParticipants(conversationId);
+    joinedParticipants.forEach((item) => {
+      req.io.to(`user:${item.user_id}`).emit("participant_cursor_changed", {
+        ...syncPayload,
+        userId,
+      });
+    });
+
+    try {
+      await publishMessageSeen({
         conversationId,
         userId,
         msgId,
-        readAt: new Date(),
+        deviceId: req.body.deviceId || null,
       });
+    } catch (publishError) {
+      console.error(
+        "[ParticipantController] Failed to publish seen receipt:",
+        publishError.message,
+      );
+    }
+
+    res.status(200).json(participantPayload);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.updateLastDelivered = async (req, res) => {
+  try {
+    const { conversationId, userId, msgId, deviceId } = req.body;
+    const participant = await ParticipantService.updateLastDelivered(
+      conversationId,
+      userId,
+      msgId,
+    );
+
+    if (!participant) {
+      return res.status(404).json({ error: "Participant not found" });
+    }
+
+    try {
+      await publishMessageDelivered({
+        conversationId,
+        userId,
+        msgId,
+        deviceId: deviceId || null,
+      });
+    } catch (publishError) {
+      console.error(
+        "[ParticipantController] Failed to publish delivered receipt:",
+        publishError.message,
+      );
     }
 
     res.status(200).json(participant);

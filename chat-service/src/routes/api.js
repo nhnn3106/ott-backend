@@ -7,8 +7,10 @@ const MessageController = require("../controllers/messageController");
 const ParticipantController = require("../controllers/participantController");
 const UserCategoryController = require("../controllers/userCategoryController");
 const relationshipRoutes = require("./relationshipRoutes");
+const aiRoutes = require("./aiRoutes");
 
 router.use("/relationships", relationshipRoutes);
+router.use("/ai", aiRoutes);
 
 router.post("/users/sync", UserController.syncUser);
 router.get("/users/:userId", UserController.getUser);
@@ -32,6 +34,18 @@ router.delete(
   "/conversations/:conversationId/dissolve/:userId",
   ConversationController.dissolveGroup,
 );
+router.post(
+  "/conversations/:conversationId/block",
+  ConversationController.blockMember,
+);
+router.post(
+  "/conversations/:conversationId/unblock",
+  ConversationController.unblockMember,
+);
+router.get(
+  "/conversations/:conversationId/blocked-members",
+  ConversationController.getBlockedMembers,
+);
 
 router.get(
   "/participants/:userId",
@@ -51,6 +65,7 @@ router.put(
 );
 router.put("/participants/pin", ParticipantController.updatePinStatus);
 router.put("/participants/read", ParticipantController.updateLastRead);
+router.put("/participants/delivered", ParticipantController.updateLastDelivered);
 router.put(
   "/participants/delete-conversation",
   ParticipantController.deleteConversation,
@@ -83,6 +98,7 @@ router.post("/messages", MessageController.sendMessage);
 router.post("/messages/forward", MessageController.forwardMessage);
 router.put("/messages/:msgId/reaction", MessageController.reactToMessage);
 router.put("/messages/:msgId/vote", MessageController.votePoll);
+router.put("/messages/:msgId/poll-lock", MessageController.lockPoll);
 router.put("/messages/:msgId/revoke", MessageController.revokeMessage);
 router.put("/messages/:msgId/delete", MessageController.deleteMessage);
 router.put("/messages/:msgId/pin", MessageController.pinMessage);

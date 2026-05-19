@@ -36,5 +36,11 @@ media-service/src/main/resources/application-seed.properties
 .vscode/
 
 .env
+deploy/*.local
+deploy/*.local.*
+deploy/*.secret
 *.md
+!AWS_MICROSERVICE_DEPLOY_CICD_GUIDE.md
 *.mermaid
+*.map
+/scripts

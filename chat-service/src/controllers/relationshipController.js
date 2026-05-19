@@ -1,15 +1,25 @@
 const relationshipService = require("../services/relationshipService");
+const ConversationService = require("../services/conversationService");
 
 exports.sendRequest = async (req, res) => {
   try {
     const { requesterId, receiverId } = req.body;
     const result = await relationshipService.sendFriendRequest(requesterId, receiverId);
     const { relationship, conversation, message } = result;
+    const detailedConversation = conversation?._id
+      ? await ConversationService.getConversationById(conversation._id)
+      : null;
+    const conversationPayload = detailedConversation || conversation;
 
     // Emit socket events for new conversation and system message (not yet moved to MQ)
-    req.io.to(`user:${receiverId}`).emit("tao_phong_moi", conversation);
-    req.io.to(`user:${receiverId}`).emit("tin_nhan", message);
-    req.io.to(`user:${requesterId}`).emit("tin_nhan", message);
+    if (conversationPayload) {
+      req.io.to(`user:${requesterId}`).emit("tao_phong_moi", conversationPayload);
+      req.io.to(`user:${receiverId}`).emit("tao_phong_moi", conversationPayload);
+    }
+    if (message) {
+      req.io.to(`user:${receiverId}`).emit("tin_nhan", message);
+      req.io.to(`user:${requesterId}`).emit("tin_nhan", message);
+    }
 
     res.status(200).json(relationship);
   } catch (error) {
@@ -86,6 +96,64 @@ exports.unfriend = async (req, res) => {
     res.status(200).json(relationship);
   } catch (error) {
     console.error(`[RelationshipController] Unfriend error: ${error.message}`);
+    res.status(400).json({ error: error.message });
+  }
+};
+
+exports.blockUser = async (req, res) => {
+  try {
+    const { userId, targetId } = req.body;
+    const relationship = await relationshipService.blockUser(userId, targetId);
+
+    // Notify both users via socket
+    req.io.to(`user:${userId}`).emit("cap_nhat_quan_he", {
+      type: "BLOCKED",
+      relationshipId: relationship._id,
+      requesterId: userId,
+      receiverId: targetId,
+      status: "BLOCKED",
+      actorId: userId
+    });
+    req.io.to(`user:${targetId}`).emit("cap_nhat_quan_he", {
+      type: "BLOCKED",
+      relationshipId: relationship._id,
+      requesterId: userId,
+      receiverId: targetId,
+      status: "BLOCKED",
+      actorId: userId
+    });
+
+    res.status(200).json(relationship);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
+exports.unblockUser = async (req, res) => {
+  try {
+    const { userId, targetId } = req.body;
+    const relationship = await relationshipService.unblockUser(userId, targetId);
+
+    // Notify both users via socket
+    req.io.to(`user:${userId}`).emit("cap_nhat_quan_he", {
+      type: "UNFRIENDED", // UNFRIENDED is used for clearing status
+      relationshipId: relationship._id,
+      requesterId: userId,
+      receiverId: targetId,
+      status: relationship.status,
+      actorId: userId
+    });
+    req.io.to(`user:${targetId}`).emit("cap_nhat_quan_he", {
+      type: "UNFRIENDED",
+      relationshipId: relationship._id,
+      requesterId: userId,
+      receiverId: targetId,
+      status: relationship.status,
+      actorId: userId
+    });
+
+    res.status(200).json(relationship);
+  } catch (error) {
     res.status(400).json({ error: error.message });
   }
 };

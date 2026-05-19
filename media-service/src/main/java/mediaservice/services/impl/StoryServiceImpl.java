@@ -1,31 +1,29 @@
 package mediaservice.services.impl;
 
 import lombok.RequiredArgsConstructor;
-import mediaservice.dtos.requests.StoryRequest;
-import mediaservice.dtos.requests.StoryItemRequest;
+import mediaservice.dtos.requests.*;
 import mediaservice.dtos.responses.StoryGroupResponse;
 import mediaservice.dtos.responses.StoryReelItemResponse;
 import mediaservice.dtos.responses.StoryReelResponse;
 import mediaservice.dtos.responses.StoryResponse;
+import mediaservice.mappers.ContentAccessControlMapper;
 import mediaservice.mappers.StoryMapper;
+import mediaservice.mappers.StoryItemMapper;
 import mediaservice.mappers.UserAccountMapper;
 import mediaservice.dtos.messages.MediaDeleteJob;
 import mediaservice.realtime.MediaRealtimePublisher;
 import mediaservice.realtime.MediaRealtimeUpdate;
-import mediaservice.models.ImageItem;
-import mediaservice.models.StoryItem;
-import mediaservice.models.Story;
-import mediaservice.models.UserAccount;
-import mediaservice.models.VideoItem;
-import mediaservice.models.enums.ContentStatusType;
-import mediaservice.models.enums.RelationshipStatusType;
-import mediaservice.models.enums.RuleType;
-import mediaservice.models.enums.StoryItemType;
-import mediaservice.models.enums.VisibilityType;
+import mediaservice.models.*;
+import mediaservice.models.enums.*;
 import mediaservice.repositories.StoryItemRepository;
 import mediaservice.repositories.StoryRepository;
+import mediaservice.repositories.StoryViewRepository;
 import mediaservice.repositories.UserAccountRepository;
 import mediaservice.services.MediaDeleteJobPublisher;
+import mediaservice.services.MediaCompressionJobPublisher;
+import mediaservice.services.MediaUploadJobPublisher;
+import mediaservice.dtos.messages.MediaCompressionJob;
+import mediaservice.dtos.messages.MediaUploadJob;
 import mediaservice.services.StoryService;
 import mediaservice.utils.MediaUrlBuilder;
 import org.springframework.cache.annotation.CacheEvict;
@@ -38,12 +36,14 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -56,11 +56,16 @@ public class StoryServiceImpl implements StoryService {
     private final StoryRepository storyRepository;
     private final StoryItemRepository storyItemRepository;
     private final StoryMapper storyMapper;
+    private final StoryItemMapper storyItemMapper;
     private final UserAccountRepository userAccountRepository;
     private final UserAccountMapper userAccountMapper;
+    private final StoryViewRepository storyViewRepository;
     private final MediaDeleteJobPublisher mediaDeleteJobPublisher;
     private final MediaUrlBuilder mediaUrlBuilder;
     private final MediaRealtimePublisher mediaRealtimePublisher;
+    private final MediaCompressionJobPublisher mediaCompressionJobPublisher;
+    private final MediaUploadJobPublisher mediaUploadJobPublisher;
+    private final ContentAccessControlMapper accessControlMapper;
 
     @Override
     @Transactional
@@ -99,14 +104,13 @@ public class StoryServiceImpl implements StoryService {
             savedStory.setStoryItems(new HashSet<>(persistedItems));
         }
 
-        boolean hasMedia = story.getStoryItems() != null && story.getStoryItems().stream().anyMatch(item ->
-            item instanceof ImageItem || item instanceof VideoItem
-        );
-        if (!hasMedia) {
-            publishAfterCommit(savedStory.getId(), "STORY", "CREATE");
-        }
+        // Process Access Controls
+        processAccessControls(request, savedStory);
+        Story finalStory = storyRepository.save(savedStory);
 
-        return storyMapper.toResponse(savedStory);
+        publishAfterCommit(finalStory.getId(), "STORY", "CREATE");
+
+        return storyMapper.toResponse(finalStory);
     }
 
     private void validateStoryItems(StoryRequest request) {
@@ -156,40 +160,205 @@ public class StoryServiceImpl implements StoryService {
     @Override
     @Transactional
     @CacheEvict(value = {"stories", "allStories", "storyReel"}, allEntries = true)
-    public StoryResponse updateStory(String id, StoryRequest request) {
+    public StoryResponse updateStory(String id, StoryRequest request, List<MultipartFile> files, List<String> captions) {
         Story story = storyRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Story not found with id: " + id));
 
-        List<String> previousKeys = collectStoryMediaKeys(story);
+        // 1. Update basic fields using mapper
         storyMapper.updateEntity(request, story);
 
+        List<String> previousKeys = collectStoryMediaKeys(story);
+        Set<String> keepKeys = new HashSet<>();
+
+        // 2. Ensure account is correct
         if (request.getUserId() != null && !request.getUserId().isBlank()) {
             UserAccount account = userAccountRepository.findById(request.getUserId())
                     .orElseThrow(() -> new RuntimeException("User not found: " + request.getUserId()));
             story.setAccount(account);
         }
 
-        Story updatedStory = storyRepository.save(story);
+        // 3. Process Story Items
+        Set<StoryItem> currentItems = story.getStoryItems() != null ? story.getStoryItems() : new HashSet<>();
+        Set<StoryItem> nextItems = new LinkedHashSet<>();
+        
+        int filePointer = 0;
+        boolean hasUpdateAsyncJobs = false;
 
         if (request.getStoryItems() != null) {
-            List<String> keepKeys = collectStoryRequestMediaKeys(request.getStoryItems());
-            List<String> deleteKeys = new ArrayList<>();
-            for (String key : previousKeys) {
-                if (!keepKeys.contains(key)) {
-                    deleteKeys.add(key);
+            for (int i = 0; i < request.getStoryItems().size(); i++) {
+                StoryItemRequest itemReq = request.getStoryItems().get(i);
+                if (itemReq == null) continue;
+
+                // Match by ID first if provided
+                StoryItem matched = null;
+                if (itemReq.getId() != null) {
+                    matched = currentItems.stream()
+                            .filter(it -> itemReq.getId().equals(it.getId()))
+                            .findFirst()
+                            .orElse(null);
+                }
+
+                // If not matched by ID, try matching by URL for media items or content/pos for text items
+                if (matched == null) {
+                    if (itemReq.getType() != StoryItemType.TEXT_ITEM) {
+                        String url = (itemReq.getType() == StoryItemType.IMAGE_ITEM && itemReq.getImageItem() != null)
+                                ? itemReq.getImageItem().getUrl()
+                                : (itemReq.getType() == StoryItemType.VIDEO_ITEM && itemReq.getVideoItem() != null)
+                                    ? itemReq.getVideoItem().getUrl()
+                                    : null;
+
+                        if (url != null) {
+                            String relPath = resolveKey(url, "stories");
+                            matched = currentItems.stream()
+                                    .filter(it -> {
+                                        if (it instanceof ImageItem ii) return relPath.equals(resolveKey(ii.getUrl(), "stories"));
+                                        if (it instanceof VideoItem vi) return relPath.equals(resolveKey(vi.getUrl(), "stories"));
+                                        return false;
+                                    })
+                                    .findFirst()
+                                    .orElse(null);
+                            if (matched != null) keepKeys.add(relPath);
+                        }
+                    } else if (itemReq.getTextItem() != null) {
+                        // For text items, match by content and position if ID is missing
+                        String content = itemReq.getTextItem().getContent();
+                        matched = currentItems.stream()
+                                .filter(it -> it instanceof TextItem ti && 
+                                             Objects.equals(ti.getContent(), content) &&
+                                             Math.abs(ti.getPositionX() - itemReq.getPositionX()) < 0.01 &&
+                                             Math.abs(ti.getPositionY() - itemReq.getPositionY()) < 0.01)
+                                .findFirst()
+                                .orElse(null);
+                    }
+                }
+
+                if (matched != null) {
+                    // Update existing item's spatial properties
+                    matched.setZIndex(itemReq.getZIndex());
+                    matched.setPositionX(itemReq.getPositionX());
+                    matched.setPositionY(itemReq.getPositionY());
+                    matched.setRotation(itemReq.getRotation());
+                    matched.setScale(itemReq.getScale());
+                    
+                    if (matched instanceof TextItem ti && itemReq.getTextItem() != null) {
+                        ti.setContent(itemReq.getTextItem().getContent());
+                        ti.setBackgroundColor(itemReq.getTextItem().getBackgroundColor());
+                    }
+                    
+                    nextItems.add(matched);
+                } else {
+                    // New item or item with file upload
+                    String url = (itemReq.getType() == StoryItemType.IMAGE_ITEM && itemReq.getImageItem() != null)
+                            ? itemReq.getImageItem().getUrl()
+                            : (itemReq.getType() == StoryItemType.VIDEO_ITEM && itemReq.getVideoItem() != null)
+                                ? itemReq.getVideoItem().getUrl()
+                                : null;
+
+                    if (url != null && mediaUrlBuilder.isFullUrl(url) && !mediaUrlBuilder.isInternalS3Url(url)) {
+                        // This is likely a placeholder or external URL that needs a file from 'files'
+                        if (files != null && filePointer < files.size()) {
+                            MultipartFile file = files.get(filePointer++);
+                            String s3Key = buildS3Key("stories", file.getOriginalFilename());
+                            keepKeys.add(s3Key);
+
+                            StoryItem newItem = storyItemMapper.toEntity(itemReq);
+                            if (newItem instanceof ImageItem ii) ii.setUrl(s3Key);
+                            else if (newItem instanceof VideoItem vi) vi.setUrl(s3Key);
+                            
+                            newItem.setStory(story);
+                            storyItemRepository.save(newItem);
+                            enqueueAsyncMediaProcessing(file, s3Key, newItem.getId());
+                            nextItems.add(newItem);
+                            hasUpdateAsyncJobs = true;
+                        }
+                    } else {
+                        // Already uploaded or text item
+                        StoryItem newItem = storyItemMapper.toEntity(itemReq);
+                        newItem.setStory(story);
+                        if (url != null) keepKeys.add(resolveKey(url, "stories"));
+                        nextItems.add(newItem);
+                    }
                 }
             }
-            if (deleteKeys.isEmpty()) {
-                publishAfterCommit(story.getId(), "STORY", "UPDATE");
-            } else {
-                enqueueDeleteJob(deleteKeys, story.getId(), "STORY", "UPDATE");
-            }
+        }
+
+        // 4. Update the collection in-place to keep JPA happy and preserve identities
+        if (story.getStoryItems() == null) {
+            story.setStoryItems(nextItems);
         } else {
+            // Remove items that are no longer present
+            story.getStoryItems().removeIf(it -> !nextItems.contains(it));
+            // Add new items
+            story.getStoryItems().addAll(nextItems);
+        }
+
+        // 4b. Process Access Controls
+        processAccessControls(request, story);
+
+        Story updatedStory = storyRepository.save(story);
+
+        List<String> deleteKeys = new ArrayList<>();
+        for (String key : previousKeys) {
+            if (!keepKeys.contains(key)) {
+                deleteKeys.add(key);
+            }
+        }
+
+        if (deleteKeys.isEmpty()) {
             publishAfterCommit(story.getId(), "STORY", "UPDATE");
+        } else {
+            enqueueDeleteJob(deleteKeys, story.getId(), "STORY", "UPDATE");
         }
 
         return storyMapper.toResponse(updatedStory);
     }
+
+    private void enqueueAsyncMediaProcessing(MultipartFile file, String s3Key, String storyItemId) {
+        // Reuse logic from StoryController (I should probably move this to a shared helper, but for now I'll duplicate as it's small)
+        String contentType = file.getContentType() != null ? file.getContentType() : "";
+        boolean isVideo = contentType.startsWith("video/");
+        boolean isAudio = contentType.startsWith("audio/");
+
+        try {
+            if (isVideo || isAudio) {
+                String mediaType = isAudio ? "AUDIO" : "VIDEO";
+                String outputContentType = isAudio ? "audio/mp4" : "video/mp4";
+                String prefix = isAudio ? "audio-" : "video-";
+
+                java.nio.file.Path tempPath = mediaservice.utils.MediaTempFileStore.saveToTemp(file, prefix);
+                MediaCompressionJob job = new MediaCompressionJob(
+                    tempPath.toString(),
+                    mediaType,
+                    s3Key,
+                    outputContentType,
+                    null,
+                    "STORY",
+                    "UPLOAD",
+                    storyItemId,
+                    null
+                );
+                // I need the publisher here. They are already in the class.
+                mediaCompressionJobPublisher.publish(job);
+                return;
+            }
+
+            java.nio.file.Path tempPath = mediaservice.utils.MediaTempFileStore.saveToTemp(file, "image-");
+            MediaUploadJob job = new MediaUploadJob(
+                    tempPath.toString(),
+                    s3Key,
+                    contentType,
+                    null,
+                    "STORY",
+                    "UPLOAD",
+                    storyItemId,
+                    null
+            );
+            mediaUploadJobPublisher.publish(job);
+        } catch (Exception ex) {
+            // Ignore enqueue failures.
+        }
+    }
+    
 
     @Override
     @Transactional
@@ -199,6 +368,10 @@ public class StoryServiceImpl implements StoryService {
                 .orElseThrow(() -> new RuntimeException("Story not found with id: " + id));
 
         List<String> deleteKeys = collectStoryMediaKeys(story);
+        
+        // Delete related data first
+        storyViewRepository.deleteByStoryId(id);
+        
         storyRepository.delete(story);
 
         if (deleteKeys.isEmpty()) {
@@ -290,6 +463,12 @@ public class StoryServiceImpl implements StoryService {
         return keys;
     }
 
+    private String buildS3Key(String folder, String originalFilename) {
+        String timestamp = java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss").format(java.time.LocalDateTime.now());
+        String cleanName = (originalFilename != null) ? originalFilename.replaceAll("[^a-zA-Z0-9.-]", "_") : "file";
+        return folder + "/" + timestamp + "_" + java.util.UUID.randomUUID().toString().substring(0, 8) + "_" + cleanName;
+    }
+
     private String resolveKey(String raw, String defaultFolder) {
         if (raw == null || raw.isBlank()) {
             return null;
@@ -313,8 +492,11 @@ public class StoryServiceImpl implements StoryService {
     @Override
     @Transactional(readOnly = true)
     public List<StoryResponse> getStoriesByUserId(String userId) {
-        List<Story> stories = storyRepository.findAll(); // TODO: Add custom query
-        return storyMapper.toResponseList(stories);
+        List<Story> stories = storyRepository.findAll().stream()
+                .filter(s -> s.getAccount() != null && s.getAccount().getId().equals(userId))
+                .sorted(Comparator.comparing(Story::getCreatedAt).reversed())
+                .toList();
+        return stories.stream().map(this::toFullResponse).toList();
     }
 
     @Override
@@ -339,7 +521,7 @@ public class StoryServiceImpl implements StoryService {
                 accountId,
                 LocalDateTime.now()
         );
-        return storyMapper.toResponseList(stories);
+        return stories.stream().map(this::toFullResponse).toList();
     }
 
     @Override
@@ -417,5 +599,67 @@ public class StoryServiceImpl implements StoryService {
                 story.getVisibility()
         );
     }
-}
 
+    private StoryResponse toFullResponse(Story story) {
+        StoryResponse response = storyMapper.toResponse(story);
+        response.setTotalViews(storyViewRepository.countByStoryId(story.getId()));
+        return response;
+    }
+
+    @Override
+    @Transactional
+    public void viewStory(String storyId, String accountId) {
+        if (storyViewRepository.existsByStoryIdAndAccountId(storyId, accountId)) {
+            return;
+        }
+
+        Story story = storyRepository.findById(storyId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Story not found"));
+        
+        UserAccount account = userAccountRepository.findById(accountId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found"));
+
+        mediaservice.models.StoryView view = new mediaservice.models.StoryView();
+        view.setStory(story);
+        view.setAccount(account);
+        storyViewRepository.save(view);
+    }
+
+    @Override
+    public List<mediaservice.dtos.responses.UserAccountResponse> getStoryViewers(String storyId) {
+        return storyViewRepository.findByStoryIdOrderByViewedAtDesc(storyId).stream()
+                .map(view -> userAccountMapper.toResponse(view.getAccount()))
+                .toList();
+    }
+
+    private void processAccessControls(StoryRequest request, Story story) {
+        if (request.getVisibility() != VisibilityType.CUSTOM) {
+            if (story.getAccessControls() != null) {
+                story.getAccessControls().clear();
+            }
+            return;
+        }
+
+        if (request.getAccessControls() == null || request.getAccessControls().isEmpty()) {
+            return;
+        }
+
+        Set<ContentAccessControl> accessControls = new HashSet<>();
+        for (AccessControlRequest acReq : request.getAccessControls()) {
+            UserAccount acAccount = userAccountRepository.findById(acReq.getAccountId()).orElse(null);
+            if (acAccount != null) {
+                ContentAccessControl ac = accessControlMapper.toEntity(acReq);
+                ac.setAccount(acAccount);
+                ac.setContent(story);
+                accessControls.add(ac);
+            }
+        }
+
+        if (story.getAccessControls() == null) {
+            story.setAccessControls(accessControls);
+        } else {
+            story.getAccessControls().clear();
+            story.getAccessControls().addAll(accessControls);
+        }
+    }
+}
