@@ -77,8 +77,8 @@ public class RabbitMQConfig {
     }
 
     @Bean
-    public TopicExchange moderationEventsExchange(@Value("${moderation.rabbitmq.exchange}") String exchange) {
-        return new TopicExchange(exchange, true, false);
+    public DirectExchange moderationEventsExchange(@Value("${moderation.rabbitmq.exchange}") String exchange) {
+        return new DirectExchange(exchange, true, false);
     }
 
     @Bean
