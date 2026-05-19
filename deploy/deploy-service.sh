@@ -13,6 +13,17 @@ DOCKER_IMAGE_PRUNE_UNTIL="${DOCKER_IMAGE_PRUNE_UNTIL:-72h}"
 DOCKER_BUILDER_PRUNE_UNTIL="${DOCKER_BUILDER_PRUNE_UNTIL:-72h}"
 DOCKER_LOG_TRUNCATE_OVER="${DOCKER_LOG_TRUNCATE_OVER:-200M}"
 
+declare -A IMAGE_REPOS=(
+  [API_GATEWAY_IMAGE]=ott-api-gateway
+  [AUTH_SERVICE_IMAGE]=ott-auth-service
+  [USER_SERVICE_IMAGE]=ott-user-service
+  [NOTIFICATION_SERVICE_IMAGE]=ott-notification-service
+  [MEDIA_SERVICE_IMAGE]=ott-media-service
+  [CHAT_SERVICE_IMAGE]=ott-chat-service
+  [ANALYTIC_SERVICE_IMAGE]=ott-analytic-service
+  [MODERATION_SERVICE_IMAGE]=ott-moderation-service
+)
+
 case "$SERVICE" in
   api-gateway) IMAGE_KEY="API_GATEWAY_IMAGE" ;;
   auth-service) IMAGE_KEY="AUTH_SERVICE_IMAGE" ;;
@@ -46,6 +57,13 @@ touch "$IMAGES_FILE"
   cd "$APP_DIR"
 
   PREVIOUS_IMAGE="$(grep -E "^${IMAGE_KEY}=" "$IMAGES_FILE" | cut -d= -f2- || true)"
+  ECR_REGISTRY="${IMAGE_URI%%/*}"
+
+  for key in "${!IMAGE_REPOS[@]}"; do
+    if ! grep -q "^${key}=" "$IMAGES_FILE"; then
+      echo "${key}=${ECR_REGISTRY}/${IMAGE_REPOS[$key]}:latest" >> "$IMAGES_FILE"
+    fi
+  done
 
   if grep -q "^${IMAGE_KEY}=" "$IMAGES_FILE"; then
     sed -i "s|^${IMAGE_KEY}=.*|${IMAGE_KEY}=${IMAGE_URI}|" "$IMAGES_FILE"
@@ -53,7 +71,6 @@ touch "$IMAGES_FILE"
     echo "${IMAGE_KEY}=${IMAGE_URI}" >> "$IMAGES_FILE"
   fi
 
-  ECR_REGISTRY="${IMAGE_URI%%/*}"
   aws ecr get-login-password --region "$AWS_REGION" \
     | docker login --username AWS --password-stdin "$ECR_REGISTRY"
 
