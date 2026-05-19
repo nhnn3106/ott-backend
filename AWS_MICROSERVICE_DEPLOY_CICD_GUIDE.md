@@ -581,6 +581,7 @@ NOTIFICATION_SERVICE_IMAGE=<aws-account-id>.dkr.ecr.ap-southeast-1.amazonaws.com
 MEDIA_SERVICE_IMAGE=<aws-account-id>.dkr.ecr.ap-southeast-1.amazonaws.com/ott-media-service:latest
 CHAT_SERVICE_IMAGE=<aws-account-id>.dkr.ecr.ap-southeast-1.amazonaws.com/ott-chat-service:latest
 ANALYTIC_SERVICE_IMAGE=<aws-account-id>.dkr.ecr.ap-southeast-1.amazonaws.com/ott-analytic-service:latest
+MODERATION_SERVICE_IMAGE=<aws-account-id>.dkr.ecr.ap-southeast-1.amazonaws.com/ott-moderation-service:latest
 ```
 
 ---
@@ -1132,12 +1133,17 @@ jobs:
               - "docker-compose.yml"
               - ".dockerignore"
               - ".github/workflows/backend-ci-cd.yml"
+            moderation-service:
+              - "moderation-service/**"
+              - "docker-compose.yml"
+              - ".dockerignore"
+              - ".github/workflows/backend-ci-cd.yml"
 
       - id: matrix
         shell: bash
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.force_all }}" == "true" ]]; then
-            echo 'services=["api-gateway","auth-service","user-service","notification-service","media-service","chat-service","analytic-service"]' >> "$GITHUB_OUTPUT"
+            echo 'services=["api-gateway","auth-service","user-service","notification-service","media-service","chat-service","analytic-service","moderation-service"]' >> "$GITHUB_OUTPUT"
           else
             echo 'services=${{ steps.filter.outputs.changes }}' >> "$GITHUB_OUTPUT"
           fi
@@ -1856,6 +1862,7 @@ NOTIFICATION_SERVICE_IMAGE=642058032746.dkr.ecr.ap-southeast-1.amazonaws.com/ott
 MEDIA_SERVICE_IMAGE=642058032746.dkr.ecr.ap-southeast-1.amazonaws.com/ott-media-service:latest
 CHAT_SERVICE_IMAGE=642058032746.dkr.ecr.ap-southeast-1.amazonaws.com/ott-chat-service:latest
 ANALYTIC_SERVICE_IMAGE=642058032746.dkr.ecr.ap-southeast-1.amazonaws.com/ott-analytic-service:latest
+MODERATION_SERVICE_IMAGE=642058032746.dkr.ecr.ap-southeast-1.amazonaws.com/ott-moderation-service:latest
 ```
 
 Sau workflow deploy lan dau, file nay se tu dong duoc update sang tag commit SHA cua tung service.
