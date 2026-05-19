@@ -88,6 +88,18 @@ const ensureRelationshipSystemMessage = async (content, relationship, io) => {
 
   const config = getRelationshipSystemMessageConfig(content, relationship);
   if (!config) return null;
+  const relationshipIds = Array.from(
+    new Set(
+      [
+        config.relationshipId,
+        relationship?._id,
+        relationship?.id,
+        relationship?.relationship_id,
+      ]
+        .filter(Boolean)
+        .map((value) => String(value)),
+    ),
+  );
   const requesterName =
     config.action === "friend_request_sent"
       ? await getUserDisplayName(config.requesterId)
@@ -105,11 +117,31 @@ const ensureRelationshipSystemMessage = async (content, relationship, io) => {
 
   const existingMessage = await Message.findOne({
     conversation_id: conversation._id,
+    type: config.type,
     "system_meta.action": config.action,
-    "system_meta.relationship_id": config.relationshipId,
+    $or: [
+      { "system_meta.relationship_id": { $in: relationshipIds } },
+      {
+        "system_meta.requester_id": config.requesterId,
+        "system_meta.receiver_id": config.receiverId,
+      },
+    ],
   }).lean();
 
-  if (existingMessage) return null;
+  if (existingMessage) {
+    const nextMeta = {
+      ...(existingMessage.system_meta || {}),
+      relationship_id: String(relationship?._id || config.relationshipId),
+      requester_id: config.requesterId,
+      receiver_id: config.receiverId,
+      ...(requesterName ? { requester_name: requesterName } : {}),
+    };
+
+    await Message.findByIdAndUpdate(existingMessage._id, {
+      system_meta: nextMeta,
+    });
+    return null;
+  }
 
   const message = await MessageService.sendMessage({
     conversationId: conversation._id,
