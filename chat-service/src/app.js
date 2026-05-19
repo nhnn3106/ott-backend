@@ -1863,9 +1863,12 @@ app.use("/api", messageRoutes);
 
 // ========== OTHER ROUTES ==========
 app.use("/api", apiRoutes);
-// Redundant mounting to prevent 404s from various gateway mappings
+// Redundant mounting to prevent 404s from various gateway mappings.
 app.use("/api/ai", aiRoutes);
 app.use("/ai", aiRoutes);
+app.use("/api/chat/ai", aiRoutes);
+app.use("/riff/api/ai", aiRoutes);
+app.use("/riff/api/chat/ai", aiRoutes);
 
 app.get("/", (req, res) => res.send("Chat Service dang chay..."));
 
