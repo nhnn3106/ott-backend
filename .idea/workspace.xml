@@ -5,17 +5,19 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="1bb96e93-77b6-4b77-b543-9908f50ffd65" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/api-gateway/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/api-gateway/src/main/resources/application.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/chat-service/src/consumers/index.js" beforeDir="false" afterPath="$PROJECT_DIR$/chat-service/src/consumers/index.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/chat-service/src/consumers/userConsumer.js" beforeDir="false" afterPath="$PROJECT_DIR$/chat-service/src/consumers/userConsumer.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/chat-service/src/services/relationshipService.js" beforeDir="false" afterPath="$PROJECT_DIR$/chat-service/src/services/relationshipService.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/media-service/src/main/java/mediaservice/services/impl/CommentServiceImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/media-service/src/main/java/mediaservice/services/impl/CommentServiceImpl.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/media-service/src/main/java/mediaservice/services/impl/ReactionServiceImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/media-service/src/main/java/mediaservice/services/impl/ReactionServiceImpl.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/media-service/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/media-service/src/main/resources/application.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/config/RabbitMQConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/config/RabbitMQConfig.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/consumer/NotificationConsumer.java" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/consumer/NotificationConsumer.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notification-service/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/src/main/resources/application.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notification-service/target/classes/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/target/classes/application.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/config/SecurityConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/config/SecurityConfig.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/controller/AuthController.java" beforeDir="false" afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/controller/AuthController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/exception/ErrorCode.java" beforeDir="false" afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/exception/ErrorCode.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/repository/UserSessionRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/repository/UserSessionRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/service/AuthService.java" beforeDir="false" afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/service/AuthService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/service/SessionService.java" beforeDir="false" afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/service/SessionService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/auth-service/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/auth-service/src/main/resources/application.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/deploy/docker-compose.prod.yml" beforeDir="false" afterPath="$PROJECT_DIR$/deploy/docker-compose.prod.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/controller/InAppNotificationController.java" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/controller/InAppNotificationController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/entity/InAppNotification.java" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/entity/InAppNotification.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/service/InAppNotificationService.java" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/service/InAppNotificationService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/user-service/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/resources/application.properties" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -292,9 +294,9 @@
       </method>
     </configuration>
     <list>
-      <item itemvalue="Spring Boot.MediaServiceSpringApplication" />
       <item itemvalue="Spring Boot.ApiGatewayApplication" />
       <item itemvalue="Spring Boot.AuthServiceApplication" />
+      <item itemvalue="Spring Boot.MediaServiceSpringApplication" />
       <item itemvalue="Spring Boot.NotificationServiceApplication" />
       <item itemvalue="Spring Boot.OttBackendApplication" />
       <item itemvalue="Spring Boot.UserServiceApplication" />
@@ -355,6 +357,9 @@
       <workItem from="1777965002833" duration="1648000" />
       <workItem from="1777999745346" duration="76000" />
       <workItem from="1778078000607" duration="15963000" />
+      <workItem from="1778763097181" duration="2383000" />
+      <workItem from="1778929971067" duration="327000" />
+      <workItem from="1779267605715" duration="2541000" />
     </task>
     <servers />
   </component>
