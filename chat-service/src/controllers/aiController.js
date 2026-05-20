@@ -4,27 +4,8 @@ const participantService = require("../services/participantService");
 const User = require("../models/User");
 const fs = require("fs/promises");
 
-const SMART_REPLY_TYPES = new Set(["text", "link"]);
-const SUMMARY_TYPES = new Set([
-  "text",
-  "link",
-  "poll",
-  "system_add",
-  "system_block",
-  "system_leave",
-  "system_pin",
-  "system_unpin",
-  "system_poll",
-  "system_transfer_owner",
-  "system_role_change",
-  "system_friend_request",
-  "call_start",
-  "call_join",
-  "call_end",
-  "call_missed",
-  "call_cancel",
-  "call_no_answer",
-]);
+const SMART_REPLY_TYPES = new Set(["text"]);
+const SUMMARY_TYPES = new Set(["text"]);
 
 const toPositiveInt = (value, fallback, max) => {
   const parsed = Number(value);
@@ -65,6 +46,17 @@ const isVisibleMessage = (message) =>
   !message.is_revoked &&
   !message.deleted_at;
 
+const isVisibleToRequester = (message, requesterId) => {
+  if (!isVisibleMessage(message)) return false;
+  if (!requesterId) return true;
+
+  const deletedFor = Array.isArray(message.deleted_for)
+    ? message.deleted_for.map((userId) => String(userId))
+    : [];
+
+  return !deletedFor.includes(String(requesterId));
+};
+
 const getSenderNameMap = async (messages, requesterId) => {
   const senderIds = [
     ...new Set(
@@ -86,7 +78,7 @@ const getSenderNameMap = async (messages, requesterId) => {
 
 const buildContextMessages = async (rawMessages, { requesterId, allowedTypes }) => {
   const visibleMessages = (rawMessages || [])
-    .filter(isVisibleMessage)
+    .filter((message) => isVisibleToRequester(message, requesterId))
     .filter((message) => !allowedTypes || allowedTypes.has(message.type))
     .filter((message) => extractContent(message).trim());
 
@@ -133,11 +125,18 @@ exports.getSmartReplies = async (req, res) => {
     if (!conversationId) {
       return res.status(400).json({ error: "conversationId is required" });
     }
+    if (!requesterId) {
+      return res.status(400).json({ error: "userId is required" });
+    }
 
     await ensureConversationAccess(conversationId, requesterId);
 
     const limit = toPositiveInt(req.query.limit, 12, 20);
-    const messages = await messageService.getMessages(conversationId, { limit });
+    const messages = await messageService.getMessages(conversationId, {
+      limit,
+      types: SMART_REPLY_TYPES,
+      userId: requesterId,
+    });
     const contextMessages = await buildContextMessages(messages, {
       requesterId,
       allowedTypes: SMART_REPLY_TYPES,
@@ -170,11 +169,18 @@ exports.summarizeConversation = async (req, res) => {
     if (!conversationId) {
       return res.status(400).json({ error: "conversationId is required" });
     }
+    if (!requesterId) {
+      return res.status(400).json({ error: "userId is required" });
+    }
 
     await ensureConversationAccess(conversationId, requesterId);
 
     const limit = toPositiveInt(req.query.limit, 60, 120);
-    const messages = await messageService.getMessages(conversationId, { limit });
+    const messages = await messageService.getMessages(conversationId, {
+      limit,
+      types: SUMMARY_TYPES,
+      userId: requesterId,
+    });
     const contextMessages = await buildContextMessages(messages, {
       requesterId,
       allowedTypes: SUMMARY_TYPES,

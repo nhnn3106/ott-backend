@@ -8,8 +8,11 @@ import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.QueueBuilder;
 import org.springframework.amqp.core.TopicExchange;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
+import org.springframework.amqp.rabbit.core.RabbitAdmin;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -38,6 +41,46 @@ public class RabbitMqConfig {
 
     public static final String MODERATION_EVENTS_EXCHANGE = "moderation.events";
     public static final String MODERATION_VIOLATION_DETECTED_ROUTING_KEY = "moderation.violation.detected";
+
+    @Bean
+    public RabbitAdmin rabbitAdmin(ConnectionFactory connectionFactory) {
+        RabbitAdmin rabbitAdmin = new RabbitAdmin(connectionFactory);
+        rabbitAdmin.setAutoStartup(true);
+        return rabbitAdmin;
+    }
+
+    @Bean
+    public SmartLifecycle rabbitDeclarablesInitializer(RabbitAdmin rabbitAdmin) {
+        return new SmartLifecycle() {
+            private boolean running;
+
+            @Override
+            public void start() {
+                rabbitAdmin.initialize();
+                running = true;
+            }
+
+            @Override
+            public void stop() {
+                running = false;
+            }
+
+            @Override
+            public boolean isRunning() {
+                return running;
+            }
+
+            @Override
+            public boolean isAutoStartup() {
+                return true;
+            }
+
+            @Override
+            public int getPhase() {
+                return Integer.MIN_VALUE;
+            }
+        };
+    }
 
     @Bean
     public TopicExchange userEventsExchange() {
@@ -106,9 +149,9 @@ public class RabbitMqConfig {
     }
 
     @Bean
-    public TopicExchange moderationEventsExchange(
+    public DirectExchange moderationEventsExchange(
             @Value("${analytics.rabbitmq.exchange.moderation:" + MODERATION_EVENTS_EXCHANGE + "}") String exchangeName) {
-        return new TopicExchange(exchangeName, true, false);
+        return new DirectExchange(exchangeName, true, false);
     }
 
     @Bean
@@ -150,7 +193,7 @@ public class RabbitMqConfig {
     @Bean
     public Binding contentViolationBinding(
             @Qualifier("contentViolationQueue") Queue contentViolationQueue,
-            TopicExchange moderationEventsExchange,
+            DirectExchange moderationEventsExchange,
             @Value("${analytics.rabbitmq.routing-key.content-violation:" + MODERATION_VIOLATION_DETECTED_ROUTING_KEY + "}") String routingKey) {
         return BindingBuilder.bind(contentViolationQueue).to(moderationEventsExchange).with(routingKey);
     }

@@ -6,6 +6,34 @@ const Message = require("../models/Message");
 const EXCHANGE_NAME = "relationship.events";
 const ROUTING_KEY = "relationship.#";
 
+const buildRelationshipUpdatePayload = (relationship, content = {}) => {
+  const raw =
+    relationship && typeof relationship.toObject === "function"
+      ? relationship.toObject()
+      : relationship || {};
+  const relationshipId =
+    raw._id || raw.id || raw.relationship_id || content.relationshipId;
+  const requesterId = raw.requester_id || raw.requesterId || content.requesterId;
+  const receiverId = raw.receiver_id || raw.receiverId || content.receiverId;
+  const status = raw.status || content.status;
+
+  return {
+    ...raw,
+    _id: raw._id,
+    id: raw.id || raw._id,
+    relationshipId,
+    relationship_id: raw.relationship_id,
+    requesterId,
+    receiverId,
+    requester_id: requesterId,
+    receiver_id: receiverId,
+    status: status ? String(status).toUpperCase() : status,
+    type: content.type,
+    actorId: content.actorId,
+    timestamp: content.timestamp || new Date().toISOString(),
+  };
+};
+
 const getUserDisplayName = async (userId) => {
   const User = require("../models/User");
   const user = await User.findOne({ user_id: userId }).select("name").lean();
@@ -60,6 +88,18 @@ const ensureRelationshipSystemMessage = async (content, relationship, io) => {
 
   const config = getRelationshipSystemMessageConfig(content, relationship);
   if (!config) return null;
+  const relationshipIds = Array.from(
+    new Set(
+      [
+        config.relationshipId,
+        relationship?._id,
+        relationship?.id,
+        relationship?.relationship_id,
+      ]
+        .filter(Boolean)
+        .map((value) => String(value)),
+    ),
+  );
   const requesterName =
     config.action === "friend_request_sent"
       ? await getUserDisplayName(config.requesterId)
@@ -77,11 +117,31 @@ const ensureRelationshipSystemMessage = async (content, relationship, io) => {
 
   const existingMessage = await Message.findOne({
     conversation_id: conversation._id,
+    type: config.type,
     "system_meta.action": config.action,
-    "system_meta.relationship_id": config.relationshipId,
+    $or: [
+      { "system_meta.relationship_id": { $in: relationshipIds } },
+      {
+        "system_meta.requester_id": config.requesterId,
+        "system_meta.receiver_id": config.receiverId,
+      },
+    ],
   }).lean();
 
-  if (existingMessage) return null;
+  if (existingMessage) {
+    const nextMeta = {
+      ...(existingMessage.system_meta || {}),
+      relationship_id: String(relationship?._id || config.relationshipId),
+      requester_id: config.requesterId,
+      receiver_id: config.receiverId,
+      ...(requesterName ? { requester_name: requesterName } : {}),
+    };
+
+    await Message.findByIdAndUpdate(existingMessage._id, {
+      system_meta: nextMeta,
+    });
+    return null;
+  }
 
   const message = await MessageService.sendMessage({
     conversationId: conversation._id,
@@ -126,18 +186,25 @@ const handleRelationshipEvent = async (channel, msg, io) => {
     const content = JSON.parse(rawContent);
     console.log(" [x] RelationshipConsumer: Parsed event:", content);
 
-    // Sync database (idempotent update)
-    const relationship = await relationshipService.updateRelationshipFromEvent(content);
+    const relationship =
+      content.source === "chat-service"
+        ? await relationshipService.getRelationshipBetween(
+            content.requesterId,
+            content.receiverId,
+          )
+        : await relationshipService.updateRelationshipFromEvent(content);
+
     await ensureRelationshipSystemMessage(content, relationship, io);
 
     // Emit Realtime via Socket.IO to users involved
     // We use fields from the saved relationship to ensure consistent naming (requester_id, receiver_id)
-    if (io && relationship) {
-      console.log(` [x] RelationshipConsumer: Emitting realtime update to users: ${relationship.requester_id}, ${relationship.receiver_id}`);
+    const payload = buildRelationshipUpdatePayload(relationship, content);
+    if (io && payload.requesterId && payload.receiverId) {
+      console.log(` [x] RelationshipConsumer: Emitting realtime update to users: ${payload.requesterId}, ${payload.receiverId}`);
       
       // Emit to each user's room
-      io.to(`user:${relationship.requester_id}`).emit("cap_nhat_quan_he", relationship);
-      io.to(`user:${relationship.receiver_id}`).emit("cap_nhat_quan_he", relationship);
+      io.to(`user:${payload.requesterId}`).emit("cap_nhat_quan_he", payload);
+      io.to(`user:${payload.receiverId}`).emit("cap_nhat_quan_he", payload);
     }
 
     channel.ack(msg);

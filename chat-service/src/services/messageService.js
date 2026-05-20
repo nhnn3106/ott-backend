@@ -351,13 +351,81 @@ const copyS3Object = async (sourceKey) => {
   return newKey;
 };
 
-exports.getMessages = async (conversationId, { limit = 20, skip = 0 } = {}) => {
-  const messages = await Message.find({ conversation_id: conversationId })
+const normalizeMessageTypes = (types) => {
+  if (!types) return [];
+  const rawTypes = types instanceof Set ? Array.from(types) : types;
+  return (Array.isArray(rawTypes) ? rawTypes : [rawTypes])
+    .map((type) => String(type || "").trim())
+    .filter(Boolean);
+};
+
+const isMessageAfterDeletedMarker = (message, deletedMsgId = "0") => {
+  const marker = String(deletedMsgId || "0");
+  if (!marker || marker === "0") return true;
+
+  const messageId = String(message?.msg_id || "");
+  if (!messageId) return false;
+
+  try {
+    return BigInt(messageId) > BigInt(marker);
+  } catch {
+    return messageId > marker;
+  }
+};
+
+const getUserMessageVisibilityScope = async (conversationId, userId) => {
+  if (!userId) {
+    return { canRead: true, deletedMsgId: "0" };
+  }
+
+  const participant = await Participant.findOne({
+    conversation_id: conversationId,
+    user_id: userId,
+  })
+    .select("deleted_msg_id status")
+    .lean();
+
+  if (!participant || participant.status !== "joined") {
+    return { canRead: false, deletedMsgId: "0" };
+  }
+
+  return {
+    canRead: true,
+    deletedMsgId: String(participant.deleted_msg_id || "0"),
+  };
+};
+
+exports.getMessages = async (
+  conversationId,
+  { limit = 20, skip = 0, types, userId } = {},
+) => {
+  const messageTypes = normalizeMessageTypes(types);
+  const { canRead, deletedMsgId } = await getUserMessageVisibilityScope(
+    conversationId,
+    userId,
+  );
+
+  if (!canRead) return [];
+
+  const query = {
+    conversation_id: conversationId,
+    is_deleted: { $ne: true },
+    is_revoked: { $ne: true },
+    ...(userId ? { deleted_for: { $ne: userId } } : {}),
+    ...(deletedMsgId !== "0" ? { msg_id: { $gt: deletedMsgId } } : {}),
+    ...(messageTypes.length ? { type: { $in: messageTypes } } : {}),
+  };
+
+  const messages = await Message.find(query)
     .sort({ msg_id: -1 })
     .skip(skip)
     .limit(limit)
     .lean();
-  return messages;
+  return messages.filter(
+    (message) =>
+      !message.deleted_at &&
+      isMessageAfterDeletedMarker(message, deletedMsgId),
+  );
 };
 
 const maybeTranscodeVoiceKey = async (key) => {

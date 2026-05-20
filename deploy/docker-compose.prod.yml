@@ -5,25 +5,6 @@ x-logging: &default-logging
     max-file: "${DOCKER_LOG_MAX_FILE:-3}"
 
 services:
-  analytic-postgres:
-    image: postgres:15-alpine
-    container_name: analytic-postgres
-    restart: unless-stopped
-    logging: *default-logging
-    environment:
-      POSTGRES_DB: ${ANALYTIC_DB_NAME:-admin_analytic_db}
-      POSTGRES_USER: ${ANALYTIC_DB_USERNAME:-postgres}
-      POSTGRES_PASSWORD: ${ANALYTIC_DB_PASSWORD:?ANALYTIC_DB_PASSWORD is required}
-    volumes:
-      - analytic_postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${ANALYTIC_DB_USERNAME:-postgres} -d ${ANALYTIC_DB_NAME:-admin_analytic_db}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - ott-network
-
   redis:
     image: redis:7-alpine
     container_name: ott-redis
@@ -50,6 +31,8 @@ services:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    ports:
+      - "${RABBITMQ_MANAGEMENT_BIND:-127.0.0.1}:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
       interval: 10s
@@ -210,10 +193,12 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      REDIS_DB: ${REDIS_DB:-0}
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
       RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-admin}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
       AWS_REGION: ${AWS_REGION:-ap-southeast-1}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?AWS_ACCESS_KEY_ID is required}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?AWS_SECRET_ACCESS_KEY is required}
@@ -222,10 +207,20 @@ services:
       GROQ_TEXT_MODEL: ${GROQ_TEXT_MODEL:-}
       GROQ_FALLBACK_MODELS: ${GROQ_FALLBACK_MODELS:-}
       GROQ_STT_MODEL: ${GROQ_STT_MODEL:-}
+      GROQ_STT_FALLBACK_MODELS: ${GROQ_STT_FALLBACK_MODELS:-}
       GROQ_STT_LANGUAGE: ${GROQ_STT_LANGUAGE:-}
       AI_TIMEOUT_MS: ${AI_TIMEOUT_MS:-}
       AI_STT_TIMEOUT_MS: ${AI_STT_TIMEOUT_MS:-}
       AI_MAX_AUDIO_BYTES: ${AI_MAX_AUDIO_BYTES:-}
+      AI_DISABLE_STRICT_SCHEMA: ${AI_DISABLE_STRICT_SCHEMA:-}
+      FFMPEG_PATH: ${FFMPEG_PATH:-}
+      PRESENCE_TTL_SECONDS: ${PRESENCE_TTL_SECONDS:-}
+      PRESENCE_RECONCILE_INTERVAL_MS: ${PRESENCE_RECONCILE_INTERVAL_MS:-}
+      USER_CACHE_TTL: ${USER_CACHE_TTL:-}
+      REKOGNITION_MIN_CONFIDENCE: ${REKOGNITION_MIN_CONFIDENCE:-}
+      MODERATION_FAIL_CLOSED: ${MODERATION_FAIL_CLOSED:-false}
+      MODERATION_RABBITMQ_EXCHANGE: ${MODERATION_RABBITMQ_EXCHANGE:-}
+      MODERATION_REVIEW_REQUEST_ROUTING_KEY: ${MODERATION_REVIEW_REQUEST_ROUTING_KEY:-}
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
       ANALYTICS_MESSAGE_SENT_QUEUE: ${ANALYTICS_MESSAGE_SENT_QUEUE:-analytics.message.sent.queue}
@@ -244,9 +239,10 @@ services:
     logging: *default-logging
     environment:
       JAVA_TOOL_OPTIONS: -XX:+UseContainerSupport -XX:MaxRAMPercentage=60.0 -XX:InitialRAMPercentage=20.0
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       ANALYTIC_SERVER_PORT: 8092
-      ANALYTIC_DB_URL: jdbc:postgresql://analytic-postgres:5432/${ANALYTIC_DB_NAME:-admin_analytic_db}
-      ANALYTIC_DB_USERNAME: ${ANALYTIC_DB_USERNAME:-postgres}
+      ANALYTIC_DB_URL: ${ANALYTIC_DB_URL:?ANALYTIC_DB_URL is required}
+      ANALYTIC_DB_USERNAME: ${ANALYTIC_DB_USERNAME:?ANALYTIC_DB_USERNAME is required}
       ANALYTIC_DB_PASSWORD: ${ANALYTIC_DB_PASSWORD:?ANALYTIC_DB_PASSWORD is required}
       ANALYTIC_RABBITMQ_HOST: rabbitmq
       ANALYTIC_RABBITMQ_PORT: 5672
@@ -255,8 +251,30 @@ services:
       USER_SERVICE_URL: http://user-service:8082
       ANALYTIC_ALLOWED_ORIGINS: ${ANALYTIC_ALLOWED_ORIGINS:-}
     depends_on:
-      analytic-postgres:
+      rabbitmq:
         condition: service_healthy
+    networks:
+      - ott-network
+
+  moderation-service:
+    image: ${MODERATION_SERVICE_IMAGE:?MODERATION_SERVICE_IMAGE is required}
+    container_name: ott-moderation
+    restart: unless-stopped
+    environment:
+      JAVA_TOOL_OPTIONS: -XX:+UseContainerSupport -XX:MaxRAMPercentage=60.0 -XX:InitialRAMPercentage=20.0
+      SERVER_PORT: 8087
+      SPRING_DATASOURCE_URL: ${MODERATION_DB_URL:?MODERATION_DB_URL is required}
+      SPRING_DATASOURCE_USERNAME: ${MODERATION_DB_USERNAME:?MODERATION_DB_USERNAME is required}
+      SPRING_DATASOURCE_PASSWORD: ${MODERATION_DB_PASSWORD:?MODERATION_DB_PASSWORD is required}
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-admin}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
+      AWS_REGION: ${AWS_REGION:-ap-southeast-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?AWS_ACCESS_KEY_ID is required}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?AWS_SECRET_ACCESS_KEY is required}
+      MODERATION_REVIEW_REQUEST_DLQ: ${MODERATION_REVIEW_REQUEST_DLQ:-moderation.review.requests.dlq}
+    depends_on:
       rabbitmq:
         condition: service_healthy
     networks:
@@ -288,11 +306,11 @@ services:
       - media-service
       - chat-service
       - analytic-service
+      - moderation-service
     networks:
       - ott-network
 
 volumes:
-  analytic_postgres_data:
   redis_data:
   rabbitmq_data:
 
