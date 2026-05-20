@@ -108,6 +108,15 @@ public class PostController {
         return ResponseEntity.ok(postService.getPostsByUserId(userId, viewerId));
     }
 
+    /** GET /posts/search */
+    @GetMapping("/search")
+    public ResponseEntity<Page<PostResponse>> searchPosts(
+            @RequestParam String q,
+            @RequestParam String viewerId,
+            @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) org.springframework.data.domain.Pageable pageable) {
+        return ResponseEntity.ok(postService.searchPosts(q, viewerId, pageable));
+    }
+
     /** PUT /posts/{id} – cập nhật bài post */
     @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<PostResponse> updatePostMultipart(

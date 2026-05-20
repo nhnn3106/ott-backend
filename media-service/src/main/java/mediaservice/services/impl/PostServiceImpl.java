@@ -745,6 +745,25 @@ public class PostServiceImpl implements PostService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Page<PostResponse> searchPosts(String query, String viewerId, Pageable pageable) {
+        return postRepository.searchPostsWithAuthorized(
+                query,
+                ContentStatusType.ACTIVE,
+                VisibilityType.PUBLIC,
+                VisibilityType.PRIVATE,
+                VisibilityType.FRIENDS,
+                RelationshipStatusType.ACCEPTED,
+                VisibilityType.CUSTOM,
+                RuleType.INCLUDE,
+                RuleType.EXCLUDE,
+                RelationshipStatusType.BLOCKED,
+                viewerId,
+                pageable
+        ).map(p -> enrichCounts(postMapper.toResponse(p), p.getId(), viewerId));
+    }
+
+    @Override
     @Transactional
     @CacheEvict(value = {"posts", "allPosts", "userPosts"}, allEntries = true)
     public PostResponse sharePost(String postId, String accountId, String caption, VisibilityType visibility) {
