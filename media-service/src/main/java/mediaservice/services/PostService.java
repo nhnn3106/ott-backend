@@ -36,6 +36,7 @@ public interface PostService {
     void deletePost(String id);
     List<PostResponse> getPostsByUserId(String userId);
     List<PostResponse> getPostsByUserId(String userId, String viewerId);
+    Page<PostResponse> searchPosts(String query, String viewerId, Pageable pageable);
     PostResponse sharePost(String postId, String accountId, String caption, VisibilityType visibility);
 }
 
