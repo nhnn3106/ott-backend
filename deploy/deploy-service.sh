@@ -88,8 +88,8 @@ touch "$IMAGES_FILE"
       docker compose --env-file "$RUNTIME_ENV_FILE" --env-file "$IMAGES_FILE" -f "$COMPOSE_FILE" up -d rabbitmq
       ;;
     analytic-service)
-      echo "Ensuring shared dependencies are running: analytic-postgres rabbitmq"
-      docker compose --env-file "$RUNTIME_ENV_FILE" --env-file "$IMAGES_FILE" -f "$COMPOSE_FILE" up -d analytic-postgres rabbitmq
+      echo "Ensuring shared dependency is running: rabbitmq"
+      docker compose --env-file "$RUNTIME_ENV_FILE" --env-file "$IMAGES_FILE" -f "$COMPOSE_FILE" up -d rabbitmq
       ;;
   esac
 
@@ -127,5 +127,7 @@ touch "$IMAGES_FILE"
   df -h / || true
   docker system df || true
 
-  docker compose --env-file "$RUNTIME_ENV_FILE" --env-file "$IMAGES_FILE" -f "$COMPOSE_FILE" ps "$SERVICE"
+  docker ps \
+    --filter "label=com.docker.compose.service=${SERVICE}" \
+    --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
 ) 200>"$LOCK_FILE"
