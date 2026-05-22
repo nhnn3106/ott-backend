@@ -148,6 +148,7 @@ const publishMessageNotificationsBestEffort = async ({
             type: "CHAT_MESSAGE",
             content,
             referenceId: String(conversationId),
+            pushOnly: true,
           }),
         ),
     );
