@@ -27,6 +27,12 @@ public class InAppNotificationService {
 
     public void processNotificationEvent(InAppNotificationEvent event) {
         log.info("Processing in-app notification event for user: {}", event.getRecipientId());
+
+        if (Boolean.TRUE.equals(event.getPushOnly())) {
+            log.info("Sending push-only notification type={} to user={}", event.getType(), event.getRecipientId());
+            pushNotificationService.sendNotification(event);
+            return;
+        }
         
         // Save to DB
         InAppNotification notification = InAppNotification.builder()

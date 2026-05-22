@@ -1,5 +1,6 @@
 package iuh.fit.notificationservice.service;
 
+import iuh.fit.notificationservice.dto.event.InAppNotificationEvent;
 import iuh.fit.notificationservice.dto.request.PushTokenRequest;
 import iuh.fit.notificationservice.entity.InAppNotification;
 import iuh.fit.notificationservice.entity.PushToken;
@@ -56,11 +57,54 @@ public class PushNotificationService {
     }
 
     public void sendNotification(InAppNotification notification) {
-        List<PushToken> tokens = pushTokenRepository.findByUserIdAndActiveTrue(notification.getRecipientId());
-        if (tokens.isEmpty()) return;
+        sendNotificationPayload(
+                notification.getRecipientId(),
+                String.valueOf(notification.getId()),
+                notification.getType(),
+                notification.getContent(),
+                notification.getReferenceId(),
+                notification.getSenderId(),
+                false
+        );
+    }
+
+    public void sendNotification(InAppNotificationEvent event) {
+        sendNotificationPayload(
+                event.getRecipientId(),
+                null,
+                event.getType(),
+                event.getContent(),
+                event.getReferenceId(),
+                event.getSenderId(),
+                true
+        );
+    }
+
+    private void sendNotificationPayload(
+            String recipientId,
+            String notificationId,
+            String type,
+            String content,
+            String referenceId,
+            String senderId,
+            boolean pushOnly
+    ) {
+        List<PushToken> tokens = pushTokenRepository.findByUserIdAndActiveTrue(recipientId);
+        if (tokens.isEmpty()) {
+            log.warn("No active Expo push tokens for userId={}, type={}", recipientId, type);
+            return;
+        }
 
         List<Map<String, Object>> messages = tokens.stream()
-                .map(token -> buildExpoMessage(token.getExpoPushToken(), notification))
+                .map(token -> buildExpoMessage(
+                        token.getExpoPushToken(),
+                        notificationId,
+                        type,
+                        content,
+                        referenceId,
+                        senderId,
+                        pushOnly
+                ))
                 .toList();
 
         HttpHeaders headers = new HttpHeaders();
@@ -68,29 +112,47 @@ public class PushNotificationService {
         headers.setAccept(List.of(MediaType.APPLICATION_JSON));
 
         try {
-            restTemplate.exchange(
+            ResponseEntity<String> response = restTemplate.exchange(
                     EXPO_PUSH_URL,
                     HttpMethod.POST,
                     new HttpEntity<>(messages, headers),
                     String.class
             );
+            log.info(
+                    "Sent Expo push notification type={} to userId={} tokens={} response={}",
+                    type,
+                    recipientId,
+                    tokens.size(),
+                    response.getBody()
+            );
         } catch (Exception e) {
-            log.warn("Failed to send Expo push notification for notificationId={}: {}",
-                    notification.getId(), e.getMessage());
+            log.warn("Failed to send Expo push notification type={} to userId={}: {}",
+                    type, recipientId, e.getMessage());
         }
     }
 
-    private Map<String, Object> buildExpoMessage(String token, InAppNotification notification) {
+    private Map<String, Object> buildExpoMessage(
+            String token,
+            String notificationId,
+            String type,
+            String content,
+            String referenceId,
+            String senderId,
+            boolean pushOnly
+    ) {
         Map<String, Object> data = new HashMap<>();
-        data.put("notificationId", String.valueOf(notification.getId()));
-        data.put("type", notification.getType());
-        data.put("referenceId", notification.getReferenceId());
-        data.put("senderId", notification.getSenderId());
+        if (notificationId != null) {
+            data.put("notificationId", notificationId);
+        }
+        data.put("type", type);
+        data.put("referenceId", referenceId);
+        data.put("senderId", senderId);
+        data.put("pushOnly", pushOnly);
 
         Map<String, Object> message = new HashMap<>();
         message.put("to", token);
-        message.put("title", resolveTitle(notification.getType()));
-        message.put("body", notification.getContent());
+        message.put("title", resolveTitle(type));
+        message.put("body", content);
         message.put("sound", "default");
         message.put("priority", "high");
         message.put("channelId", "riff-notifications");
