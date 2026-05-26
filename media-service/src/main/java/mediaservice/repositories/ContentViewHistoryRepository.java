@@ -16,4 +16,7 @@ public interface ContentViewHistoryRepository extends JpaRepository<ContentViewH
 
     @Transactional
     void deleteByAccountId(String accountId);
+
+    @Transactional
+    void deleteByContentId(String contentId);
 }

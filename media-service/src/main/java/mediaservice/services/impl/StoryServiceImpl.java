@@ -18,6 +18,8 @@ import mediaservice.models.enums.*;
 import mediaservice.repositories.StoryItemRepository;
 import mediaservice.repositories.StoryRepository;
 import mediaservice.repositories.StoryViewRepository;
+import mediaservice.repositories.ContentViewHistoryRepository;
+import mediaservice.repositories.SavedContentRepository;
 import mediaservice.repositories.UserAccountRepository;
 import mediaservice.services.MediaDeleteJobPublisher;
 import mediaservice.services.MediaCompressionJobPublisher;
@@ -60,6 +62,8 @@ public class StoryServiceImpl implements StoryService {
     private final UserAccountRepository userAccountRepository;
     private final UserAccountMapper userAccountMapper;
     private final StoryViewRepository storyViewRepository;
+    private final ContentViewHistoryRepository contentViewHistoryRepository;
+    private final SavedContentRepository savedContentRepository;
     private final MediaDeleteJobPublisher mediaDeleteJobPublisher;
     private final MediaUrlBuilder mediaUrlBuilder;
     private final MediaRealtimePublisher mediaRealtimePublisher;
@@ -371,6 +375,8 @@ public class StoryServiceImpl implements StoryService {
         
         // Delete related data first
         storyViewRepository.deleteByStoryId(id);
+        contentViewHistoryRepository.deleteByContentId(story.getId());
+        savedContentRepository.deleteByContentId(story.getId());
         
         storyRepository.delete(story);
 
