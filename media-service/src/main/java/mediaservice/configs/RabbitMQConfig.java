@@ -19,6 +19,7 @@ public class RabbitMQConfig {
 
     private static final String ANALYTICS_DLX = "analytics.dlx";
     private static final String POST_CREATED_DLQ = "analytics.post.created.dlq";
+    private static final String MEDIA_MODERATION_DLX = "media.moderation.dlx";
 
     @Bean
     public DirectExchange mediaCompressionExchange(MediaCompressionProperties properties) {
@@ -111,6 +112,47 @@ public class RabbitMQConfig {
     @Bean
     public DirectExchange moderationEventsExchange(@Value("${moderation.rabbitmq.exchange}") String exchange) {
         return new DirectExchange(exchange, true, false);
+    }
+
+    @Bean
+    public DirectExchange mediaModerationDlx() {
+        return new DirectExchange(MEDIA_MODERATION_DLX, true, false);
+    }
+
+    @Bean
+    public Queue mediaModerationViolationQueue(
+            @Value("${moderation.rabbitmq.queue.violation:media.moderation.violation.queue}") String queue,
+            @Value("${moderation.rabbitmq.queue.violation-dlq:media.moderation.violation.dlq}") String dlq) {
+        return QueueBuilder.durable(queue)
+                .withArgument("x-dead-letter-exchange", MEDIA_MODERATION_DLX)
+                .withArgument("x-dead-letter-routing-key", dlq)
+                .build();
+    }
+
+    @Bean
+    public Queue mediaModerationViolationDlq(
+            @Value("${moderation.rabbitmq.queue.violation-dlq:media.moderation.violation.dlq}") String dlq) {
+        return QueueBuilder.durable(dlq).build();
+    }
+
+    @Bean
+    public Binding mediaModerationViolationBinding(
+            Queue mediaModerationViolationQueue,
+            DirectExchange moderationEventsExchange,
+            @Value("${moderation.rabbitmq.routing-key.violation-detected:moderation.violation.detected}") String routingKey) {
+        return BindingBuilder.bind(mediaModerationViolationQueue)
+                .to(moderationEventsExchange)
+                .with(routingKey);
+    }
+
+    @Bean
+    public Binding mediaModerationViolationDlqBinding(
+            Queue mediaModerationViolationDlq,
+            DirectExchange mediaModerationDlx,
+            @Value("${moderation.rabbitmq.queue.violation-dlq:media.moderation.violation.dlq}") String dlq) {
+        return BindingBuilder.bind(mediaModerationViolationDlq)
+                .to(mediaModerationDlx)
+                .with(dlq);
     }
 
     @Bean
