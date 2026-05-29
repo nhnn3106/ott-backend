@@ -632,9 +632,13 @@ public class PostServiceImpl implements PostService {
                 .orElseThrow(() -> new RuntimeException("Post not found with id: " + id));
 
         List<String> deleteKeys = collectPostMediaKeys(post);
-        contentViewHistoryRepository.deleteByContentId(post.getId());
-        savedContentRepository.deleteByContentId(post.getId());
-        postRepository.delete(post);
+
+        // Always soft delete so history/saved entries can still render the deleted state.
+        post.setStatus(ContentStatusType.DELETED);
+        if (post.getMedias() != null) {
+            post.getMedias().clear();
+        }
+        postRepository.save(post);
 
         if (deleteKeys.isEmpty()) {
             publishAfterCommit(post.getId(), "POST", "DELETE");
@@ -784,6 +788,12 @@ public class PostServiceImpl implements PostService {
         Post originalPost = postRepository.findById(postId)
                 .orElseThrow(() -> new RuntimeException("Original post not found with id: " + postId));
 
+        // If sharing a shared post, always point to the root/original post.
+        Post rootPost = originalPost;
+        while (rootPost.getSharedPost() != null) {
+            rootPost = rootPost.getSharedPost();
+        }
+
         UserAccount account = ensureUserSynced(accountId);
         if (account == null) {
             throw new RuntimeException("User not found or sync failed for id: " + accountId);
@@ -794,7 +804,7 @@ public class PostServiceImpl implements PostService {
         share.setCaption(caption);
         share.setVisibility(visibility != null ? visibility : VisibilityType.PUBLIC);
         share.setStatus(ContentStatusType.ACTIVE);
-        share.setSharedPost(originalPost);
+        share.setSharedPost(rootPost);
 
         Post savedShare = postRepository.save(share);
 
@@ -803,8 +813,8 @@ public class PostServiceImpl implements PostService {
         publishAfterCommit(savedShare.getId(), "POST", "CREATE");
 
         // 2. For the original post (to broadcast that its share count has updated)
-        postActivityPublisher.publish(originalPost.getId(), "SHARE", "CREATE", 
-            java.util.Map.of("shares", postRepository.countBySharedPost_Id(originalPost.getId())));
+        postActivityPublisher.publish(rootPost.getId(), "SHARE", "CREATE", 
+            java.util.Map.of("shares", postRepository.countBySharedPost_Id(rootPost.getId())));
 
         return enrichCounts(postMapper.toResponse(savedShare), savedShare.getId());
     }
