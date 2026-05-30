@@ -22,6 +22,7 @@ public class UserStatusChangedEvent {
     private UserStatusSnapshot previousStatus;
     private UserStatusSnapshot newStatus;
     private String reason;
+    private Long durationMinutes;
     private LocalDateTime effectiveUntil;
     private Instant timestamp;
 }
