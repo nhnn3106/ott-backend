@@ -1,18 +1,23 @@
 package iuh.fit.se.analyticservice.listener;
 
+<<<<<<< Updated upstream
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Locale;
 
+=======
+import java.nio.charset.StandardCharsets;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
+>>>>>>> Stashed changes
 import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 import iuh.fit.se.analyticservice.config.RabbitMqConfig;
 import iuh.fit.se.analyticservice.dto.UserStatusChangedEvent;
-import iuh.fit.se.analyticservice.entity.AdminAuditLog;
-import iuh.fit.se.analyticservice.repository.AdminAuditLogRepository;
+import iuh.fit.se.analyticservice.service.AdminAuditLogService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -21,11 +26,22 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class ModerationEventListener {
 
+<<<<<<< Updated upstream
     private final AdminAuditLogRepository adminAuditLogRepository;
+=======
+    private final AdminAuditLogService adminAuditLogService;
+    private final ObjectMapper objectMapper;
+
+    @PostConstruct
+    void logListenerMode() {
+        log.info("User status audit listener initialized with raw RabbitMQ Message handler");
+    }
+>>>>>>> Stashed changes
 
     @RabbitListener(queues = RabbitMqConfig.USER_STATUS_CHANGED_QUEUE)
     public void handleUserStatusChangedEvent(UserStatusChangedEvent event) {
         try {
+<<<<<<< Updated upstream
             validateEvent(event);
             if (adminAuditLogRepository.existsByEventId(event.getEventId())) {
                 log.warn("Duplicate event detected: eventId={}", event.getEventId());
@@ -56,11 +72,22 @@ public class ModerationEventListener {
         } catch (DataIntegrityViolationException duplicate) {
             log.warn("Duplicate moderation status event ignored: eventId={}",
                     event != null ? event.getEventId() : null);
+=======
+            UserStatusChangedEvent event = objectMapper.readValue(payload, UserStatusChangedEvent.class);
+            log.info(
+                    "Received user.status.changed event: eventId={}, userId={}, actionType={}",
+                    event.getEventId(),
+                    event.getUserId(),
+                    event.getActionType()
+            );
+            adminAuditLogService.recordUserStatusChanged(event);
+>>>>>>> Stashed changes
         } catch (Exception ex) {
             log.error("Failed to process user.status.changed event: {}", event, ex);
             throw new AmqpRejectAndDontRequeueException("Invalid moderation analytics event", ex);
         }
     }
+<<<<<<< Updated upstream
 
     private void validateEvent(UserStatusChangedEvent event) {
         if (event == null) {
@@ -103,4 +130,6 @@ public class ModerationEventListener {
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
     }
+=======
+>>>>>>> Stashed changes
 }
