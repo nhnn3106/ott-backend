@@ -145,7 +145,8 @@ services:
     restart: unless-stopped
     logging: *default-logging
     environment:
-      JAVA_TOOL_OPTIONS: -XX:+UseContainerSupport -XX:MaxRAMPercentage=60.0 -XX:InitialRAMPercentage=20.0
+      JAVA_TOOL_OPTIONS: -Duser.timezone=UTC -XX:+UseContainerSupport -XX:MaxRAMPercentage=60.0 -XX:InitialRAMPercentage=20.0
+      TZ: UTC
       SOCIAL_DB_URL: ${SOCIAL_DB_URL:?SOCIAL_DB_URL is required}
       SOCIAL_DB_USERNAME: ${SOCIAL_DB_USERNAME:?SOCIAL_DB_USERNAME is required}
       SOCIAL_DB_PASSWORD: ${SOCIAL_DB_PASSWORD:?SOCIAL_DB_PASSWORD is required}
@@ -189,6 +190,7 @@ services:
     logging: *default-logging
     environment:
       NODE_ENV: production
+      TZ: UTC
       PORT: 5000
       FRONTEND_URL: ${FRONTEND_URL:?FRONTEND_URL is required}
       FRONTEND_URL_ALT: ${FRONTEND_URL_ALT:-http://localhost:3000}

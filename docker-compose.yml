@@ -90,7 +90,7 @@ services:
       - "8090:8090"
       - "8091:8091"
     environment:
-      - TZ=Asia/Singapore
+      - TZ=UTC
     networks:
       - ott-network
     depends_on:
@@ -103,6 +103,7 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
+      TZ: UTC
       PORT: ${CHAT_SERVICE_PORT}
       MONGO_URI: ${CHAT_MONGO_URI}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
