@@ -118,6 +118,42 @@ exports.createConversation = async (req, res) => {
   }
 };
 
+exports.findPrivateConversation = async (req, res) => {
+  try {
+    const { userId, targetUserId } = req.query;
+    if (!userId || !targetUserId) {
+      return res.status(400).json({ error: "userId va targetUserId la bat buoc" });
+    }
+
+    const conversationId = await ConversationService.findPrivateConversation(
+      String(userId),
+      String(targetUserId),
+    );
+
+    if (!conversationId) {
+      return res.status(200).json(null);
+    }
+
+    const conversation = await ConversationService.getConversationById(conversationId);
+    return res.status(200).json(conversation);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+exports.getConversationById = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const conversation = await ConversationService.getConversationById(conversationId);
+    if (!conversation) {
+      return res.status(404).json({ error: "Cuoc hoi thoai khong ton tai" });
+    }
+    return res.status(200).json(conversation);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
 exports.addMember = async (req, res) => {
   try {
     const { conversationId, userId, userIds, addedBy } = req.body;

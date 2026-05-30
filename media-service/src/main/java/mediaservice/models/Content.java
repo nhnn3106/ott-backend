@@ -28,7 +28,6 @@ public abstract class Content {
 
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
     private ContentStatusType status = ContentStatusType.ACTIVE;
 
     @Enumerated(EnumType.STRING)
