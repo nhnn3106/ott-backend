@@ -5,7 +5,6 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import mediaservice.models.enums.ContentStatusType;
-import mediaservice.models.enums.ContentTargetType;
 import mediaservice.models.enums.VisibilityType;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -29,8 +28,8 @@ public abstract class Content {
 
 
     @Enumerated(EnumType.STRING)
-    @Column(columnDefinition = "ACTIVE")
-    private ContentStatusType status;
+    @Column(nullable = false, length = 20)
+    private ContentStatusType status = ContentStatusType.ACTIVE;
 
     @Enumerated(EnumType.STRING)
     private VisibilityType visibility;
