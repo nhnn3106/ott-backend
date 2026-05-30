@@ -46,6 +46,123 @@ const S3_POLICY_SIGNAL_PATTERN =
 const S3_POLICY_CLEAN_VALUE_PATTERN =
   /^(clean|ok|pass|passed|safe|allowed|false|0|no|none)$/i;
 const MEDIA_MESSAGE_TYPES = new Set(["image", "video", "file", "audio"]);
+const parsePositiveNumberEnv = (name, fallback) => {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+};
+const SEND_FAST_CACHE_TTL_MS = Math.max(
+  0,
+  parsePositiveNumberEnv("CHAT_SEND_FAST_CACHE_TTL_MS", 30000),
+);
+const SEND_FAST_CACHE_MAX_ENTRIES = Math.max(
+  100,
+  parsePositiveNumberEnv("CHAT_SEND_FAST_CACHE_MAX_ENTRIES", 5000),
+);
+const sendFastPathCache = new Map();
+const sendFastPathPendingLoads = new Map();
+
+const getSendCacheValue = (key) => {
+  if (!SEND_FAST_CACHE_TTL_MS) return undefined;
+
+  const entry = sendFastPathCache.get(key);
+  if (!entry) return undefined;
+
+  if (entry.expiresAt <= Date.now()) {
+    sendFastPathCache.delete(key);
+    return undefined;
+  }
+
+  return entry.value;
+};
+
+const setSendCacheValue = (key, value, ttlMs = SEND_FAST_CACHE_TTL_MS) => {
+  if (!ttlMs || value == null) return value;
+
+  while (sendFastPathCache.size >= SEND_FAST_CACHE_MAX_ENTRIES) {
+    const oldestKey = sendFastPathCache.keys().next().value;
+    if (!oldestKey) break;
+    sendFastPathCache.delete(oldestKey);
+  }
+
+  sendFastPathCache.set(key, {
+    value,
+    expiresAt: Date.now() + ttlMs,
+  });
+
+  return value;
+};
+
+const getOrLoadSendCacheValue = async (key, loader, ttlMs) => {
+  const cached = getSendCacheValue(key);
+  if (cached !== undefined) return cached;
+
+  const pending = sendFastPathPendingLoads.get(key);
+  if (pending) return pending;
+
+  const loadPromise = Promise.resolve()
+    .then(loader)
+    .then((value) => setSendCacheValue(key, value, ttlMs))
+    .finally(() => {
+      sendFastPathPendingLoads.delete(key);
+    });
+
+  sendFastPathPendingLoads.set(key, loadPromise);
+  return loadPromise;
+};
+
+const runBestEffort = (label, task) => {
+  Promise.resolve()
+    .then(task)
+    .catch((error) => {
+      console.warn(
+        `[${label}] background task failed:`,
+        error?.message || error,
+      );
+    });
+};
+
+const getParticipantForSend = (conversationId, senderId) =>
+  getOrLoadSendCacheValue(
+    `participant:${conversationId}:${senderId}`,
+    () =>
+      Participant.findOne({
+        conversation_id: conversationId,
+        user_id: senderId,
+      })
+        .select("settings status deleted_msg_id")
+        .lean(),
+  );
+
+const getConversationForSend = (conversationId) =>
+  getOrLoadSendCacheValue(
+    `conversation:${conversationId}`,
+    () =>
+      Conversation.findById(conversationId)
+        .select(
+          "type name avatar member_count is_dissolved status blocked_user_ids",
+        )
+        .lean(),
+  );
+
+const getSenderForSend = (senderId) =>
+  getOrLoadSendCacheValue(
+    `sender:${senderId}`,
+    () => User.findOne({ user_id: senderId }).select("name avatar").lean(),
+    Math.max(SEND_FAST_CACHE_TTL_MS, 60000),
+  );
+
+const getOtherPrivateParticipantForSend = (conversationId, senderId) =>
+  getOrLoadSendCacheValue(
+    `private-other:${conversationId}:${senderId}`,
+    () =>
+      Participant.findOne({
+        conversation_id: conversationId,
+        user_id: { $ne: senderId },
+      })
+        .select("user_id")
+        .lean(),
+  );
+
 const sanitizeS3FileName = (fileName) => {
   const baseName =
     String(fileName || "file")
@@ -808,22 +925,22 @@ exports.sendMessage = async ({
       .lean();
   }
 
-  const participant = await Participant.findOne({
-    conversation_id: conversationId,
-    user_id: senderId,
-  }).lean();
+  const [participant, conversation, sender] = await Promise.all([
+    getParticipantForSend(conversationId, senderId),
+    getConversationForSend(conversationId),
+    getSenderForSend(senderId),
+  ]);
 
   if (!participant) {
     throw new Error("Bạn không thuộc cuộc hội thoại này");
   }
 
   // Check for blocking in private conversations
-  const conversation = await Conversation.findById(conversationId).lean();
   if (conversation && conversation.type === "private") {
-    const otherParticipant = await Participant.findOne({
-      conversation_id: conversationId,
-      user_id: { $ne: senderId },
-    }).lean();
+    const otherParticipant = await getOtherPrivateParticipantForSend(
+      conversationId,
+      senderId,
+    );
 
     if (otherParticipant) {
       const relationship = await Relationship.findOne({
@@ -831,7 +948,9 @@ exports.sendMessage = async ({
           { requester_id: senderId, receiver_id: otherParticipant.user_id },
           { requester_id: otherParticipant.user_id, receiver_id: senderId },
         ],
-      }).lean();
+      })
+        .select("status requester_id")
+        .lean();
 
       if (relationship && relationship.status === "BLOCKED") {
         if (relationship.requester_id === senderId) {
@@ -890,50 +1009,42 @@ exports.sendMessage = async ({
     });
   }
 
+  const senderName = sender?.name || "";
+  const senderAvatar = sanitizeAvatarValue(sender?.avatar || "");
   const updatedConversation = await ConversationService.updateLastMessage(
     conversationId,
     savedMessage,
+    { senderName },
   );
 
-  try {
-    await publishMessageSentEvent({
+  runBestEffort("analytics", () =>
+    publishMessageSentEvent({
       messageId: savedMessage.msg_id,
       userId: senderId,
       messageType: type,
-    });
-  } catch (error) {
-    // Do not block chat delivery when analytics pipeline is unavailable
-    console.warn(
-      "[analytics] publish message.sent failed:",
-      error?.message || error,
-    );
-  }
+    }),
+  );
 
-  // Add message to Redis cache (last 20 messages)
-  const sender = await User.findOne({ user_id: senderId })
-    .select("name avatar")
-    .lean();
   const enrichedMessage = {
     ...savedMessage.toObject(),
     sender_name:
-      sender?.name || updatedConversation?.last_message?.sender_name || "",
-    sender_avatar: sanitizeAvatarValue(sender?.avatar || ""),
+      senderName || updatedConversation?.last_message?.sender_name || "",
+    sender_avatar: senderAvatar,
     reply_to: buildReplyPreview(replyMessage, replySender?.name || ""),
   };
 
-  await messageCacheService.addMessage(conversationId, enrichedMessage);
-  publishMessageNotificationsBestEffort({
-    conversationId,
-    senderId,
-    message: enrichedMessage,
-    senderName: enrichedMessage.sender_name,
-    conversation,
-  }).catch((error) => {
-    console.warn(
-      "[notification] async chat message notification failed:",
-      error?.message || error,
-    );
-  });
+  runBestEffort("message-cache", () =>
+    messageCacheService.addMessage(conversationId, enrichedMessage),
+  );
+  runBestEffort("notification", () =>
+    publishMessageNotificationsBestEffort({
+      conversationId,
+      senderId,
+      message: enrichedMessage,
+      senderName: enrichedMessage.sender_name,
+      conversation,
+    }),
+  );
 
   // Gửi kèm sender_name để FE cập nhật conversation list mà không cần query thêm
   return enrichedMessage;

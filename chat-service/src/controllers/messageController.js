@@ -3,6 +3,17 @@ const ParticipantService = require("../services/participantService");
 const { publishMessageCreated } = require("../events/chatEvents");
 const accountStatusService = require("../services/accountStatusService");
 
+const runControllerBestEffort = (label, task) => {
+  Promise.resolve()
+    .then(task)
+    .catch((error) => {
+      console.warn(
+        `[${label}] background task failed:`,
+        error?.message || error,
+      );
+    });
+};
+
 const emitMessageToParticipants = async (io, conversationId, message) => {
   if (!io || !conversationId || !message) return;
 
@@ -75,16 +86,18 @@ exports.sendMessage = async (req, res) => {
       pollOptions,
     });
 
-    await publishMessageCreatedBestEffort(req, {
-      conversationId,
-      msgId: savedMessage.msg_id,
-      senderId,
-      createdAt: savedMessage.createdAt || new Date().toISOString(),
-    }, savedMessage);
+    runControllerBestEffort("chat-events", () =>
+      publishMessageCreatedBestEffort(req, {
+        conversationId,
+        msgId: savedMessage.msg_id,
+        senderId,
+        createdAt: savedMessage.createdAt || new Date().toISOString(),
+      }, savedMessage),
+    );
 
     // Nếu là poll, tự động tạo thêm 1 tin system thông báo
     if (type === "poll" && pollQuestion) {
-      try {
+      runControllerBestEffort("poll-system-message", async () => {
         const sysMsg = await MessageService.sendMessage({
           conversationId,
           senderId,
@@ -98,9 +111,7 @@ exports.sendMessage = async (req, res) => {
           senderId,
           createdAt: sysMsg.createdAt || new Date().toISOString(),
         }, sysMsg);
-      } catch (sysErr) {
-        console.warn("Không thể tạo thông báo poll:", sysErr.message);
-      }
+      });
     }
 
     res.status(201).json(savedMessage);
