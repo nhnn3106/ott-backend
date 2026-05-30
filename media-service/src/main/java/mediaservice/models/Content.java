@@ -29,8 +29,7 @@ public abstract class Content {
 
 
     @Enumerated(EnumType.STRING)
-    @Column(columnDefinition = "ACTIVE")
-    private ContentStatusType status;
+    private ContentStatusType status = ContentStatusType.ACTIVE;
 
     @Enumerated(EnumType.STRING)
     private VisibilityType visibility;
