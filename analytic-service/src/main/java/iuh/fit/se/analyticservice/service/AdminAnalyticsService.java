@@ -13,14 +13,12 @@ import java.util.Optional;
 import java.util.TreeSet;
 import java.time.temporal.ChronoUnit;
 
-<<<<<<< Updated upstream
-=======
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
->>>>>>> Stashed changes
 import org.springframework.stereotype.Service;
 
 import iuh.fit.se.analyticservice.client.UserServiceClient;
+import iuh.fit.se.analyticservice.dto.ApiResponseDTO;
 import iuh.fit.se.analyticservice.dto.DailyActivityResponse;
 import iuh.fit.se.analyticservice.dto.DailyPostCountResponse;
 import iuh.fit.se.analyticservice.dto.DailyUserTrendResponse;
@@ -52,13 +50,10 @@ public class AdminAnalyticsService {
     private final DailyStatsRepository dailyStatsRepository;
     private final UserServiceClient userServiceClient;
 
-<<<<<<< Updated upstream
-=======
     @Value("${internal.api.key:}")
     private String internalApiKey;
 
     @Cacheable(cacheNames = "analyticsOverview", key = "#timeRange", condition = "@environment.getProperty('analytics.cache.enabled', 'true') == 'true'")
->>>>>>> Stashed changes
     public OverviewResponse getOverview(String timeRange) {
         Instant from = resolveFrom(timeRange);
         LocalDate today = LocalDate.now(ZoneOffset.UTC);
@@ -136,7 +131,14 @@ public class AdminAnalyticsService {
             RecentNewUserDTO dto = new RecentNewUserDTO(
                     event.getUserId(),
                     user != null ? user.getEmail() : null,
-                    user != null ? user.getFullName() : null
+                    user != null ? user.getFullName() : null,
+                    event.getTimestamp(),
+                    hasProfileDetails(user),
+                    user != null ? user.getIsActive() : null,
+                    user != null ? user.getIsBlocked() : null,
+                    user != null ? user.getBlockedUntil() : null,
+                    user != null ? user.getBlockedReason() : null,
+                    user != null ? user.getDeletedAt() : null
             );
 
             if (matchesQuery(dto, normalizedQuery)) {
@@ -409,13 +411,31 @@ public class AdminAnalyticsService {
     }
 
     private UserDetailDTO fetchUserDetail(String userId) {
+        if (internalApiKey == null || internalApiKey.isBlank()) {
+            log.warn("INTERNAL_API_KEY is not configured, returning analytics event without profile details");
+            return null;
+        }
+
         try {
-            return userServiceClient.getUserById(userId);
+            ApiResponseDTO<UserDetailDTO> response = userServiceClient.getUserById(userId, internalApiKey);
+            return response != null ? response.getResult() : null;
         } catch (RuntimeException ex) {
             log.warn("user-service unavailable for userId={}, returning analytics event without profile details",
                     userId, ex);
             return null;
         }
+    }
+
+    private boolean hasProfileDetails(UserDetailDTO user) {
+        if (user == null) {
+            return false;
+        }
+
+        return !isBlank(user.getEmail()) || !isBlank(user.getFullName()) || !isBlank(user.getPhone());
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     private List<LocalDate> buildDateRange(Instant from, java.util.Set<LocalDate> firstDates, java.util.Set<LocalDate> secondDates) {

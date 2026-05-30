@@ -14,13 +14,13 @@ const {
   HeadObjectCommand,
 } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
-const {
-  RekognitionClient,
-  DetectModerationLabelsCommand,
-} = require("@aws-sdk/client-rekognition");
 const { s3Client, bucketName } = require("../config/s3");
 const { publishMessageSentEvent } = require("./analyticsPublisher");
-const { publishMessageForReview } = require("./chatModerationPublisher");
+const {
+  publishMessageForReview,
+  publishMessageImageForReview,
+} = require("./chatModerationPublisher");
+const { publishNotification } = require("../events/notificationEvents");
 
 const fs = require("fs/promises");
 const path = require("path");
@@ -31,23 +31,20 @@ const crypto = require("crypto");
 
 const REVOKED_PLACEHOLDER = "Tin nhắn đã được thu hồi";
 const S3_CACHE_CONTROL = "public, max-age=31536000, immutable";
+const PUSH_NOTIFICATION_MESSAGE_TYPES = new Set([
+  "text",
+  "image",
+  "video",
+  "audio",
+  "file",
+  "link",
+  "poll",
+]);
 const S3_POLICY_SIGNAL_PATTERN =
   /(violation|moderation|unsafe|malware|virus|infected|blocked|denied|explicit.?deny|quarantine|sensitive|nsfw|adult|explicit)/i;
 const S3_POLICY_CLEAN_VALUE_PATTERN =
   /^(clean|ok|pass|passed|safe|allowed|false|0|no|none)$/i;
-const MODERATION_MIN_CONFIDENCE = Number(
-  process.env.REKOGNITION_MIN_CONFIDENCE || 65,
-);
-const MODERATION_FAIL_CLOSED =
-  String(process.env.MODERATION_FAIL_CLOSED || "false").toLowerCase() === "true";
-const rekognitionClient = new RekognitionClient({
-  region: process.env.AWS_REGION || "ap-southeast-1",
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  },
-});
-
+const MEDIA_MESSAGE_TYPES = new Set(["image", "video", "file", "audio"]);
 const sanitizeS3FileName = (fileName) => {
   const baseName =
     String(fileName || "file")
@@ -60,6 +57,210 @@ const sanitizeS3FileName = (fileName) => {
       .replace(/^_+|_+$/g, "") || "file";
 
   return baseName.slice(0, 160) || "file";
+};
+
+const hasPersistableMeta = (value) => {
+  if (value == null) return false;
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "object") {
+    if (Object.prototype.toString.call(value) !== "[object Object]") {
+      return true;
+    }
+    return Object.keys(value).length > 0;
+  }
+  return true;
+};
+
+const normalizePollOptionsForStorage = (pollOptions) => {
+  if (!Array.isArray(pollOptions)) return [];
+
+  return pollOptions
+    .map((option) => {
+      const normalizedOption = {
+        id: String(option?.id || "").trim(),
+        name: String(option?.name || "").trim(),
+      };
+
+      const voters = Array.isArray(option?.voters)
+        ? option.voters.filter(Boolean).map((voterId) => String(voterId))
+        : [];
+
+      if (voters.length > 0) {
+        normalizedOption.voters = voters;
+      }
+
+      return normalizedOption;
+    })
+    .filter((option) => option.id && option.name);
+};
+
+const buildMessageCreatePayload = ({
+  conversationId,
+  senderId,
+  content,
+  type,
+  size,
+  replyToMsgId,
+  pollQuestion,
+  pollMultipleChoice,
+  pollOptions,
+  systemMeta,
+}) => {
+  const messageType = type || "text";
+  const payload = {
+    conversation_id: conversationId,
+    sender_id: senderId,
+    content,
+    type: messageType,
+  };
+
+  if (replyToMsgId) {
+    payload.reply_to_msg_id = replyToMsgId;
+  }
+
+  const numericSize = Number(size);
+  if (
+    MEDIA_MESSAGE_TYPES.has(messageType) &&
+    Number.isFinite(numericSize) &&
+    numericSize > 0
+  ) {
+    payload.size = numericSize;
+  }
+
+  if (messageType === "poll") {
+    const normalizedQuestion = String(pollQuestion || "").trim();
+    if (normalizedQuestion) {
+      payload.poll_question = normalizedQuestion;
+    }
+
+    if (pollMultipleChoice === true) {
+      payload.poll_multiple_choice = true;
+    }
+
+    const normalizedOptions = normalizePollOptionsForStorage(pollOptions);
+    if (normalizedOptions.length > 0) {
+      payload.poll_options = normalizedOptions;
+    }
+  }
+
+  if (hasPersistableMeta(systemMeta)) {
+    payload.system_meta = systemMeta;
+  }
+
+  return payload;
+};
+
+const isParticipantNotificationEnabled = (participant) => {
+  const settings = participant?.settings || {};
+  const status = settings.notification_status || "on";
+
+  if (status === "off") return false;
+  if (status !== "mute") return true;
+
+  if (!settings.mute_until) return false;
+  const muteUntil = new Date(settings.mute_until).getTime();
+  return Number.isNaN(muteUntil) || muteUntil <= Date.now();
+};
+
+const resolvePublicMediaUrl = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw || /^data:image\//i.test(raw)) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (!bucketName) return "";
+
+  const region = process.env.AWS_REGION || "ap-southeast-1";
+  const key = raw
+    .replace(/^\/+/, "")
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+  return key ? `https://${bucketName}.s3.${region}.amazonaws.com/${key}` : "";
+};
+
+const getMessageNotificationPayload = ({ message, senderName, conversation }) => {
+  const senderLabel = senderName || "Ai đó";
+  const groupName = conversation?.type === "group" ? String(conversation?.name || "").trim() : "";
+  const content = Array.isArray(message.content)
+    ? message.content.filter(Boolean)
+    : [message.content].filter(Boolean);
+  const firstContent = String(content[0] || "");
+  const title = groupName ? `${senderLabel} trong ${groupName}` : senderLabel;
+
+  switch (message.type) {
+    case "image":
+      return {
+        title,
+        body: `Đã gửi ${content.length > 1 ? `${content.length} hình ảnh` : "một hình ảnh"}`,
+      };
+    case "video":
+      return { title, body: "Đã gửi một video" };
+    case "audio":
+      return { title, body: "Đã gửi một tin nhắn thoại" };
+    case "file":
+      return { title, body: "Đã gửi một tệp" };
+    case "poll":
+      return { title, body: "Đã tạo một cuộc bình chọn" };
+    default: {
+      const preview = firstContent.length > 90 ? `${firstContent.slice(0, 90)}...` : firstContent;
+      return {
+        title,
+        body: preview || "Tin nhắn mới",
+      };
+    }
+  }
+};
+
+const publishMessageNotificationsBestEffort = async ({
+  conversationId,
+  senderId,
+  message,
+  senderName,
+  conversation,
+}) => {
+  if (!PUSH_NOTIFICATION_MESSAGE_TYPES.has(String(message?.type || ""))) return;
+
+  try {
+    const recipients = await Participant.find({
+      conversation_id: conversationId,
+      user_id: { $ne: senderId },
+      status: "joined",
+      "settings.removed_from_group_at": null,
+    })
+      .select("user_id settings")
+      .lean();
+
+    const notificationPayload = getMessageNotificationPayload({
+      message,
+      senderName,
+      conversation,
+    });
+    const senderAvatarUrl = resolvePublicMediaUrl(message.sender_avatar);
+    const content = `${notificationPayload.title}: ${notificationPayload.body}`;
+
+    await Promise.allSettled(
+      recipients
+        .filter(isParticipantNotificationEnabled)
+        .map((recipient) =>
+          publishNotification({
+            recipientId: recipient.user_id,
+            senderId,
+            type: "CHAT_MESSAGE",
+            content,
+            title: notificationPayload.title,
+            body: notificationPayload.body,
+            imageUrl: senderAvatarUrl,
+            referenceId: String(conversationId),
+            pushOnly: true,
+          }),
+        ),
+    );
+  } catch (error) {
+    console.warn(
+      "[notification] publish chat message notification failed:",
+      error?.message || error,
+    );
+  }
 };
 
 const resolveS3ContentDisposition = (fileCategory, fileName) => {
@@ -136,65 +337,7 @@ const getS3MediaWarning = async (rawKey, index) => {
   }
 };
 
-const buildModerationWarning = ({
-  index,
-  key,
-  source,
-  reason,
-  confidence,
-  labels,
-}) => ({
-  index,
-  key,
-  source,
-  reason: String(reason || "moderation_required"),
-  ...(typeof confidence === "number" ? { confidence } : {}),
-  ...(Array.isArray(labels) ? { labels } : {}),
-});
-
-const getRekognitionMediaWarning = async (rawKey, index) => {
-  const key = extractS3ObjectKey(rawKey);
-  if (!key) return null;
-
-  try {
-    const result = await rekognitionClient.send(
-      new DetectModerationLabelsCommand({
-        Image: {
-          S3Object: {
-            Bucket: bucketName,
-            Name: key,
-          },
-        },
-        MinConfidence: MODERATION_MIN_CONFIDENCE,
-      }),
-    );
-
-    const labels = result.ModerationLabels || [];
-    if (!labels.length) return null;
-
-    const normalizedLabels = labels.map((label) => ({
-      name: label.Name,
-      parentName: label.ParentName,
-      confidence: label.Confidence,
-    }));
-
-    return buildModerationWarning({
-      index,
-      key,
-      source: "rekognition",
-      reason:
-        labels
-          .slice(0, 3)
-          .map((label) => label.Name)
-          .filter(Boolean)
-          .join(", ") || "moderation_label",
-      confidence: Math.max(
-        ...labels.map((label) => Number(label.Confidence || 0)),
-      ),
-      labels: normalizedLabels,
-    });
-  } catch (error) {
-    console.warn(
+/*
       "Không thể kiểm tra Rekognition moderation:",
       error?.message || error,
     );
@@ -210,6 +353,7 @@ const getRekognitionMediaWarning = async (rawKey, index) => {
   }
 };
 
+*/
 const buildMediaPolicyMeta = async (type, contentArray) => {
   if (!["image", "video"].includes(type)) return null;
 
@@ -218,10 +362,6 @@ const buildMediaPolicyMeta = async (type, contentArray) => {
       contentArray.map(async (key, index) => {
         const s3Warning = await getS3MediaWarning(key, index);
         if (s3Warning) return s3Warning;
-
-        if (type === "image") {
-          return getRekognitionMediaWarning(key, index);
-        }
 
         return null;
       }),
@@ -351,13 +491,81 @@ const copyS3Object = async (sourceKey) => {
   return newKey;
 };
 
-exports.getMessages = async (conversationId, { limit = 20, skip = 0 } = {}) => {
-  const messages = await Message.find({ conversation_id: conversationId })
+const normalizeMessageTypes = (types) => {
+  if (!types) return [];
+  const rawTypes = types instanceof Set ? Array.from(types) : types;
+  return (Array.isArray(rawTypes) ? rawTypes : [rawTypes])
+    .map((type) => String(type || "").trim())
+    .filter(Boolean);
+};
+
+const isMessageAfterDeletedMarker = (message, deletedMsgId = "0") => {
+  const marker = String(deletedMsgId || "0");
+  if (!marker || marker === "0") return true;
+
+  const messageId = String(message?.msg_id || "");
+  if (!messageId) return false;
+
+  try {
+    return BigInt(messageId) > BigInt(marker);
+  } catch {
+    return messageId > marker;
+  }
+};
+
+const getUserMessageVisibilityScope = async (conversationId, userId) => {
+  if (!userId) {
+    return { canRead: true, deletedMsgId: "0" };
+  }
+
+  const participant = await Participant.findOne({
+    conversation_id: conversationId,
+    user_id: userId,
+  })
+    .select("deleted_msg_id status")
+    .lean();
+
+  if (!participant || participant.status !== "joined") {
+    return { canRead: false, deletedMsgId: "0" };
+  }
+
+  return {
+    canRead: true,
+    deletedMsgId: String(participant.deleted_msg_id || "0"),
+  };
+};
+
+exports.getMessages = async (
+  conversationId,
+  { limit = 20, skip = 0, types, userId } = {},
+) => {
+  const messageTypes = normalizeMessageTypes(types);
+  const { canRead, deletedMsgId } = await getUserMessageVisibilityScope(
+    conversationId,
+    userId,
+  );
+
+  if (!canRead) return [];
+
+  const query = {
+    conversation_id: conversationId,
+    is_deleted: { $ne: true },
+    is_revoked: { $ne: true },
+    ...(userId ? { deleted_for: { $ne: userId } } : {}),
+    ...(deletedMsgId !== "0" ? { msg_id: { $gt: deletedMsgId } } : {}),
+    ...(messageTypes.length ? { type: { $in: messageTypes } } : {}),
+  };
+
+  const messages = await Message.find(query)
     .sort({ msg_id: -1 })
     .skip(skip)
     .limit(limit)
     .lean();
-  return messages;
+  return messages.filter(
+    (message) =>
+      !message.deleted_at &&
+      isMessageAfterDeletedMarker(message, deletedMsgId),
+  );
 };
 
 const maybeTranscodeVoiceKey = async (key) => {
@@ -574,7 +782,8 @@ exports.sendMessage = async ({
     );
   }
 
-  const mediaPolicyMeta = await buildMediaPolicyMeta(type, normalizedContent);
+  const mediaPolicyMeta =
+    type === "image" ? null : await buildMediaPolicyMeta(type, normalizedContent);
 
   let replyMessage = null;
   let replySender = null;
@@ -636,18 +845,20 @@ exports.sendMessage = async ({
     throw new Error("Nhóm đã được giải tán");
   }
 
-  const newMessage = new Message({
-    conversation_id: conversationId,
-    sender_id: senderId,
-    content: normalizedContent,
-    type: type,
-    size: size,
-    reply_to_msg_id: replyToMsgId || null,
-    poll_question: pollQuestion || null,
-    poll_multiple_choice: pollMultipleChoice || false,
-    poll_options: pollOptions || [],
-    system_meta: systemMeta !== undefined ? systemMeta : mediaPolicyMeta,
-  });
+  const newMessage = new Message(
+    buildMessageCreatePayload({
+      conversationId,
+      senderId,
+      content: normalizedContent,
+      type,
+      size,
+      replyToMsgId,
+      pollQuestion,
+      pollMultipleChoice,
+      pollOptions,
+      systemMeta: systemMeta !== undefined ? systemMeta : mediaPolicyMeta,
+    }),
+  );
 
   const savedMessage = await newMessage.save();
 
@@ -658,6 +869,19 @@ exports.sendMessage = async ({
       normalizedContent[0],
       conversationId,
     );
+  }
+
+  if (type === "image") {
+    normalizedContent.forEach((objectKey, imageIndex) => {
+      publishMessageImageForReview({
+        messageId: savedMessage.msg_id,
+        senderId,
+        objectKey,
+        imageIndex,
+        conversationId,
+        bucketName,
+      });
+    });
   }
 
   const updatedConversation = await ConversationService.updateLastMessage(
@@ -692,6 +916,18 @@ exports.sendMessage = async ({
   };
 
   await messageCacheService.addMessage(conversationId, enrichedMessage);
+  publishMessageNotificationsBestEffort({
+    conversationId,
+    senderId,
+    message: enrichedMessage,
+    senderName: enrichedMessage.sender_name,
+    conversation,
+  }).catch((error) => {
+    console.warn(
+      "[notification] async chat message notification failed:",
+      error?.message || error,
+    );
+  });
 
   // Gửi kèm sender_name để FE cập nhật conversation list mà không cần query thêm
   return enrichedMessage;
@@ -945,7 +1181,6 @@ exports.revokeMessage = async ({ conversationId, msgId, userId }) => {
       sender_id: userId,
       type: "system_unpin",
       content: [`${actorName} đã gỡ ghim một tin nhắn`],
-      size: 0,
     });
 
     const savedSystemMessage = await systemDoc.save();
@@ -1089,6 +1324,9 @@ exports.reactToMessage = async ({
     .lean();
   const cachedMessage = {
     ...updatedMessage.toObject(),
+    reactions: Array.isArray(updatedMessage.reactions)
+      ? updatedMessage.reactions
+      : [],
     sender_name: sender?.name || updatedMessage.sender_name || "",
     sender_avatar: sanitizeAvatarValue(
       sender?.avatar || updatedMessage.sender_avatar || "",
@@ -1101,7 +1339,9 @@ exports.reactToMessage = async ({
     _id: updatedMessage._id,
     msg_id: updatedMessage.msg_id,
     conversation_id: updatedMessage.conversation_id,
-    reactions: updatedMessage.reactions,
+    reactions: Array.isArray(updatedMessage.reactions)
+      ? updatedMessage.reactions
+      : [],
     sender_name: cachedMessage.sender_name,
     sender_avatar: cachedMessage.sender_avatar,
   };
@@ -1157,7 +1397,6 @@ exports.pinMessage = async ({ conversationId, msgId, userId, isPinned }) => {
       sender_id: userId,
       type: systemType,
       content: systemContent,
-      size: 0,
     });
 
     const savedSystemMessage = await systemDoc.save();
@@ -1188,9 +1427,9 @@ exports.pinMessage = async ({ conversationId, msgId, userId, isPinned }) => {
     _id: updatedMessage._id,
     msg_id: updatedMessage.msg_id,
     conversation_id: updatedMessage.conversation_id,
-    is_pinned: updatedMessage.is_pinned,
-    pinned_at: updatedMessage.pinned_at,
-    pinned_by: updatedMessage.pinned_by,
+    is_pinned: Boolean(updatedMessage.is_pinned),
+    pinned_at: updatedMessage.pinned_at || null,
+    pinned_by: updatedMessage.pinned_by || null,
     type: updatedMessage.type,
     content: updatedMessage.content,
     sender_id: updatedMessage.sender_id,
@@ -1250,8 +1489,8 @@ exports.getMediaMessages = async (conversationId, limit = 20, skip = 0) => {
   const messages = await Message.find({
     conversation_id: conversationId,
     type: { $in: ["image", "video"] },
-    is_deleted: false,
-    is_revoked: false,
+    is_deleted: { $ne: true },
+    is_revoked: { $ne: true },
   })
     .sort({ createdAt: -1 })
     .skip(skip)
@@ -1281,8 +1520,8 @@ exports.getMediaGallery = async (conversationId, limit = 20, skip = 0) => {
     const messages = await Message.find({
       conversation_id: conversationId,
       type: { $in: ["image", "video"] },
-      is_deleted: false,
-      is_revoked: false,
+      is_deleted: { $ne: true },
+      is_revoked: { $ne: true },
     })
       .sort({ createdAt: -1 })
       .skip(messageSkip)
@@ -1395,8 +1634,8 @@ exports.getMediaAroundTarget = async (
   const baseQuery = {
     conversation_id: conversationId,
     type: { $in: ["image", "video"] },
-    is_deleted: false,
-    is_revoked: false,
+    is_deleted: { $ne: true },
+    is_revoked: { $ne: true },
   };
 
   const target = await Message.findOne({
@@ -1433,8 +1672,8 @@ exports.getFileMessages = async (conversationId, limit = 20, skip = 0) => {
   const messages = await Message.find({
     conversation_id: conversationId,
     type: "file",
-    is_deleted: false,
-    is_revoked: false,
+    is_deleted: { $ne: true },
+    is_revoked: { $ne: true },
   })
     .sort({ createdAt: -1 })
     .skip(skip)
@@ -1451,8 +1690,8 @@ exports.getLinkMessages = async (conversationId, limit = 20, skip = 0) => {
   const messages = await Message.find({
     conversation_id: conversationId,
     type: { $in: ["text", "link"] },
-    is_deleted: false,
-    is_revoked: false,
+    is_deleted: { $ne: true },
+    is_revoked: { $ne: true },
   }).sort({ createdAt: -1 });
 
   // Filter messages that contain links
@@ -1636,8 +1875,8 @@ exports.searchEverything = async ({
 
   const messageFilter = {
     conversation_id: { $in: conversationIds },
-    is_deleted: false,
-    is_revoked: false,
+    is_deleted: { $ne: true },
+    is_revoked: { $ne: true },
     deleted_for: { $ne: userId },
   };
 
@@ -1800,15 +2039,22 @@ exports.votePoll = async ({ conversationId, msgId, userId, optionIds }) => {
 
   const voter = await User.findOne({ user_id: userId }).select("name").lean();
   const voterName = voter?.name || "Một thành viên";
+  const pollOptions = Array.isArray(message.poll_options)
+    ? message.poll_options
+    : [];
 
   // Check if they were already in any option
-  const wasVoted = message.poll_options.some((opt) =>
-    opt.voters.some((v) => String(v) === String(userId))
+  const wasVoted = pollOptions.some((opt) =>
+    (Array.isArray(opt.voters) ? opt.voters : []).some(
+      (v) => String(v) === String(userId),
+    ),
   );
 
   // Remove user from all options first
-  message.poll_options.forEach((opt) => {
-    opt.voters = opt.voters.filter((voterId) => String(voterId) !== String(userId));
+  pollOptions.forEach((opt) => {
+    opt.voters = (Array.isArray(opt.voters) ? opt.voters : []).filter(
+      (voterId) => String(voterId) !== String(userId),
+    );
   });
 
   // Then add user to selected options
@@ -1818,8 +2064,11 @@ exports.votePoll = async ({ conversationId, msgId, userId, optionIds }) => {
       throw new Error("Khảo sát này chỉ cho phép chọn 1 đáp án");
     }
 
-    message.poll_options.forEach((opt) => {
+    pollOptions.forEach((opt) => {
       if (optionIds.includes(String(opt.id))) {
+        if (!Array.isArray(opt.voters)) {
+          opt.voters = [];
+        }
         opt.voters.push(userId);
         selectedOptionNames.push(opt.name);
       }
@@ -1840,7 +2089,6 @@ exports.votePoll = async ({ conversationId, msgId, userId, optionIds }) => {
       sender_id: userId,
       type: "system_poll",
       content: [actionText],
-      size: 0,
     });
 
     const savedSystemMessage = await systemDoc.save();

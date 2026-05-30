@@ -23,11 +23,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import iuh.fit.se.analyticservice.dto.AdminAuditEvent;
 import iuh.fit.se.analyticservice.dto.AuditLogDTO;
+import iuh.fit.se.analyticservice.dto.ContentViolationLogDTO;
 import iuh.fit.se.analyticservice.dto.ModerationDashboardResponse;
 import iuh.fit.se.analyticservice.dto.PaginatedAuditLogsResponse;
 import iuh.fit.se.analyticservice.dto.UserStatusChangedEvent;
 import iuh.fit.se.analyticservice.entity.AdminAuditLog;
+import iuh.fit.se.analyticservice.entity.ContentViolationLog;
 import iuh.fit.se.analyticservice.repository.AdminAuditLogRepository;
+import iuh.fit.se.analyticservice.repository.ContentViolationLogRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -37,22 +40,19 @@ import lombok.extern.slf4j.Slf4j;
 public class AdminAuditLogService {
 
     private final AdminAuditLogRepository adminAuditLogRepository;
-<<<<<<< Updated upstream
-=======
     private final ContentViolationLogRepository contentViolationLogRepository;
     private final ObjectMapper objectMapper;
->>>>>>> Stashed changes
 
     @Transactional
     @CacheEvict(cacheNames = {"adminAuditLogs", "moderationDashboard"}, allEntries = true)
     public void logAction(String adminId, String actionType, String targetUserId) {
-        AdminAuditLog log = AdminAuditLog.builder()
+        AdminAuditLog logAction = AdminAuditLog.builder()
                 .adminId(adminId)
                 .actionType(actionType)
                 .targetUserId(targetUserId)
                 .createdAt(LocalDateTime.now())
                 .build();
-        adminAuditLogRepository.save(log);
+        adminAuditLogRepository.save(logAction);
     }
 
     @Transactional
@@ -134,12 +134,24 @@ public class AdminAuditLogService {
 
     @Cacheable(cacheNames = "moderationDashboard", key = "'metrics'", condition = "@environment.getProperty('analytics.cache.enabled', 'true') == 'true'")
     public ModerationDashboardResponse getDashboardMetrics() {
-        long totalBannedUsers = adminAuditLogRepository.countByActionType("BLOCK");
+        long totalBannedUsers = adminAuditLogRepository.countByActionType("USER_BLOCK")
+                + adminAuditLogRepository.countByActionType("BLOCK");
         List<AuditLogDTO> recentLogs = adminAuditLogRepository.findTop10ByOrderByCreatedAtDesc().stream()
                 .map(this::toAuditLogDTO)
                 .toList();
+        long totalContentViolations = contentViolationLogRepository.count();
+        List<ContentViolationLogDTO> recentContentViolations = contentViolationLogRepository
+                .findTop10ByOrderByDetectedAtDesc()
+                .stream()
+                .map(this::toContentViolationLogDTO)
+                .toList();
 
-        return new ModerationDashboardResponse(totalBannedUsers, recentLogs);
+        return new ModerationDashboardResponse(
+                totalBannedUsers,
+                recentLogs,
+                totalContentViolations,
+                recentContentViolations
+        );
     }
 
     private AuditLogDTO toAuditLogDTO(AdminAuditLog log) {
@@ -151,11 +163,11 @@ public class AdminAuditLogService {
                 log.getTargetUserId(),
                 log.getReason(),
                 log.getDurationMinutes(),
+                log.getOldValue(),
+                log.getNewValue(),
                 log.getCreatedAt()
         );
     }
-<<<<<<< Updated upstream
-=======
 
     private ContentViolationLogDTO toContentViolationLogDTO(ContentViolationLog log) {
         return new ContentViolationLogDTO(
@@ -299,5 +311,4 @@ public class AdminAuditLogService {
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
     }
->>>>>>> Stashed changes
 }

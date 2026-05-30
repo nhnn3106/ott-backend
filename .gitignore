@@ -44,3 +44,5 @@ deploy/*.secret
 *.mermaid
 *.map
 /scripts
+media_logs.txt
+ARCHITECTURE_MODERATION_ANALYTICS.html

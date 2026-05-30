@@ -13,4 +13,6 @@ public interface SavedContentRepository extends JpaRepository<SavedContent, Stri
     Page<SavedContent> findByAccountIdOrderBySavedAtDesc(String accountId, Pageable pageable);
     Optional<SavedContent> findByAccountIdAndContentId(String accountId, String contentId);
     boolean existsByAccountIdAndContentId(String accountId, String contentId);
+
+    void deleteByContentId(String contentId);
 }
