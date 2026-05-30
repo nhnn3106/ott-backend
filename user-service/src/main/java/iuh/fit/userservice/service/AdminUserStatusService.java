@@ -63,6 +63,9 @@ public class AdminUserStatusService {
                 .previousStatus(previousStatus)
                 .newStatus(newStatus)
                 .reason(reason)
+                .durationMinutes(effectiveAction == UserStatusAction.BLOCK && !Boolean.TRUE.equals(isPermanent)
+                        ? durationMinutes
+                        : null)
                 .effectiveUntil(saved.getBlockedUntil())
                 .timestamp(Instant.now())
                 .build();
