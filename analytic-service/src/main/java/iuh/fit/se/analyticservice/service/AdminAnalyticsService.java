@@ -13,6 +13,8 @@ import java.util.Optional;
 import java.util.TreeSet;
 import java.time.temporal.ChronoUnit;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -120,34 +122,42 @@ public class AdminAnalyticsService {
     @Cacheable(cacheNames = "analyticsRecentUsers", key = "{#timeRange, #query, #page, #size}", condition = "@environment.getProperty('analytics.cache.enabled', 'true') == 'true'")
     public PaginatedRecentUsersResponse getRecentUsers(String timeRange, String query, int page, int size) {
         Instant from = resolveFrom(timeRange);
+        int safeSize = size <= 0 ? 10 : Math.min(size, 100);
+        int safePage = Math.max(page, 0);
+        String normalizedQuery = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
+
+        if (normalizedQuery.isBlank()) {
+            PageRequest pageRequest = PageRequest.of(safePage, safeSize);
+            Page<RawUserEvent> eventPage = from == null
+                    ? rawUserEventRepository.findAllByOrderByTimestampDesc(pageRequest)
+                    : rawUserEventRepository.findAllByTimestampGreaterThanEqualOrderByTimestampDesc(from, pageRequest);
+
+            List<RecentNewUserDTO> items = eventPage.getContent().stream()
+                    .map(this::buildRecentUserDto)
+                    .toList();
+
+            return new PaginatedRecentUsersResponse(
+                    items,
+                    eventPage.getTotalElements(),
+                    safePage,
+                    safeSize,
+                    eventPage.getTotalPages()
+            );
+        }
+
         List<RawUserEvent> recentEvents = from == null
                 ? rawUserEventRepository.findAllByOrderByTimestampDesc()
                 : rawUserEventRepository.findAllByTimestampGreaterThanEqualOrderByTimestampDesc(from);
         List<RecentNewUserDTO> result = new ArrayList<>();
-        String normalizedQuery = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
 
         for (RawUserEvent event : recentEvents) {
-            UserDetailDTO user = fetchUserDetail(event.getUserId());
-            RecentNewUserDTO dto = new RecentNewUserDTO(
-                    event.getUserId(),
-                    user != null ? user.getEmail() : null,
-                    user != null ? user.getFullName() : null,
-                    event.getTimestamp(),
-                    hasProfileDetails(user),
-                    user != null ? user.getIsActive() : null,
-                    user != null ? user.getIsBlocked() : null,
-                    user != null ? user.getBlockedUntil() : null,
-                    user != null ? user.getBlockedReason() : null,
-                    user != null ? user.getDeletedAt() : null
-            );
+            RecentNewUserDTO dto = buildRecentUserDto(event);
 
             if (matchesQuery(dto, normalizedQuery)) {
                 result.add(dto);
             }
         }
 
-        int safeSize = size <= 0 ? 10 : Math.min(size, 100);
-        int safePage = Math.max(page, 0);
         int totalElements = result.size();
         int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / safeSize);
         long requestedOffset = (long) safePage * safeSize;
@@ -160,6 +170,22 @@ public class AdminAnalyticsService {
                 safePage,
                 safeSize,
                 totalPages
+        );
+    }
+
+    private RecentNewUserDTO buildRecentUserDto(RawUserEvent event) {
+        UserDetailDTO user = fetchUserDetail(event.getUserId());
+        return new RecentNewUserDTO(
+                event.getUserId(),
+                user != null ? user.getEmail() : null,
+                user != null ? user.getFullName() : null,
+                event.getTimestamp(),
+                hasProfileDetails(user),
+                user != null ? user.getIsActive() : null,
+                user != null ? user.getIsBlocked() : null,
+                user != null ? user.getBlockedUntil() : null,
+                user != null ? user.getBlockedReason() : null,
+                user != null ? user.getDeletedAt() : null
         );
     }
 

@@ -3,6 +3,7 @@ package iuh.fit.se.analyticservice.repository;
 import java.time.Instant;
 import java.util.List;
 
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -11,7 +12,11 @@ import iuh.fit.se.analyticservice.entity.RawUserEvent;
 public interface RawUserEventRepository extends JpaRepository<RawUserEvent, String> {
     List<RawUserEvent> findAllByOrderByTimestampDesc();
 
+    Page<RawUserEvent> findAllByOrderByTimestampDesc(Pageable pageable);
+
     List<RawUserEvent> findAllByTimestampGreaterThanEqualOrderByTimestampDesc(Instant from);
+
+    Page<RawUserEvent> findAllByTimestampGreaterThanEqualOrderByTimestampDesc(Instant from, Pageable pageable);
 
     List<RawUserEvent> findTop5ByOrderByTimestampDesc();
 
