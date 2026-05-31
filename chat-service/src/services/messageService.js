@@ -5,6 +5,7 @@ const User = require("../models/User");
 const Relationship = require("../models/Relationship");
 const ConversationService = require("./conversationService");
 const messageCacheService = require("./messageCacheService");
+const chatSendCacheService = require("./chatSendCacheService");
 const {
   PutObjectCommand,
   GetObjectCommand,
@@ -22,6 +23,7 @@ const {
 } = require("./chatModerationPublisher");
 const { publishNotification } = require("../events/notificationEvents");
 const accountStatusService = require("./accountStatusService");
+const { generateId } = require("../utils/snowflake");
 
 const fs = require("fs/promises");
 const path = require("path");
@@ -46,6 +48,154 @@ const S3_POLICY_SIGNAL_PATTERN =
 const S3_POLICY_CLEAN_VALUE_PATTERN =
   /^(clean|ok|pass|passed|safe|allowed|false|0|no|none)$/i;
 const MEDIA_MESSAGE_TYPES = new Set(["image", "video", "file", "audio"]);
+const parsePositiveNumberEnv = (name, fallback) => {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+};
+const SEND_FAST_CACHE_TTL_MS = Math.max(
+  0,
+  parsePositiveNumberEnv("CHAT_SEND_FAST_CACHE_TTL_MS", 30000),
+);
+const SEND_FAST_CACHE_MAX_ENTRIES = Math.max(
+  100,
+  parsePositiveNumberEnv("CHAT_SEND_FAST_CACHE_MAX_ENTRIES", 5000),
+);
+const sendFastPathCache = new Map();
+const sendFastPathPendingLoads = new Map();
+
+const getSendCacheValue = (key) => {
+  if (!SEND_FAST_CACHE_TTL_MS) return undefined;
+
+  const entry = sendFastPathCache.get(key);
+  if (!entry) return undefined;
+
+  if (entry.expiresAt <= Date.now()) {
+    sendFastPathCache.delete(key);
+    return undefined;
+  }
+
+  return entry.value;
+};
+
+const setSendCacheValue = (key, value, ttlMs = SEND_FAST_CACHE_TTL_MS) => {
+  if (!ttlMs || value == null) return value;
+
+  while (sendFastPathCache.size >= SEND_FAST_CACHE_MAX_ENTRIES) {
+    const oldestKey = sendFastPathCache.keys().next().value;
+    if (!oldestKey) break;
+    sendFastPathCache.delete(oldestKey);
+  }
+
+  sendFastPathCache.set(key, {
+    value,
+    expiresAt: Date.now() + ttlMs,
+  });
+
+  return value;
+};
+
+const getOrLoadSendCacheValue = async (key, loader, ttlMs) => {
+  const cached = getSendCacheValue(key);
+  if (cached !== undefined) return cached;
+
+  const pending = sendFastPathPendingLoads.get(key);
+  if (pending) return pending;
+
+  const loadPromise = Promise.resolve()
+    .then(async () => {
+      const redisCached = await chatSendCacheService.getJson(key);
+      if (redisCached !== undefined) {
+        return redisCached;
+      }
+
+      const value = await loader();
+      if (value != null) {
+        await chatSendCacheService.setJson(
+          key,
+          value,
+          Math.ceil((ttlMs || SEND_FAST_CACHE_TTL_MS) / 1000),
+        );
+      }
+      return value;
+    })
+    .then((value) => setSendCacheValue(key, value, ttlMs))
+    .finally(() => {
+      sendFastPathPendingLoads.delete(key);
+    });
+
+  sendFastPathPendingLoads.set(key, loadPromise);
+  return loadPromise;
+};
+
+const runBestEffort = (label, task) => {
+  Promise.resolve()
+    .then(task)
+    .catch((error) => {
+      console.warn(
+        `[${label}] background task failed:`,
+        error?.message || error,
+      );
+    });
+};
+
+const getParticipantForSend = (conversationId, senderId) =>
+  getOrLoadSendCacheValue(
+    `participant:${conversationId}:${senderId}`,
+    () =>
+      Participant.findOne({
+        conversation_id: conversationId,
+        user_id: senderId,
+      })
+        .select("settings status deleted_msg_id")
+        .lean(),
+  );
+
+const getConversationForSend = (conversationId) =>
+  getOrLoadSendCacheValue(
+    `conversation:${conversationId}`,
+    () =>
+      Conversation.findById(conversationId)
+        .select(
+          "type name avatar member_count is_dissolved status blocked_user_ids",
+        )
+        .lean(),
+  );
+
+const getSenderForSend = (senderId) =>
+  getOrLoadSendCacheValue(
+    `sender:${senderId}`,
+    () => User.findOne({ user_id: senderId }).select("name avatar").lean(),
+    Math.max(SEND_FAST_CACHE_TTL_MS, 60000),
+  );
+
+const getOtherPrivateParticipantForSend = (conversationId, senderId) =>
+  getOrLoadSendCacheValue(
+    `private-other:${conversationId}:${senderId}`,
+    () =>
+      Participant.findOne({
+        conversation_id: conversationId,
+        user_id: { $ne: senderId },
+      })
+        .select("user_id")
+        .lean(),
+  );
+
+const getRelationshipForSend = (senderId, otherUserId) => {
+  const pairKey = [String(senderId), String(otherUserId)].sort().join(":");
+  return getOrLoadSendCacheValue(
+    `relationship:${pairKey}`,
+    () =>
+      Relationship.findOne({
+        $or: [
+          { requester_id: senderId, receiver_id: otherUserId },
+          { requester_id: otherUserId, receiver_id: senderId },
+        ],
+      })
+        .select("status requester_id")
+        .lean(),
+  );
+};
+
 const sanitizeS3FileName = (fileName) => {
   const baseName =
     String(fileName || "file")
@@ -96,6 +246,7 @@ const normalizePollOptionsForStorage = (pollOptions) => {
 };
 
 const buildMessageCreatePayload = ({
+  msgId,
   conversationId,
   senderId,
   content,
@@ -114,6 +265,10 @@ const buildMessageCreatePayload = ({
     content,
     type: messageType,
   };
+
+  if (msgId) {
+    payload.msg_id = String(msgId);
+  }
 
   if (replyToMsgId) {
     payload.reply_to_msg_id = replyToMsgId;
@@ -761,7 +916,132 @@ exports.generatePresignedUrl = async (fileName, fileType) => {
   return { uploadUrl, fileCategory, key, fileUrl };
 };
 
+exports.prepareQueuedMessage = async ({
+  conversationId,
+  senderId,
+  content,
+  type,
+  size,
+  replyToMsgId,
+  pollQuestion,
+  pollMultipleChoice,
+  pollOptions,
+  systemMeta,
+  clientMessageId,
+}) => {
+  if (!conversationId || !senderId) {
+    throw new Error("Thiếu conversationId hoặc senderId");
+  }
+
+  const participant = await getParticipantForSend(conversationId, senderId);
+  if (!participant) {
+    throw new Error("Bạn không thuộc cuộc hội thoại này");
+  }
+
+  if (participant?.settings?.removed_from_group_at) {
+    throw new Error("Bạn đã bị đuổi khỏi nhóm");
+  }
+
+  if (participant?.settings?.group_dissolved_at) {
+    throw new Error("Nhóm đã được giải tán");
+  }
+
+  const conversation = await getConversationForSend(conversationId);
+  if (!conversation) {
+    throw new Error("Cuộc hội thoại không tồn tại");
+  }
+
+  if (conversation.is_dissolved || conversation.status === "dissolved") {
+    throw new Error("Nhóm đã được giải tán");
+  }
+
+  if (conversation.type === "private") {
+    const otherParticipant = await getOtherPrivateParticipantForSend(
+      conversationId,
+      senderId,
+    );
+
+    if (otherParticipant) {
+      const relationship = await getRelationshipForSend(
+        senderId,
+        otherParticipant.user_id,
+      );
+
+      if (relationship?.status === "BLOCKED") {
+        if (relationship.requester_id === senderId) {
+          throw new Error("Bạn đã chặn người này. Hãy bỏ chặn để tiếp tục trò chuyện.");
+        }
+        throw new Error("Bạn đã bị người này chặn.");
+      }
+    }
+  }
+
+  const contentArray = Array.isArray(content) ? content : [content];
+  const normalizedContent = [...contentArray];
+  const msgId = generateId();
+  const now = new Date();
+  const messageType = type || "text";
+  const numericSize = Number(size);
+
+  const command = {
+    msgId,
+    conversationId,
+    senderId,
+    content: normalizedContent,
+    type: messageType,
+    size,
+    replyToMsgId,
+    pollQuestion,
+    pollMultipleChoice,
+    pollOptions,
+    systemMeta,
+    clientMessageId,
+    queuedAt: now.toISOString(),
+  };
+
+  const acceptedMessage = {
+    _id: msgId,
+    msg_id: msgId,
+    conversation_id: conversationId,
+    sender_id: senderId,
+    content: normalizedContent,
+    type: messageType,
+    pending: true,
+    delivery_status: "queued",
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  if (clientMessageId) {
+    acceptedMessage.client_message_id = String(clientMessageId);
+  }
+
+  if (
+    MEDIA_MESSAGE_TYPES.has(messageType) &&
+    Number.isFinite(numericSize) &&
+    numericSize > 0
+  ) {
+    acceptedMessage.size = numericSize;
+  }
+
+  if (replyToMsgId) {
+    acceptedMessage.reply_to_msg_id = replyToMsgId;
+  }
+
+  if (messageType === "poll") {
+    acceptedMessage.poll_question = pollQuestion;
+    acceptedMessage.poll_multiple_choice = pollMultipleChoice === true;
+    acceptedMessage.poll_options = normalizePollOptionsForStorage(pollOptions);
+  }
+
+  return {
+    command,
+    acceptedMessage,
+  };
+};
+
 exports.sendMessage = async ({
+  msgId,
   conversationId,
   senderId,
   content,
@@ -808,30 +1088,28 @@ exports.sendMessage = async ({
       .lean();
   }
 
-  const participant = await Participant.findOne({
-    conversation_id: conversationId,
-    user_id: senderId,
-  }).lean();
+  const [participant, conversation, sender] = await Promise.all([
+    getParticipantForSend(conversationId, senderId),
+    getConversationForSend(conversationId),
+    getSenderForSend(senderId),
+  ]);
 
   if (!participant) {
     throw new Error("Bạn không thuộc cuộc hội thoại này");
   }
 
   // Check for blocking in private conversations
-  const conversation = await Conversation.findById(conversationId).lean();
   if (conversation && conversation.type === "private") {
-    const otherParticipant = await Participant.findOne({
-      conversation_id: conversationId,
-      user_id: { $ne: senderId },
-    }).lean();
+    const otherParticipant = await getOtherPrivateParticipantForSend(
+      conversationId,
+      senderId,
+    );
 
     if (otherParticipant) {
-      const relationship = await Relationship.findOne({
-        $or: [
-          { requester_id: senderId, receiver_id: otherParticipant.user_id },
-          { requester_id: otherParticipant.user_id, receiver_id: senderId },
-        ],
-      }).lean();
+      const relationship = await getRelationshipForSend(
+        senderId,
+        otherParticipant.user_id,
+      );
 
       if (relationship && relationship.status === "BLOCKED") {
         if (relationship.requester_id === senderId) {
@@ -855,6 +1133,7 @@ exports.sendMessage = async ({
     buildMessageCreatePayload({
       conversationId,
       senderId,
+      msgId,
       content: normalizedContent,
       type,
       size,
@@ -890,50 +1169,42 @@ exports.sendMessage = async ({
     });
   }
 
+  const senderName = sender?.name || "";
+  const senderAvatar = sanitizeAvatarValue(sender?.avatar || "");
   const updatedConversation = await ConversationService.updateLastMessage(
     conversationId,
     savedMessage,
+    { senderName },
   );
 
-  try {
-    await publishMessageSentEvent({
+  runBestEffort("analytics", () =>
+    publishMessageSentEvent({
       messageId: savedMessage.msg_id,
       userId: senderId,
       messageType: type,
-    });
-  } catch (error) {
-    // Do not block chat delivery when analytics pipeline is unavailable
-    console.warn(
-      "[analytics] publish message.sent failed:",
-      error?.message || error,
-    );
-  }
+    }),
+  );
 
-  // Add message to Redis cache (last 20 messages)
-  const sender = await User.findOne({ user_id: senderId })
-    .select("name avatar")
-    .lean();
   const enrichedMessage = {
     ...savedMessage.toObject(),
     sender_name:
-      sender?.name || updatedConversation?.last_message?.sender_name || "",
-    sender_avatar: sanitizeAvatarValue(sender?.avatar || ""),
+      senderName || updatedConversation?.last_message?.sender_name || "",
+    sender_avatar: senderAvatar,
     reply_to: buildReplyPreview(replyMessage, replySender?.name || ""),
   };
 
-  await messageCacheService.addMessage(conversationId, enrichedMessage);
-  publishMessageNotificationsBestEffort({
-    conversationId,
-    senderId,
-    message: enrichedMessage,
-    senderName: enrichedMessage.sender_name,
-    conversation,
-  }).catch((error) => {
-    console.warn(
-      "[notification] async chat message notification failed:",
-      error?.message || error,
-    );
-  });
+  runBestEffort("message-cache", () =>
+    messageCacheService.addMessage(conversationId, enrichedMessage),
+  );
+  runBestEffort("notification", () =>
+    publishMessageNotificationsBestEffort({
+      conversationId,
+      senderId,
+      message: enrichedMessage,
+      senderName: enrichedMessage.sender_name,
+      conversation,
+    }),
+  );
 
   // Gửi kèm sender_name để FE cập nhật conversation list mà không cần query thêm
   return enrichedMessage;

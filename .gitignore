@@ -35,6 +35,8 @@ media-service/src/main/resources/application-seed.properties
 ### VS Code ###
 .vscode/
 
+/load-tests
+
 .env
 deploy/*.local
 deploy/*.local.*

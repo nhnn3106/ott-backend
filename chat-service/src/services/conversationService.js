@@ -86,7 +86,7 @@ exports.findOrCreatePrivateConversation = async (user1Id, user2Id) => {
 exports.getAllConversations = async () => {
   return await Conversation.find().sort({ updatedAt: -1 });
 };
-exports.updateLastMessage = async (conversationId, message) => {
+exports.updateLastMessage = async (conversationId, message, options = {}) => {
   const rawType = String(message?.type || "text");
   const safeType = rawType; // Preserve system type for frontend
   let displayContent = "";
@@ -117,9 +117,15 @@ exports.updateLastMessage = async (conversationId, message) => {
     }
   }
 
-  const sender = await User.findOne({ user_id: message.sender_id })
-    .select("name")
-    .lean();
+  const providedSenderName = String(options?.senderName || "").trim();
+  let senderName = providedSenderName;
+
+  if (!senderName) {
+    const sender = await User.findOne({ user_id: message.sender_id })
+      .select("name")
+      .lean();
+    senderName = sender?.name || "";
+  }
 
   return await Conversation.findByIdAndUpdate(
     conversationId,
@@ -127,7 +133,7 @@ exports.updateLastMessage = async (conversationId, message) => {
       last_message: {
         msg_id: message.msg_id,
         sender_id: message.sender_id,
-        sender_name: sender?.name || "",
+        sender_name: senderName,
         content: displayContent,
         type: safeType,
         createdAt: message.createdAt,
