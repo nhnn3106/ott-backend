@@ -45,17 +45,14 @@ public class RelationshipNotificationConsumer {
 
         String requesterName = firstNonBlank(
                 string(payload.get("requesterDisplayName")),
-                requesterId,
                 "Người dùng"
         );
         String receiverName = firstNonBlank(
                 string(payload.get("receiverDisplayName")),
-                receiverId,
                 "Người dùng"
         );
         String blockerName = firstNonBlank(
                 string(payload.get("blockedByDisplayName")),
-                actorId,
                 "Người dùng"
         );
 
