@@ -238,42 +238,33 @@ const applyImageViolationToMessage = async (event, io) => {
 
   message.system_meta = {
     ...buildModerationMeta(event, currentMeta),
-    media_policy_status: "rejected",
+    media_policy_status: "flagged",
     media_warnings: nextWarnings,
   };
-  message.is_revoked = true;
-  message.content = [MODERATION_PLACEHOLDER];
-  message.reactions = [];
-  message.is_pinned = false;
-  message.pinned_at = null;
-  message.pinned_by = null;
 
   const savedMessage = await message.save();
   const payload = {
     ...(await getPayloadMessage(savedMessage)),
-    is_revoked: true,
+    is_revoked: !!savedMessage.is_revoked,
     is_deleted: !!savedMessage.is_deleted,
-    reactions: [],
+    reactions: savedMessage.reactions || [],
   };
 
-  await Promise.allSettled([
-    messageCacheService.updateMessage(
-      savedMessage.conversation_id,
-      savedMessage.msg_id,
-      payload,
-    ),
-    updateConversationLastMessage(savedMessage),
-  ]);
+  await messageCacheService.updateMessage(
+    savedMessage.conversation_id,
+    savedMessage.msg_id,
+    payload,
+  );
 
   await emitToConversationParticipants(
     io,
     savedMessage.conversation_id,
-    "tin_nhan_thu_hoi",
+    "tin_nhan_cap_nhat",
     payload,
   );
 
   logger.warn(
-    `[moderation] image message auto-hidden: msgId=${savedMessage.msg_id}, imageIndex=${nextWarning.index}, violationId=${event.violationId}, labels=${event.matchedLabels.join(",")}`,
+    `[moderation] image message flagged: msgId=${savedMessage.msg_id}, imageIndex=${nextWarning.index}, violationId=${event.violationId}, labels=${event.matchedLabels.join(",")}`,
   );
 };
 
@@ -340,7 +331,7 @@ const initModerationViolationConsumer = async (channel, io) => {
     { noAck: false },
   );
 
-  console.log(" [OK] ModerationViolationConsumer: chat auto-hide ready");
+  console.log(" [OK] ModerationViolationConsumer: chat moderation ready");
 };
 
 module.exports = {

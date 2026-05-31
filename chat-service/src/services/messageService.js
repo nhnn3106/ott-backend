@@ -32,6 +32,23 @@ const { spawn } = require("child_process");
 const { pipeline } = require("stream/promises");
 const crypto = require("crypto");
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const findMessageForMutation = async ({ conversationId, msgId }) => {
+  const query = {
+    msg_id: msgId,
+    conversation_id: conversationId,
+  };
+
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const message = await Message.findOne(query);
+    if (message) return message;
+    await sleep(250);
+  }
+
+  return null;
+};
+
 const REVOKED_PLACEHOLDER = "Tin nhắn đã được thu hồi";
 const S3_CACHE_CONTROL = "public, max-age=31536000, immutable";
 const PUSH_NOTIFICATION_MESSAGE_TYPES = new Set([
@@ -1381,9 +1398,9 @@ exports.getMessageHistory = async (
 };
 
 exports.revokeMessage = async ({ conversationId, msgId, userId }) => {
-  const message = await Message.findOne({
-    msg_id: msgId,
-    conversation_id: conversationId,
+  const message = await findMessageForMutation({
+    conversationId,
+    msgId,
   });
 
   if (!message || message.is_deleted) {
@@ -1512,9 +1529,9 @@ exports.deleteMessage = async ({ conversationId, msgId, userId }) => {
     throw new Error("Bạn không thuộc cuộc hội thoại này");
   }
 
-  const message = await Message.findOne({
-    msg_id: msgId,
-    conversation_id: conversationId,
+  const message = await findMessageForMutation({
+    conversationId,
+    msgId,
   });
 
   if (!message || message.is_deleted) {
