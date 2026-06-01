@@ -56,6 +56,7 @@ public class AnalyticsArchiveService {
     private final RawPostEventRepository rawPostEventRepository;
 
     @Scheduled(cron = "${analytics.archive.cron}", zone = "${analytics.archive.zone}")
+    @Transactional
     public void archiveExpiredRawEventsScheduled() {
         if (!properties.isEnabled()) {
             log.debug("Analytics archive job is disabled");
