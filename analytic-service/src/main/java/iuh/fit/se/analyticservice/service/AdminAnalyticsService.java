@@ -5,7 +5,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -21,6 +21,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
+import iuh.fit.se.analyticservice.config.DailyStatsProperties;
 import iuh.fit.se.analyticservice.client.UserServiceClient;
 import iuh.fit.se.analyticservice.dto.ApiResponseDTO;
 import iuh.fit.se.analyticservice.dto.DailyActivityResponse;
@@ -53,6 +54,7 @@ public class AdminAnalyticsService {
     private final RawPostEventRepository rawPostEventRepository;
     private final DailyStatsRepository dailyStatsRepository;
     private final UserServiceClient userServiceClient;
+    private final DailyStatsProperties dailyStatsProperties;
 
     @Value("${internal.api.key:}")
     private String internalApiKey;
@@ -60,9 +62,9 @@ public class AdminAnalyticsService {
     @Cacheable(cacheNames = "analyticsOverview", key = "#timeRange", condition = "@environment.getProperty('analytics.cache.enabled', 'true') == 'true'")
     public OverviewResponse getOverview(String timeRange) {
         Instant from = resolveFrom(timeRange);
-        LocalDate today = LocalDate.now(ZoneOffset.UTC);
-        Instant dauFrom = today.atStartOfDay().toInstant(ZoneOffset.UTC);
-        Instant mauFrom = today.minusDays(29).atStartOfDay().toInstant(ZoneOffset.UTC);
+        LocalDate today = LocalDate.now(analyticsZone());
+        Instant dauFrom = startOfDay(today);
+        Instant mauFrom = startOfDay(today.minusDays(29));
 
         if (from != null) {
             Optional<OverviewResponse> aggregatedOverview = buildOverviewFromDailyStats(from);
@@ -85,8 +87,8 @@ public class AdminAnalyticsService {
         }
 
         // compute previous period start by counting the number of days in the current range
-        LocalDate startDate = from.atZone(ZoneOffset.UTC).toLocalDate();
-        LocalDate endDate = LocalDate.now(ZoneOffset.UTC);
+        LocalDate startDate = toAnalyticsDate(from);
+        LocalDate endDate = LocalDate.now(analyticsZone());
         long days = java.time.temporal.ChronoUnit.DAYS.between(startDate, endDate) + 1;
         Instant prevFrom = from.minus(java.time.Duration.ofDays(days));
 
@@ -303,8 +305,8 @@ public class AdminAnalyticsService {
     }
 
     private Optional<OverviewResponse> buildOverviewFromDailyStats(Instant from) {
-        LocalDate startDate = from.atZone(ZoneOffset.UTC).toLocalDate();
-        LocalDate endDate = LocalDate.now(ZoneOffset.UTC);
+        LocalDate startDate = toAnalyticsDate(from);
+        LocalDate endDate = LocalDate.now(analyticsZone());
         List<DailyStats> stats = findCompleteDailyStats(startDate, endDate);
         if (stats.isEmpty()) {
             return Optional.empty();
@@ -316,15 +318,15 @@ public class AdminAnalyticsService {
         long totalPosts = stats.stream().mapToLong(DailyStats::getPostEvents).sum();
         long dau = dailyStatsRepository.findByStatDate(endDate)
                 .map(DailyStats::getActiveUsers)
-                .orElseGet(() -> rawLoginEventRepository.countDistinctUsersFrom(endDate.atStartOfDay().toInstant(ZoneOffset.UTC)));
-        long mau = rawLoginEventRepository.countDistinctUsersFrom(endDate.minusDays(29).atStartOfDay().toInstant(ZoneOffset.UTC));
+                .orElseGet(() -> rawLoginEventRepository.countDistinctUsersFrom(startOfDay(endDate)));
+        long mau = rawLoginEventRepository.countDistinctUsersFrom(startOfDay(endDate.minusDays(29)));
 
         return Optional.of(new OverviewResponse(totalUsers, totalLogins, totalMessages, totalPosts, dau, mau));
     }
 
     private Optional<List<DailyUserTrendResponse>> buildUserTrendFromDailyStats(Instant from) {
-        LocalDate startDate = from.atZone(ZoneOffset.UTC).toLocalDate();
-        LocalDate endDate = LocalDate.now(ZoneOffset.UTC);
+        LocalDate startDate = toAnalyticsDate(from);
+        LocalDate endDate = LocalDate.now(analyticsZone());
         List<DailyStats> stats = findCompleteDailyStats(startDate, endDate);
         if (stats.isEmpty()) {
             return Optional.empty();
@@ -339,8 +341,8 @@ public class AdminAnalyticsService {
     }
 
     private Optional<List<DailyActivityResponse>> buildDailyActivityFromDailyStats(Instant from) {
-        LocalDate startDate = from.atZone(ZoneOffset.UTC).toLocalDate();
-        LocalDate endDate = LocalDate.now(ZoneOffset.UTC);
+        LocalDate startDate = toAnalyticsDate(from);
+        LocalDate endDate = LocalDate.now(analyticsZone());
         List<DailyStats> stats = findCompleteDailyStats(startDate, endDate);
         if (stats.isEmpty()) {
             return Optional.empty();
@@ -355,8 +357,8 @@ public class AdminAnalyticsService {
     }
 
     private Optional<List<DailyPostCountResponse>> buildPostDailyFromDailyStats(Instant from) {
-        LocalDate startDate = from.atZone(ZoneOffset.UTC).toLocalDate();
-        LocalDate endDate = LocalDate.now(ZoneOffset.UTC);
+        LocalDate startDate = toAnalyticsDate(from);
+        LocalDate endDate = LocalDate.now(analyticsZone());
         List<DailyStats> stats = findCompleteDailyStats(startDate, endDate);
         if (stats.isEmpty()) {
             return Optional.empty();
@@ -472,8 +474,8 @@ public class AdminAnalyticsService {
         allDates.addAll(secondDates);
 
         if (from != null) {
-            LocalDate start = from.atZone(ZoneOffset.UTC).toLocalDate();
-            LocalDate end = LocalDate.now(ZoneOffset.UTC);
+            LocalDate start = toAnalyticsDate(from);
+            LocalDate end = LocalDate.now(analyticsZone());
             List<LocalDate> range = new ArrayList<>();
             for (LocalDate date = start; !date.isAfter(end); date = date.plusDays(1)) {
                 range.add(date);
@@ -508,7 +510,7 @@ public class AdminAnalyticsService {
             return localDateTime.toLocalDate();
         }
         if (value instanceof java.util.Date date) {
-            return date.toInstant().atZone(ZoneOffset.UTC).toLocalDate();
+            return date.toInstant().atZone(analyticsZone()).toLocalDate();
         }
         return LocalDate.parse(String.valueOf(value));
     }
@@ -523,14 +525,26 @@ public class AdminAnalyticsService {
 
     private Instant resolveFrom(String timeRange) {
         String normalized = timeRange == null ? "alltime" : timeRange.trim().toLowerCase(Locale.ROOT);
-        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        LocalDate today = LocalDate.now(analyticsZone());
 
         return switch (normalized) {
-            case "today" -> today.atStartOfDay().toInstant(ZoneOffset.UTC);
-            case "last7days", "7d", "last_7_days" -> today.minusDays(6).atStartOfDay().toInstant(ZoneOffset.UTC);
-            case "last30days", "30d", "last_30_days" -> today.minusDays(29).atStartOfDay().toInstant(ZoneOffset.UTC);
+            case "today" -> startOfDay(today);
+            case "last7days", "7d", "last_7_days" -> startOfDay(today.minusDays(6));
+            case "last30days", "30d", "last_30_days" -> startOfDay(today.minusDays(29));
             case "all", "alltime", "all_time" -> null;
             default -> throw new IllegalArgumentException("Unsupported timeRange: " + timeRange);
         };
+    }
+
+    private Instant startOfDay(LocalDate date) {
+        return date.atStartOfDay(analyticsZone()).toInstant();
+    }
+
+    private LocalDate toAnalyticsDate(Instant instant) {
+        return instant.atZone(analyticsZone()).toLocalDate();
+    }
+
+    private ZoneId analyticsZone() {
+        return ZoneId.of(dailyStatsProperties.getZone());
     }
 }

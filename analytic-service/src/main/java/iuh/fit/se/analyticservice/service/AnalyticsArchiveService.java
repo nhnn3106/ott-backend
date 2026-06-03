@@ -8,7 +8,6 @@ import java.security.MessageDigest;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.function.Function;
@@ -82,8 +81,8 @@ public class AnalyticsArchiveService {
 
         ZoneId zone = ZoneId.of(properties.getZone());
         LocalDate archiveDate = LocalDate.now(zone).minusDays(Math.max(1, properties.getRetentionDays() + 1L));
-        Instant start = archiveDate.atStartOfDay().toInstant(ZoneOffset.UTC);
-        Instant end = archiveDate.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC);
+        Instant start = archiveDate.atStartOfDay(zone).toInstant();
+        Instant end = archiveDate.plusDays(1).atStartOfDay(zone).toInstant();
         int limit = Math.max(1, properties.getMaxRowsPerFile());
 
         archiveRawUserEvents(s3Client, bucket, archiveDate, start, end, limit);

@@ -3,7 +3,7 @@ package iuh.fit.se.analyticservice.service;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -46,7 +46,8 @@ public class DailyStatsAggregationService {
     @Transactional
     public void aggregateRecentWindow() {
         int lookbackDays = Math.max(0, properties.getLookbackDays());
-        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        ZoneId zone = ZoneId.of(properties.getZone());
+        LocalDate today = LocalDate.now(zone);
 
         for (int offset = lookbackDays; offset >= 0; offset--) {
             aggregateDate(today.minusDays(offset));
@@ -59,10 +60,11 @@ public class DailyStatsAggregationService {
             throw new IllegalArgumentException("statDate must not be null");
         }
 
-        Instant start = statDate.atStartOfDay().toInstant(ZoneOffset.UTC);
-        Instant end = statDate.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC);
-        LocalDateTime localStart = LocalDateTime.ofInstant(start, ZoneOffset.UTC);
-        LocalDateTime localEnd = LocalDateTime.ofInstant(end, ZoneOffset.UTC);
+        ZoneId zone = ZoneId.of(properties.getZone());
+        Instant start = statDate.atStartOfDay(zone).toInstant();
+        Instant end = statDate.plusDays(1).atStartOfDay(zone).toInstant();
+        LocalDateTime localStart = LocalDateTime.ofInstant(start, zone);
+        LocalDateTime localEnd = LocalDateTime.ofInstant(end, zone);
 
         DailyStats stats = dailyStatsRepository.findByStatDate(statDate)
                 .orElseGet(() -> DailyStats.builder().statDate(statDate).build());
