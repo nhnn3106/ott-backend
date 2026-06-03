@@ -87,9 +87,14 @@ public class PostController {
     /** GET /posts/page/{userId} */
     @GetMapping("/page/{userId}")
     public ResponseEntity<Page<PostResponse>> findAllPostsWithAuthorized(
-            @PageableDefault(size = 4, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
+            @RequestParam(required = false, defaultValue = "recent") String sortBy,
+            @PageableDefault(size = 4) Pageable pageable,
             @PathVariable String userId) {
-        return ResponseEntity.ok(postService.findAllPostsWithAuthorized(pageable, userId));
+        Sort sort = "viral".equalsIgnoreCase(sortBy)
+                ? Sort.by(Sort.Direction.DESC, "viralScore").and(Sort.by(Sort.Direction.DESC, "createdAt"))
+                : Sort.by(Sort.Direction.DESC, "createdAt");
+        org.springframework.data.domain.PageRequest pageRequest = org.springframework.data.domain.PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort);
+        return ResponseEntity.ok(postService.findAllPostsWithAuthorized(pageRequest, userId));
     }
 
     /** GET /posts/{id} */
@@ -113,8 +118,13 @@ public class PostController {
     public ResponseEntity<Page<PostResponse>> searchPosts(
             @RequestParam String q,
             @RequestParam String viewerId,
-            @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) org.springframework.data.domain.Pageable pageable) {
-        return ResponseEntity.ok(postService.searchPosts(q, viewerId, pageable));
+            @RequestParam(required = false, defaultValue = "recent") String sortBy,
+            @PageableDefault(size = 10) org.springframework.data.domain.Pageable pageable) {
+        Sort sort = "viral".equalsIgnoreCase(sortBy)
+                ? Sort.by(Sort.Direction.DESC, "viralScore").and(Sort.by(Sort.Direction.DESC, "createdAt"))
+                : Sort.by(Sort.Direction.DESC, "createdAt");
+        org.springframework.data.domain.PageRequest pageRequest = org.springframework.data.domain.PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort);
+        return ResponseEntity.ok(postService.searchPosts(q, viewerId, pageRequest));
     }
 
     /** PUT /posts/{id} – cập nhật bài post */
