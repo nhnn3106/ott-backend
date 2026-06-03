@@ -21,6 +21,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import iuh.fit.se.analyticservice.config.DailyStatsProperties;
 import iuh.fit.se.analyticservice.dto.AdminAuditEvent;
 import iuh.fit.se.analyticservice.dto.AuditLogDTO;
 import iuh.fit.se.analyticservice.dto.ContentViolationLogDTO;
@@ -42,6 +43,7 @@ public class AdminAuditLogService {
     private final AdminAuditLogRepository adminAuditLogRepository;
     private final ContentViolationLogRepository contentViolationLogRepository;
     private final ObjectMapper objectMapper;
+    private final DailyStatsProperties dailyStatsProperties;
 
     @Transactional
     @CacheEvict(cacheNames = {"adminAuditLogs", "moderationDashboard"}, allEntries = true)
@@ -50,7 +52,7 @@ public class AdminAuditLogService {
                 .adminId(adminId)
                 .actionType(actionType)
                 .targetUserId(targetUserId)
-                .createdAt(LocalDateTime.now())
+                .createdAt(LocalDateTime.now(analyticsZone()))
                 .build();
         adminAuditLogRepository.save(logAction);
     }
@@ -247,7 +249,11 @@ public class AdminAuditLogService {
         if (timestamp == null) {
             return null;
         }
-        return LocalDateTime.ofInstant(timestamp, ZoneId.systemDefault());
+        return LocalDateTime.ofInstant(timestamp, analyticsZone());
+    }
+
+    private ZoneId analyticsZone() {
+        return ZoneId.of(dailyStatsProperties.getZone());
     }
 
     private String resolveActionType(UserStatusChangedEvent event) {

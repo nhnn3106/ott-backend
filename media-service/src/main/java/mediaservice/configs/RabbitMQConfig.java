@@ -116,8 +116,8 @@ public class RabbitMQConfig {
     }
 
     @Bean
-    public TopicExchange moderationEventsExchange(@Value("${moderation.rabbitmq.exchange}") String exchange) {
-        return new TopicExchange(exchange, true, false);
+    public DirectExchange moderationEventsExchange(@Value("${moderation.rabbitmq.exchange}") String exchange) {
+        return new DirectExchange(exchange, true, false);
     }
 
     @Bean
@@ -144,7 +144,7 @@ public class RabbitMQConfig {
     @Bean
     public Binding mediaModerationViolationBinding(
             Queue mediaModerationViolationQueue,
-            TopicExchange moderationEventsExchange,
+            DirectExchange moderationEventsExchange,
             @Value("${moderation.rabbitmq.routing-key.violation-detected:moderation.violation.detected}") String routingKey) {
         return BindingBuilder.bind(mediaModerationViolationQueue)
                 .to(moderationEventsExchange)

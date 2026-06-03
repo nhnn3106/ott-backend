@@ -13,6 +13,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import iuh.fit.se.analyticservice.config.DailyStatsProperties;
 import iuh.fit.se.analyticservice.dto.ContentViolationDetectedEvent;
 import iuh.fit.se.analyticservice.entity.ContentViolationLog;
 import iuh.fit.se.analyticservice.repository.ContentViolationLogRepository;
@@ -26,6 +27,7 @@ public class ContentViolationEventListener {
 
     private final ContentViolationLogRepository contentViolationLogRepository;
     private final ObjectMapper objectMapper;
+    private final DailyStatsProperties dailyStatsProperties;
 
     @RabbitListener(queues = "${analytics.rabbitmq.queue.content-violation}")
     public void handleContentViolationEvent(Message message) {
@@ -78,9 +80,10 @@ public class ContentViolationEventListener {
     }
 
     private LocalDateTime toLocalDateTime(Instant detectedAt) {
+        ZoneId zone = ZoneId.of(dailyStatsProperties.getZone());
         if (detectedAt == null) {
-            return LocalDateTime.now();
+            return LocalDateTime.now(zone);
         }
-        return LocalDateTime.ofInstant(detectedAt, ZoneId.systemDefault());
+        return LocalDateTime.ofInstant(detectedAt, zone);
     }
 }
