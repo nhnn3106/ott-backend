@@ -15,6 +15,8 @@ import java.util.List;
 public interface PostRepository extends JpaRepository<Post, String> {
     List<Post> findByAccount_Id(String accountId);
 
+    List<Post> findByCreatedAtAfter(java.time.LocalDateTime date);
+
     @Query(value = "SELECT p FROM Post p ORDER BY p.createdAt DESC",
            countQuery = "SELECT COUNT(p) FROM Post p")
     Page<Post> findallPosts(Pageable pageable);
@@ -53,8 +55,7 @@ public interface PostRepository extends JpaRepository<Post, String> {
                 "AND ac.content = p " +
                 "AND ac.account.id = :accountId) " +
         ")) " +
-    ") " +
-    "ORDER BY p.createdAt DESC",
+    ") ",
     countQuery =
             "SELECT count(p.id) FROM Post p " +
             "JOIN Account a ON a.id = p.account.id " +
@@ -144,8 +145,7 @@ public interface PostRepository extends JpaRepository<Post, String> {
     "    WHERE relBlock.status = :blockedStatus " +
     "      AND ((relBlock.requester.id = a.id AND relBlock.receiver.id = :accountId) " +
     "        OR (relBlock.receiver.id = a.id AND relBlock.requester.id = :accountId)) " +
-    ") " +
-    "ORDER BY p.createdAt DESC",
+    ") ",
     countQuery =
             "SELECT count(p.id) FROM Post p " +
             "JOIN Account a ON a.id = p.account.id " +

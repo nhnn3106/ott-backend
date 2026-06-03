@@ -9,9 +9,11 @@ import org.springframework.amqp.rabbit.annotation.EnableRabbit;
 import mediaservice.configs.MediaCompressionProperties;
 import mediaservice.configs.MediaDeleteProperties;
 import mediaservice.configs.MediaUploadProperties;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import java.util.TimeZone;
 
 @SpringBootApplication
+@EnableScheduling
 @EnableRabbit
 @EnableJpaRepositories(basePackages = "mediaservice.repositories")
 @EnableConfigurationProperties({
