@@ -86,6 +86,18 @@ const sanitizeAvatarValue = (value) => {
   if (/^data:image\//i.test(avatar)) return "";
   return avatar;
 };
+const cacheStrictDbCheckEnabled =
+  String(process.env.CHAT_MESSAGE_CACHE_STRICT_DB_CHECK || "false")
+    .toLowerCase() === "true";
+const cacheLiveReactionsEnabled =
+  String(process.env.CHAT_MESSAGE_CACHE_LIVE_REACTIONS || "false")
+    .toLowerCase() === "true";
+const cacheHydrateSendersEnabled =
+  String(process.env.CHAT_MESSAGE_CACHE_HYDRATE_SENDERS || "false")
+    .toLowerCase() === "true";
+const cacheHydrateRepliesEnabled =
+  String(process.env.CHAT_MESSAGE_CACHE_HYDRATE_REPLIES || "false")
+    .toLowerCase() === "true";
 
 class MessageRepository {
   async hydrateSenderInfo(messages = []) {
@@ -155,7 +167,7 @@ class MessageRepository {
   async getLatestVisibleMessageId(conversationId, userId) {
     const latest = await Message.findOne({
       conversation_id: conversationId,
-      is_deleted: false,
+      is_deleted: { $ne: true },
       ...(userId ? { deleted_for: { $ne: userId } } : {}),
     })
       .sort({ msg_id: -1 })
@@ -302,6 +314,28 @@ class MessageRepository {
     });
   }
 
+  async prepareCachedMessagesForResponse(conversationId, messages, userId) {
+    let prepared = messages;
+
+    if (cacheLiveReactionsEnabled) {
+      prepared = await this.hydrateLiveReactions(conversationId, prepared);
+    }
+
+    if (cacheHydrateSendersEnabled) {
+      prepared = await this.hydrateSenderInfo(prepared);
+    }
+
+    if (cacheHydrateRepliesEnabled) {
+      prepared = await this.hydrateReplyPreviews(
+        conversationId,
+        prepared,
+        userId,
+      );
+    }
+
+    return prepared;
+  }
+
   /**
    * Create and save a new message
    * 1. Save to MongoDB
@@ -347,9 +381,15 @@ class MessageRepository {
    * @param {number} limit - number of messages to retrieve
    * @returns {Promise<Array>} messages (oldest to newest)
    */
-  async getConversationMessages(conversationId, limit = 20, userId) {
+  async getConversationMessages(conversationId, limit = 20, userId, options = {}) {
     try {
-      const deletedMsgId = await this.getDeletedMsgId(conversationId, userId);
+      const hasScopedDeletedMsgId = Object.prototype.hasOwnProperty.call(
+        options,
+        "deletedMsgId",
+      );
+      const scopedDeletedMsgId = hasScopedDeletedMsgId
+        ? String(options.deletedMsgId || "0")
+        : null;
 
       // Step 1: Check Redis cache
       const cachedExists =
@@ -363,35 +403,41 @@ class MessageRepository {
           logger.info(
             `✓ CACHE HIT: ${messages.length} messages for ${conversationId}`,
           );
+          const deletedMsgId = hasScopedDeletedMsgId
+            ? scopedDeletedMsgId
+            : cacheStrictDbCheckEnabled
+            ? await this.getDeletedMsgId(conversationId, userId)
+            : "0";
           const visibleMessages = messages.filter((m) =>
             this.isVisibleToUser(m, userId, deletedMsgId),
           );
 
           if (visibleMessages.length > 0) {
-            const cacheLatestId = this.getLatestMessageId(visibleMessages);
-            const dbLatestId = await this.getLatestVisibleMessageId(
-              conversationId,
-              userId,
-            );
+            if (cacheStrictDbCheckEnabled) {
+              const cacheLatestId = this.getLatestMessageId(visibleMessages);
+              const dbLatestId = await this.getLatestVisibleMessageId(
+                conversationId,
+                userId,
+              );
 
-            if (!dbLatestId || cacheLatestId === dbLatestId) {
-              const liveReactionMessages = await this.hydrateLiveReactions(
+              if (dbLatestId && cacheLatestId !== dbLatestId) {
+                logger.warn(
+                  `↺ CACHE STALE: ${conversationId} cache latest ${cacheLatestId} != db latest ${dbLatestId}. Fallback DB`,
+                );
+              } else {
+                return await this.prepareCachedMessagesForResponse(
+                  conversationId,
+                  visibleMessages,
+                  userId,
+                );
+              }
+            } else {
+              return await this.prepareCachedMessagesForResponse(
                 conversationId,
                 visibleMessages,
-              );
-              const hydratedSenders =
-                await this.hydrateSenderInfo(liveReactionMessages);
-
-              return await this.hydrateReplyPreviews(
-                conversationId,
-                hydratedSenders,
                 userId,
               );
             }
-
-            logger.warn(
-              `↺ CACHE STALE: ${conversationId} cache latest ${cacheLatestId} != db latest ${dbLatestId}. Fallback DB`,
-            );
           }
 
           logger.info(
@@ -402,10 +448,13 @@ class MessageRepository {
 
       // Step 2: Cache miss - fetch from MongoDB
       logger.info(`✗ CACHE MISS: Fetching from MongoDB for ${conversationId}`);
+      const deletedMsgId = hasScopedDeletedMsgId
+        ? scopedDeletedMsgId
+        : await this.getDeletedMsgId(conversationId, userId);
 
       const query = {
         conversation_id: conversationId,
-        is_deleted: false,
+        is_deleted: { $ne: true },
         ...(userId ? { deleted_for: { $ne: userId } } : {}),
       };
 
@@ -467,7 +516,7 @@ class MessageRepository {
       const targetMessage = await Message.findOne({
         conversation_id: conversationId,
         msg_id: targetId,
-        is_deleted: false,
+        is_deleted: { $ne: true },
         ...(userId ? { deleted_for: { $ne: userId } } : {}),
       }).lean();
 
@@ -477,7 +526,7 @@ class MessageRepository {
 
       const visibilityFilter = {
         conversation_id: conversationId,
-        is_deleted: false,
+        is_deleted: { $ne: true },
         ...(userId ? { deleted_for: { $ne: userId } } : {}),
       };
 
@@ -556,7 +605,7 @@ class MessageRepository {
 
       const query = {
         conversation_id: conversationId,
-        is_deleted: false,
+        is_deleted: { $ne: true },
         ...(userId ? { deleted_for: { $ne: userId } } : {}),
         msg_id: { $lt: beforeId },
       };
@@ -635,7 +684,7 @@ class MessageRepository {
 
       const messages = await Message.find({
         conversation_id: conversationId,
-        is_deleted: false,
+        is_deleted: { $ne: true },
         ...(userId ? { deleted_for: { $ne: userId } } : {}),
         msg_id: { $gt: afterId },
       })
@@ -789,6 +838,10 @@ class MessageRepository {
       // Save to MongoDB
       await message.save();
       const updated = message.toObject();
+      const responseMessage = {
+        ...updated,
+        reactions: Array.isArray(updated.reactions) ? updated.reactions : [],
+      };
 
       logger.info(
         `😊 Reaction ${normalizedEmoji} updated on message ${messageId}`,
@@ -798,10 +851,10 @@ class MessageRepository {
       await messageCacheService.updateMessage(
         conversationId,
         messageId,
-        updated,
+        responseMessage,
       );
 
-      return updated;
+      return responseMessage;
     } catch (error) {
       logger.error("Error adding reaction:", error);
       throw error;

@@ -72,6 +72,24 @@ public class RelationshipController {
         return ResponseEntity.ok(relationshipService.blockRelationship(id, blockerId));
     }
 
+    @PostMapping("/block")
+    public ResponseEntity<RelationshipResponse> blockRelationshipDirectly(
+            @RequestParam String requesterId,
+            @RequestParam String receiverId) {
+        return ResponseEntity.ok(relationshipService.blockUserDirectly(requesterId, receiverId));
+    }
+
+    @GetMapping("/blocked/{userId}")
+    public ResponseEntity<List<RelationshipResponse>> getBlockedUsers(@PathVariable String userId) {
+        return ResponseEntity.ok(relationshipService.getBlockedUsers(userId));
+    }
+
+    @DeleteMapping("/{id}/unblock")
+    public ResponseEntity<Void> unblockRelationship(@PathVariable String id) {
+        relationshipService.unblockRelationship(id);
+        return ResponseEntity.noContent().build();
+    }
+
     /* ─── Từ chối lời mời ─────────────────────────────────── */
     @DeleteMapping("/{id}/reject")
     public ResponseEntity<Void> rejectFriendRequest(@PathVariable String id) {
@@ -95,13 +113,29 @@ public class RelationshipController {
 
     /* ─── Danh sách bạn bè ────────────────────────────────── */
     @GetMapping("/friends/{userId}")
-    public ResponseEntity<List<RelationshipResponse>> getFriends(@PathVariable String userId) {
+    public ResponseEntity<List<RelationshipResponse>> getFriends(
+            @PathVariable String userId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
+        if (page != null && size != null) {
+            org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
+            return ResponseEntity.ok(relationshipService.getFriends(userId, pageable));
+        }
         return ResponseEntity.ok(relationshipService.getFriends(userId));
     }
 
     /* ─── Lời mời nhận được (PENDING) ────────────────────── */
     @GetMapping("/pending/{userId}")
-    public ResponseEntity<List<RelationshipResponse>> getPendingRequests(@PathVariable String userId) {
+    public ResponseEntity<List<RelationshipResponse>> getPendingRequests(
+            @PathVariable String userId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
+        if (page != null && size != null) {
+            org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
+            return ResponseEntity.ok(relationshipService.getPendingRequests(userId, pageable));
+        }
         return ResponseEntity.ok(relationshipService.getPendingRequests(userId));
     }
 

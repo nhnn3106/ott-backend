@@ -27,6 +27,7 @@ public interface RelationshipService {
 
     /** Chặn người dùng → status = BLOCKED, set blockedBy. */
     RelationshipResponse blockRelationship(String relationshipId, String blockerId);
+    RelationshipResponse blockUserDirectly(String requesterId, String receiverId);
 
     /** Từ chối lời mời kết bạn → xóa bản ghi. */
     void rejectFriendRequest(String relationshipId);
@@ -39,9 +40,11 @@ public interface RelationshipService {
 
     /** Lấy danh sách bạn bè (ACCEPTED) của user. */
     List<RelationshipResponse> getFriends(String userId);
+    List<RelationshipResponse> getFriends(String userId, Pageable pageable);
 
     /** Lấy danh sách lời mời kết bạn user nhận được (PENDING). */
     List<RelationshipResponse> getPendingRequests(String userId);
+    List<RelationshipResponse> getPendingRequests(String userId, Pageable pageable);
 
     /** Lấy danh sách lời mời kết bạn user đã gửi (PENDING). */
     List<RelationshipResponse> getSentRequests(String userId);
@@ -50,5 +53,11 @@ public interface RelationshipService {
     Optional<RelationshipResponse> getRelationshipBetween(String userId1, String userId2);
 
     void syncRelationshipFromEvent(String requesterId, String receiverId, String status, String type);
+
+    /** Lấy danh sách người bị user này chặn */
+    List<RelationshipResponse> getBlockedUsers(String userId);
+
+    /** Bỏ chặn mối quan hệ */
+    void unblockRelationship(String relationshipId);
 }
 

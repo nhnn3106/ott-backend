@@ -1,6 +1,6 @@
 const Relationship = require("../models/Relationship");
 const { publishRelationshipEvent } = require("../events/relationshipEvents");
-const { publishNotification } = require("../events/notificationEvents");
+const mongoose = require("mongoose");
 
 const getUserDisplayName = async (userId) => {
   const User = require("../models/User");
@@ -15,6 +15,18 @@ exports.getRelationshipBetween = async (userId1, userId2) => {
       { requester_id: userId2, receiver_id: userId1 },
     ],
   });
+};
+
+const findRelationshipByAnyId = async (relationshipId) => {
+  const normalizedId = String(relationshipId || "").trim();
+  if (!normalizedId) return null;
+
+  if (mongoose.Types.ObjectId.isValid(normalizedId)) {
+    const relationship = await Relationship.findById(normalizedId);
+    if (relationship) return relationship;
+  }
+
+  return Relationship.findOne({ relationship_id: normalizedId });
 };
 
 const ensureFriendRequestSentMessage = async (
@@ -32,6 +44,17 @@ const ensureFriendRequestSentMessage = async (
     receiverId,
   );
   const relationshipId = relationship._id.toString();
+  const relationshipIds = Array.from(
+    new Set(
+      [
+        relationshipId,
+        relationship.relationship_id,
+        relationship.id,
+      ]
+        .filter(Boolean)
+        .map((value) => String(value)),
+    ),
+  );
   const requesterName =
     String(requesterNameOverride || "").trim() ||
     await getUserDisplayName(requesterId);
@@ -43,7 +66,13 @@ const ensureFriendRequestSentMessage = async (
       conversation_id: conversation._id,
       type: "system_friend_request",
       "system_meta.action": "friend_request_sent",
-      "system_meta.relationship_id": relationshipId,
+      $or: [
+        { "system_meta.relationship_id": { $in: relationshipIds } },
+        {
+          "system_meta.requester_id": requesterId,
+          "system_meta.receiver_id": receiverId,
+        },
+      ],
     }).lean();
 
     if (message) {
@@ -52,6 +81,7 @@ const ensureFriendRequestSentMessage = async (
         : String(message.content || "");
       const nextSystemMeta = {
         ...(message.system_meta || {}),
+        relationship_id: relationshipId,
         requester_name: requesterName,
       };
       const shouldUpdateMessage =
@@ -142,19 +172,6 @@ exports.sendFriendRequest = async (requesterId, receiverId) => {
 
   await relationship.save();
   const requesterName = await getUserDisplayName(requesterId);
-  try {
-    await publishRelationshipEvent("REQUEST_SENT", relationship);
-    await publishNotification({
-      recipientId: receiverId,
-      senderId: requesterId,
-      type: "FRIEND_REQUEST",
-      content: `${requesterName} đã gửi cho bạn lời mời kết bạn`,
-      referenceId: relationship._id.toString()
-    });
-  } catch (err) {
-    console.error(`[RelationshipService] Failed to publish REQUEST_SENT event: ${err.message}`);
-  }
-
   const { conversation, message } = await ensureFriendRequestSentMessage(
     relationship,
     requesterId,
@@ -162,24 +179,30 @@ exports.sendFriendRequest = async (requesterId, receiverId) => {
     { requesterName },
   );
 
+  try {
+    await publishRelationshipEvent("REQUEST_SENT", relationship, {
+      actorId: requesterId,
+      requesterDisplayName: requesterName,
+    });
+  } catch (err) {
+    console.error(`[RelationshipService] Failed to publish REQUEST_SENT event: ${err.message}`);
+  }
+
   return { relationship, conversation, message };
 };
 
 exports.acceptFriendRequest = async (relationshipId) => {
-  const relationship = await Relationship.findById(relationshipId);
+  const relationship = await findRelationshipByAnyId(relationshipId);
   if (!relationship) throw new Error("Không tìm thấy quan hệ.");
 
   relationship.status = "ACCEPTED";
   await relationship.save();
 
   try {
-    await publishRelationshipEvent("REQUEST_ACCEPTED", relationship);
-    await publishNotification({
-      recipientId: relationship.requester_id,
-      senderId: relationship.receiver_id,
-      type: "FRIEND_ACCEPTED",
-      content: "Đã chấp nhận lời mời kết bạn của bạn",
-      referenceId: relationship._id.toString()
+    const receiverName = await getUserDisplayName(relationship.receiver_id);
+    await publishRelationshipEvent("REQUEST_ACCEPTED", relationship, {
+      actorId: relationship.receiver_id,
+      receiverDisplayName: receiverName,
     });
   } catch (err) {
     console.error(`[RelationshipService] Failed to publish REQUEST_ACCEPTED event: ${err.message}`);
@@ -210,7 +233,23 @@ exports.acceptFriendRequest = async (relationshipId) => {
 };
 
 exports.updateRelationshipFromEvent = async (payload) => {
-  const { requesterId, receiverId, status, relationshipId } = payload;
+  const { requesterId, receiverId, status, relationshipId, source } = payload;
+  if (!requesterId || !receiverId || !status) return null;
+
+  const existing = await exports.getRelationshipBetween(requesterId, receiverId);
+  if (!existing && status === "REMOVED") {
+    return null;
+  }
+
+  const update = {
+    requester_id: requesterId,
+    receiver_id: receiverId,
+    status: status,
+  };
+
+  if (relationshipId && source !== "chat-service") {
+    update.relationship_id = relationshipId;
+  }
 
   const relationship = await Relationship.findOneAndUpdate(
     {
@@ -219,12 +258,7 @@ exports.updateRelationshipFromEvent = async (payload) => {
         { requester_id: receiverId, receiver_id: requesterId },
       ],
     },
-    {
-      requester_id: requesterId,
-      receiver_id: receiverId,
-      status: status,
-      relationship_id: relationshipId,
-    },
+    update,
     { upsert: true, new: true }
   );
 
@@ -232,7 +266,7 @@ exports.updateRelationshipFromEvent = async (payload) => {
 };
 
 exports.rejectFriendRequest = async (relationshipId) => {
-  const relationship = await Relationship.findById(relationshipId);
+  const relationship = await findRelationshipByAnyId(relationshipId);
   if (!relationship) throw new Error("Không tìm thấy quan hệ.");
 
   relationship.status = "REMOVED";
@@ -247,7 +281,7 @@ exports.rejectFriendRequest = async (relationshipId) => {
 };
 
 exports.cancelFriendRequest = async (relationshipId) => {
-  const relationship = await Relationship.findById(relationshipId);
+  const relationship = await findRelationshipByAnyId(relationshipId);
   if (!relationship) throw new Error("Không tìm thấy quan hệ.");
 
   relationship.status = "REMOVED";
@@ -275,6 +309,46 @@ exports.getFriends = async (userId) => {
 
   const User = require("../models/User");
   return await User.find({ user_id: { $in: friendIds } }).lean();
+};
+
+exports.getBlockedUsers = async (userId) => {
+  const relationships = await Relationship.find({
+    requester_id: userId,
+    status: "BLOCKED",
+  }).lean();
+
+  const blockedIds = relationships
+    .map((rel) => String(rel.receiver_id || "").trim())
+    .filter(Boolean);
+
+  const User = require("../models/User");
+  const users = blockedIds.length
+    ? await User.find({ user_id: { $in: blockedIds } })
+        .select("user_id name avatar phone")
+        .lean()
+    : [];
+
+  const userById = new Map(
+    users.map((user) => [String(user.user_id || ""), user]),
+  );
+
+  return relationships.map((rel) => {
+    const receiver = userById.get(String(rel.receiver_id || "")) || {};
+    return {
+      ...rel,
+      id: rel.relationship_id || rel._id,
+      relationshipId: rel.relationship_id || rel._id,
+      requesterId: rel.requester_id,
+      receiverId: rel.receiver_id,
+      requester_id: rel.requester_id,
+      receiver_id: rel.receiver_id,
+      receiverDisplayName: receiver.name || rel.receiver_id,
+      receiverUsername: receiver.name || rel.receiver_id,
+      receiverAvatarUrl: receiver.avatar || "",
+      receiverPhoneNumber: receiver.phone || "",
+      source: "chat",
+    };
+  });
 };
 
 exports.unfriend = async (userId, friendId) => {

@@ -1,5 +1,30 @@
 const User = require("../models/User");
 const UserCacheService = require("./userCacheService");
+const mongoose = require("mongoose");
+
+const parseDate = (value) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const applyAccountStatusFields = (target, source = {}) => {
+  if (source.isActive !== undefined) target.is_active = source.isActive !== false;
+  if (source.isBlocked !== undefined) target.is_blocked = source.isBlocked === true;
+  if (source.blockedUntil !== undefined) target.blocked_until = parseDate(source.blockedUntil);
+  if (source.blockedReason !== undefined) target.blocked_reason = source.blockedReason || "";
+  if (source.deletedAt !== undefined) target.deleted_at = parseDate(source.deletedAt);
+
+  if (
+    source.isActive !== undefined ||
+    source.isBlocked !== undefined ||
+    source.blockedUntil !== undefined ||
+    source.blockedReason !== undefined ||
+    source.deletedAt !== undefined
+  ) {
+    target.status_synced_at = new Date();
+  }
+};
 
 const extractAvatarPath = (avatarUrl) => {
   if (!avatarUrl) return "";
@@ -32,6 +57,7 @@ exports.createUser = async (userData) => {
     is_online: false,
     last_active_at: new Date(),
   });
+  applyAccountStatusFields(newUser, userData);
 
   await newUser.save();
   await UserCacheService.setCachedUser(userId, newUser);
@@ -48,6 +74,7 @@ exports.updateUserInfo = async (userData) => {
   if (bio !== undefined) updatePayload.bio = bio;
   if (email !== undefined) updatePayload.email = email;
   if (phone !== undefined) updatePayload.phone = phone;
+  applyAccountStatusFields(updatePayload, userData);
 
   const updatedUser = await User.findOneAndUpdate(
     { user_id: userId },
@@ -83,6 +110,7 @@ exports.updateUser = async (userData) => {
   const updateData = {};
   if (avatar !== undefined) updateData.avatar = extractAvatarPath(avatar);
   if (displayName !== undefined) updateData.name = displayName;
+  applyAccountStatusFields(updateData, userData);
   
   const updatedUser = await User.findOneAndUpdate(
     { user_id: userId },
@@ -103,7 +131,7 @@ exports.getUser = async (user_id) => {
   }
 
   let user = await User.findOne({ user_id: user_id });
-  if (!user) {
+  if (!user && mongoose.Types.ObjectId.isValid(String(user_id || ""))) {
     user = await User.findById(user_id);
   }
   if (user) {
@@ -136,14 +164,31 @@ exports.getAllUsers = async () => {
   return await User.find();
 };
 
-exports.getUserByPhone = async (phone) => {
-  // Normalize phone formats for searching locally (handle 0 vs 84)
-  const variants = [phone];
-  if (phone.startsWith('0')) {
-    variants.push('84' + phone.substring(1));
-  } else if (phone.startsWith('84')) {
-    variants.push('0' + phone.substring(2));
+const getPhoneVariants = (phone) => {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (!digits) return [];
+
+  const variants = new Set([digits]);
+
+  if (digits.startsWith("0")) {
+    variants.add(`84${digits.substring(1)}`);
+    variants.add(digits.substring(1));
+  } else if (digits.startsWith("84")) {
+    const withoutCountryCode = digits.substring(2);
+    variants.add(withoutCountryCode);
+    variants.add(withoutCountryCode.startsWith("0")
+      ? withoutCountryCode
+      : `0${withoutCountryCode}`);
+  } else if (digits.length === 9) {
+    variants.add(`0${digits}`);
+    variants.add(`84${digits}`);
   }
+
+  return Array.from(variants);
+};
+
+exports.getUserByPhone = async (phone) => {
+  const variants = getPhoneVariants(phone);
 
   return await User.findOne({
     phone: { $in: variants }

@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -44,6 +45,9 @@ public class NotificationPublisher {
 
     @Value("${rabbitmq.routing-key.user-login:user.login}")
     private String userLoginRoutingKey;
+
+    @Value("${rabbitmq.routing-key.user-registered:user.registered}")
+    private String userRegisteredRoutingKey;
 
     public String getNotificationServiceUrl() {
         return notificationServiceUrl;
@@ -89,6 +93,7 @@ public class NotificationPublisher {
         }
     }
 
+    @Async
     public void sendWelcomeEmailAsync(String userId, String email, String fullName,
                                       String phone, boolean hasPassword, boolean hasGoogleLinked) {
         log.info("Publishing welcome email event for userId: {}", userId);
@@ -110,6 +115,7 @@ public class NotificationPublisher {
         }
     }
 
+    @Async
     public void sendAlertEmailAsync(String userId, String email, String fullName,
                                     String alertType, String ipAddress, String location, String deviceInfo) {
         log.info("Publishing alert email event for userId: {} | AlertType: {}", userId, alertType);
@@ -133,6 +139,7 @@ public class NotificationPublisher {
         }
     }
 
+    @Async
     public void publishUserLoginEvent(String userId, String loginMethod) {
         try {
             Map<String, Object> event = new HashMap<>();
@@ -149,6 +156,24 @@ public class NotificationPublisher {
         }
     }
 
+    @Async
+    public void publishUserRegisteredEvent(String userId, String registerMethod) {
+        try {
+            Map<String, Object> event = new HashMap<>();
+            event.put("event_id", UUID.randomUUID().toString());
+            event.put("user_id", userId);
+            event.put("register_method", registerMethod);
+            event.put("timestamp", Instant.now());
+
+            rabbitTemplate.convertAndSend(userEventsExchange, userRegisteredRoutingKey, event);
+            log.info("User registered analytics event published for userId={}, method={}", userId, registerMethod);
+        } catch (Exception e) {
+            // Do not break registration flow if analytics is unavailable
+            log.warn("Failed to publish user.registered analytics event for userId={}: {}", userId, e.getMessage());
+        }
+    }
+
+    @Async
     public void publishUserLogoutEvent(String userId, String sessionId, String deviceId, String action, java.util.List<String> revokedDeviceIds) {
         try {
             Map<String, Object> event = new HashMap<>();

@@ -22,10 +22,12 @@ router.post("/conversations/add-member", ConversationController.addMember);
 // Join by invite link – must be BEFORE /:conversationId to avoid route conflict
 router.post("/conversations/join-by-link", ConversationController.joinByLink);
 router.get("/conversations/invite-link/:token", ConversationController.getInviteLinkInfo);
+router.get("/conversations/private", ConversationController.findPrivateConversation);
 router.post(
   "/conversations/:conversationId/invite-link",
   ConversationController.getInviteLink,
 );
+router.get("/conversations/:conversationId", ConversationController.getConversationById);
 router.put(
   "/conversations/:conversationId",
   ConversationController.updateConversation,
@@ -98,6 +100,7 @@ router.post("/messages", MessageController.sendMessage);
 router.post("/messages/forward", MessageController.forwardMessage);
 router.put("/messages/:msgId/reaction", MessageController.reactToMessage);
 router.put("/messages/:msgId/vote", MessageController.votePoll);
+router.put("/messages/:msgId/poll-lock", MessageController.lockPoll);
 router.put("/messages/:msgId/revoke", MessageController.revokeMessage);
 router.put("/messages/:msgId/delete", MessageController.deleteMessage);
 router.put("/messages/:msgId/pin", MessageController.pinMessage);

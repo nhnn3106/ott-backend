@@ -22,18 +22,74 @@ const {
   publishMessageDelivered,
   publishMessageSeen,
 } = require("./events/chatEvents");
+
+const envEnabled = (name, defaultValue = true) => {
+  const raw = process.env[name];
+  if (raw === undefined) return defaultValue;
+  return String(raw).toLowerCase() !== "false";
+};
+
+const chatReceiptQueueEnabled = envEnabled("CHAT_RECEIPT_QUEUE_ENABLED", false);
+
 connectDB();
 const app = express();
 const server = http.createServer(app);
 
-app.use(cors());
+const normalizeOrigin = (origin) => String(origin || "").trim().replace(/\/+$/, "");
+const splitOrigins = (...values) =>
+  values
+    .flatMap((value) => String(value || "").split(","))
+    .map(normalizeOrigin)
+    .filter(Boolean);
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const allowedOrigins = Array.from(new Set(splitOrigins(
+  process.env.CHAT_ALLOWED_ORIGINS,
+  process.env.CORS_ALLOWED_ORIGINS,
+  process.env.FRONTEND_URL,
+  process.env.FRONTEND_URL_ALT,
+  process.env.FRONTEND_URL_DEPLOYED,
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://localhost:3000",
+  "https://*.vercel.app",
+)));
+
+const isOriginAllowed = (origin) => {
+  const normalizedOrigin = normalizeOrigin(origin);
+  if (!normalizedOrigin) return true;
+
+  return allowedOrigins.some((allowedOrigin) => {
+    if (allowedOrigin === "*") return true;
+    if (allowedOrigin === normalizedOrigin) return true;
+    if (!allowedOrigin.includes("*")) return false;
+
+    const pattern = `^${escapeRegExp(allowedOrigin).replace(/\\\*/g, ".*")}$`;
+    return new RegExp(pattern).test(normalizedOrigin);
+  });
+};
+
+const corsOrigin = (origin, callback) => {
+  callback(null, isOriginAllowed(origin));
+};
+
+const corsOptions = {
+  origin: corsOrigin,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+  allowedHeaders: ["Content-Type", "Authorization", "Accept", "X-Requested-With"],
+  credentials: false,
+};
+
+app.use(cors(corsOptions));
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
 const io = new Server(server, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"],
+    origin: corsOrigin,
+    methods: corsOptions.methods,
+    allowedHeaders: corsOptions.allowedHeaders,
+    credentials: false,
   },
 });
 
@@ -113,6 +169,90 @@ const clearParticipantDisconnectTimer = (callState, userId) => {
 
   clearTimeout(timer);
   callState.disconnectTimers.delete(normalizedUserId);
+};
+
+const ensureCallDeviceState = (callState) => {
+  if (!callState) return null;
+  if (!callState.activeParticipantSockets) {
+    callState.activeParticipantSockets = new Map();
+  }
+  return callState.activeParticipantSockets;
+};
+
+const isSocketConnected = (socketId) => {
+  const normalizedSocketId = normalizeId(socketId);
+  return !!normalizedSocketId && io.sockets.sockets.has(normalizedSocketId);
+};
+
+const getActiveParticipantSocketId = (callState, userId) => {
+  const normalizedUserId = normalizeId(userId);
+  if (!normalizedUserId) return "";
+
+  const socketMap = ensureCallDeviceState(callState);
+  return normalizeId(socketMap?.get(normalizedUserId));
+};
+
+const setActiveParticipantSocket = (callState, userId, socketId) => {
+  const normalizedUserId = normalizeId(userId);
+  const normalizedSocketId = normalizeId(socketId);
+  if (!normalizedUserId || !normalizedSocketId) return;
+
+  ensureCallDeviceState(callState)?.set(normalizedUserId, normalizedSocketId);
+};
+
+const clearActiveParticipantSocket = (callState, userId) => {
+  const normalizedUserId = normalizeId(userId);
+  if (!normalizedUserId) return;
+
+  ensureCallDeviceState(callState)?.delete(normalizedUserId);
+};
+
+const isParticipantActiveOnAnotherDevice = (callState, userId, socketId) => {
+  const activeSocketId = getActiveParticipantSocketId(callState, userId);
+  if (!activeSocketId) return false;
+  if (activeSocketId === normalizeId(socketId)) return false;
+
+  // If the recorded call socket is gone, let another device take over.
+  return isSocketConnected(activeSocketId);
+};
+
+const buildAnsweredElsewherePayload = (
+  callState,
+  userId,
+  reason = "answered_elsewhere",
+) => ({
+  conversationId: normalizeId(callState?.conversationId),
+  callId: normalizeId(callState?.callId),
+  userId: normalizeId(userId),
+  acceptedSocketId: getActiveParticipantSocketId(callState, userId),
+  isGroup: !!callState?.isGroup,
+  reason,
+});
+
+const emitAnsweredElsewhereToCurrentSocket = (
+  socket,
+  callState,
+  userId,
+  reason = "already_joined_elsewhere",
+) => {
+  socket.emit(
+    "cuoc_goi_da_nhan_o_thiet_bi_khac",
+    buildAnsweredElsewherePayload(callState, userId, reason),
+  );
+};
+
+const notifyOtherDevicesAnsweredElsewhere = (
+  socket,
+  callState,
+  userId,
+) => {
+  const normalizedUserId = normalizeId(userId);
+  if (!normalizedUserId) return;
+
+  socket.to(`user:${normalizedUserId}`).emit(
+    "cuoc_goi_da_nhan_o_thiet_bi_khac",
+    buildAnsweredElsewherePayload(callState, normalizedUserId),
+  );
 };
 
 const buildGroupCallUpdatePayload = (callState) => ({
@@ -273,7 +413,6 @@ const createCallNotificationMessage = async ({
       senderId,
       content,
       type,
-      size: 0,
       systemMeta,
     });
 
@@ -408,7 +547,7 @@ const getRecentCallOutcomeMessage = async (conversationId, callId = null) => {
   return Message.findOne({
     conversation_id: conversationId,
     type: { $in: CALL_OUTCOME_TYPES },
-    is_deleted: false,
+    is_deleted: { $ne: true },
     ...(callId ? { "system_meta.callId": normalizeId(callId) } : {}),
     createdAt: { $gte: since },
   })
@@ -564,7 +703,7 @@ const emitCallOutcomeMessage = async ({
       conversation_id: conversationId,
       type: { $in: CALL_OUTCOME_TYPES },
       "system_meta.callId": normalizedCallId,
-      is_deleted: false,
+      is_deleted: { $ne: true },
     })
       .sort({ createdAt: -1 })
       .select("msg_id type")
@@ -779,6 +918,22 @@ const removeParticipantFromCall = async ({
 
   clearParticipantDisconnectTimer(callState, normalizedUserId);
 
+  if (socketToLeave && isParticipantActiveOnAnotherDevice(callState, normalizedUserId, socketToLeave.id)) {
+    socketToLeave.leave(getCallRoomName(callState));
+    emitAnsweredElsewhereToCurrentSocket(
+      socketToLeave,
+      callState,
+      normalizedUserId,
+      "stale_device_ignored",
+    );
+    return {
+      ok: true,
+      callId: callState.callId,
+      participants: Array.from(callState.participants),
+      reason: "stale_device_ignored",
+    };
+  }
+
   const wasParticipant = callState.participants.delete(normalizedUserId);
   if (!wasParticipant) {
     return {
@@ -788,6 +943,8 @@ const removeParticipantFromCall = async ({
       reason: "not_participant",
     };
   }
+
+  clearActiveParticipantSocket(callState, normalizedUserId);
 
   if (socketToLeave) {
     socketToLeave.leave(getCallRoomName(callState));
@@ -829,6 +986,7 @@ const ensureCallState = (conversationId, callType, memberIds = [], isGroup = fal
       ringingMemberIds: new Set(),
       declinedMemberIds: new Set(),
       disconnectTimers: new Map(),
+      activeParticipantSockets: new Map(),
       startedAt,
       outcomeKey: `${conversationId}:${callId}`,
       answeredAt: null,
@@ -871,12 +1029,14 @@ const removeUserFromAllCalls = async (userId, reason = "disconnect") => {
   }
 };
 
-const scheduleUserDisconnectFromAllCalls = (userId) => {
+const scheduleUserDisconnectFromAllCalls = (userId, socketId = null) => {
   const normalizedUserId = normalizeId(userId);
   if (!normalizedUserId) return;
 
   for (const [conversationId, callState] of activeCalls.entries()) {
     if (!callState.participants.has(normalizedUserId)) continue;
+    const activeSocketId = getActiveParticipantSocketId(callState, normalizedUserId);
+    if (socketId && activeSocketId && activeSocketId !== normalizeId(socketId)) continue;
     if (!callState.disconnectTimers) {
       callState.disconnectTimers = new Map();
     }
@@ -1007,7 +1167,18 @@ io.on("connection", (socket) => {
           ? await ParticipantService.updateLastRead(conversationId, userId, msgId)
           : await ParticipantService.updateLastDelivered(conversationId, userId, msgId);
 
-      if (participant) {
+      if (!participant) {
+        socket.emit("message_receipt_error", {
+          conversationId,
+          msgId,
+          error: "Participant not found",
+        });
+        return;
+      }
+
+      const cursorChanged = participant.$locals?.cursorChanged !== false;
+
+      if (cursorChanged) {
         const participantPayload = {
           user_id: participant.user_id,
           conversation_id: String(participant.conversation_id),
@@ -1042,6 +1213,10 @@ io.on("connection", (socket) => {
         msgId,
         error: error.message,
       });
+      return;
+    }
+
+    if (!chatReceiptQueueEnabled || participant.$locals?.cursorChanged === false) {
       return;
     }
 
@@ -1119,6 +1294,7 @@ io.on("connection", (socket) => {
         io.to(`user:${callerId}`).emit("nguoi_dung_ban_goi", {
           conversationId,
           targetUserId: busyTargets[0],
+          reason: "target_busy",
         });
       } else {
         // Không ai bận → cho phép bắt đầu gọi
@@ -1215,6 +1391,7 @@ io.on("connection", (socket) => {
         io.to(`user:${callerId}`).emit("nguoi_dung_ban_goi", {
           conversationId,
           targetUserId: busyTargets[0],
+          reason: "target_busy",
         });
         acknowledge({ ok: false, reason: "busy", targetUserId: busyTargets[0] });
         return;
@@ -1229,6 +1406,7 @@ io.on("connection", (socket) => {
       callState.status = "ringing";
       callState.ringingMemberIds = new Set(availableTargetUserIds);
       callState.participants.add(normalizedCallerId);
+      setActiveParticipantSocket(callState, normalizedCallerId, socket.id);
 
       socket.join(getCallRoomName(callState));
 
@@ -1341,6 +1519,29 @@ io.on("connection", (socket) => {
       ]);
       const normalizedJoinUserId = normalizeId(userId);
       const wasAlreadyParticipant = callState.participants.has(normalizedJoinUserId);
+      const activeJoinSocketId = getActiveParticipantSocketId(callState, normalizedJoinUserId);
+      if (
+        wasAlreadyParticipant &&
+        activeJoinSocketId &&
+        activeJoinSocketId !== socket.id &&
+        isSocketConnected(activeJoinSocketId)
+      ) {
+        emitAnsweredElsewhereToCurrentSocket(
+          socket,
+          callState,
+          normalizedJoinUserId,
+          "already_joined_elsewhere",
+        );
+        acknowledge({
+          ok: false,
+          reason: "already_joined_elsewhere",
+          conversationId,
+          callId: callState.callId,
+          isGroup: callState.isGroup,
+        });
+        return;
+      }
+
       if (
         callState.isGroup &&
         !wasAlreadyParticipant &&
@@ -1364,6 +1565,8 @@ io.on("connection", (socket) => {
       callState.ringingMemberIds?.delete(normalizedJoinUserId);
       callState.declinedMemberIds?.delete(normalizedJoinUserId);
       callState.participants.add(normalizedJoinUserId);
+      setActiveParticipantSocket(callState, normalizedJoinUserId, socket.id);
+      notifyOtherDevicesAnsweredElsewhere(socket, callState, normalizedJoinUserId);
 
       if (!callState.answeredAt && callState.participants.size >= 2) {
         callState.answeredAt = new Date().toISOString();
@@ -1589,47 +1792,77 @@ io.on("connection", (socket) => {
       });
   });
 
-  socket.on("tu_choi_goi", async ({ conversationId, callId, userId, callerId }) => {
-    if (!conversationId || !userId || !callerId) return;
+  socket.on("tu_choi_goi", async ({ conversationId, callId, userId, callerId }, ack) => {
+    const acknowledge = (payload = {}) => {
+      if (typeof ack === "function") ack(payload);
+    };
+    if (!conversationId || !userId || !callerId) {
+      acknowledge({ ok: false, reason: "missing_payload" });
+      return;
+    }
 
-    io.to(`user:${callerId}`).emit("nguoi_dung_tu_choi_goi", {
-      conversationId,
-      callId,
-      userId,
-    });
-
+    const normalizedDeclineUserId = normalizeId(userId);
     const callState = activeCalls.get(conversationId);
     if (!callState || !isSameCall(callState, callId)) {
-      io.to(`user:${userId}`).emit("ket_thuc_phong_goi", {
+      socket.emit("ket_thuc_phong_goi", {
         conversationId,
         callId,
         endedBy: userId,
         reason: "call_not_found",
       });
+      acknowledge({ ok: false, reason: "call_not_found" });
       return;
     }
 
-    callState.declinedMemberIds?.add(normalizeId(userId));
-    callState.ringingMemberIds?.delete(normalizeId(userId));
+    if (
+      isParticipantActiveOnAnotherDevice(callState, normalizedDeclineUserId, socket.id) ||
+      (callState.participants.has(normalizedDeclineUserId) && hasCallBeenAnswered(callState))
+    ) {
+      emitAnsweredElsewhereToCurrentSocket(
+        socket,
+        callState,
+        normalizedDeclineUserId,
+        "stale_device_ignored",
+      );
+      socket.emit("ket_thuc_phong_goi", {
+        conversationId,
+        callId: callState.callId,
+        endedBy: normalizedDeclineUserId,
+        reason: "stale_device_ignored",
+      });
+      acknowledge({ ok: true, reason: "stale_device_ignored", callId: callState.callId });
+      return;
+    }
+
+    io.to(`user:${callerId}`).emit("nguoi_dung_tu_choi_goi", {
+      conversationId,
+      callId: callState.callId,
+      userId,
+    });
+
+    callState.declinedMemberIds?.add(normalizedDeclineUserId);
+    callState.ringingMemberIds?.delete(normalizedDeclineUserId);
 
     // Nếu là nhóm, chỉ đóng modal của người từ chối, không đóng cả phòng
     if (callState && callState.isGroup) {
-      io.to(`user:${userId}`).emit("ket_thuc_phong_goi", {
+      io.to(`user:${normalizedDeclineUserId}`).emit("ket_thuc_phong_goi", {
         conversationId,
         callId: callState.callId,
         endedBy: userId,
         reason: "declined",
       });
+      acknowledge({ ok: true, reason: "declined", callId: callState.callId });
       return;
     }
 
-    await finishCall({
+    const result = await finishCall({
       conversationId,
       callId: callState.callId,
       endedBy: userId,
       outcome: hasCallBeenAnswered(callState) ? "completed" : "missed",
       reason: "declined",
     });
+    acknowledge(result);
   });
 
   socket.on("ket_thuc_goi", async ({ conversationId, callId, userId, callType, wasConnected, durationSeconds }, ack) => {
@@ -1668,6 +1901,21 @@ io.on("connection", (socket) => {
     );
 
     // Restore: Nếu là cuộc gọi nhóm, hành động "Kết thúc" của 1 người chỉ là "Rời đi"
+    if (isParticipantActiveOnAnotherDevice(callState, endingUserId, socket.id)) {
+      emitAnsweredElsewhereToCurrentSocket(
+        socket,
+        callState,
+        endingUserId,
+        "stale_device_ignored",
+      );
+      acknowledge({
+        ok: true,
+        reason: "stale_device_ignored",
+        callId: callState.callId,
+      });
+      return;
+    }
+
     if (callState.isGroup) {
       const leaveResult = await removeParticipantFromCall({
         conversationId,
@@ -1720,7 +1968,7 @@ io.on("connection", (socket) => {
 
     if (callRoomId) {
       console.log(`Socket cua user ${userId} trong phong ${callRoomId} dang ngat ket noi (disconnecting), doi reconnect grace ${CALL_RECONNECT_GRACE_MS}ms.`);
-      scheduleUserDisconnectFromAllCalls(userId);
+      scheduleUserDisconnectFromAllCalls(userId, socket.id);
     }
   });
 
@@ -1744,7 +1992,7 @@ io.on("connection", (socket) => {
 
     if (activeSockets.length === 0) {
       console.log(`User ${userId} da ngat ket noi hoan toan. Len lich don dep cuoc goi sau reconnect grace...`);
-      scheduleUserDisconnectFromAllCalls(userId);
+      scheduleUserDisconnectFromAllCalls(userId, socket.id);
     } else {
       console.log(`User ${userId} ngat ket noi 1 socket, nhung van con ${activeSockets.length} socket khac hoat dong.`);
     }
@@ -1816,9 +2064,12 @@ app.use("/api", messageRoutes);
 
 // ========== OTHER ROUTES ==========
 app.use("/api", apiRoutes);
-// Redundant mounting to prevent 404s from various gateway mappings
+// Redundant mounting to prevent 404s from various gateway mappings.
 app.use("/api/ai", aiRoutes);
 app.use("/ai", aiRoutes);
+app.use("/api/chat/ai", aiRoutes);
+app.use("/riff/api/ai", aiRoutes);
+app.use("/riff/api/chat/ai", aiRoutes);
 
 app.get("/", (req, res) => res.send("Chat Service dang chay..."));
 

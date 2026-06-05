@@ -6,6 +6,7 @@ import mediaservice.dtos.responses.UserAccountResponse;
 import mediaservice.mappers.UserAccountMapper;
 import mediaservice.models.UserAccount;
 import mediaservice.repositories.UserAccountRepository;
+import mediaservice.services.ProfileImageModerationService;
 import mediaservice.services.S3Service;
 import mediaservice.services.UserAccountService;
 import mediaservice.services.UserEventPublisher;
@@ -15,6 +16,7 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -31,10 +33,11 @@ public class UserAccountServiceImpl implements UserAccountService {
     private final S3Service s3Service;
     private final UserEventPublisher userEventPublisher;
     private final UserSyncService userSyncService;
+    private final ProfileImageModerationService profileImageModerationService;
 
     @Override
     @Transactional
-    @CacheEvict(value = {"users", "allUsers"}, allEntries = true)
+    @CacheEvict(value = {"users", "allUsers", "userSearch"}, allEntries = true)
     public UserAccountResponse createUserAccount(UserAccountRequest request) {
         UserAccount userAccount = userAccountMapper.toEntity(request);
         UserAccount savedUserAccount = userAccountRepository.save(userAccount);
@@ -84,10 +87,35 @@ public class UserAccountServiceImpl implements UserAccountService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    @Cacheable(value = "userSearch", key = "#query", unless = "#result == null || #result.isEmpty()")
+    public List<UserAccountResponse> searchUserAccounts(String query) {
+        String normalized = normalizeSearchQuery(query);
+        if (normalized == null) {
+            return List.of();
+        }
+        return userAccountRepository.searchUsers(normalized).stream()
+                .map(userAccountMapper::toResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<UserAccountResponse> searchUserAccounts(String query, Pageable pageable) {
+        String normalized = normalizeSearchQuery(query);
+        if (normalized == null) {
+            return Page.empty(pageable);
+        }
+        return userAccountRepository.searchUsers(normalized, pageable)
+                .map(userAccountMapper::toResponse);
+    }
+
+    @Override
     @Transactional
     @Caching(evict = {
         @CacheEvict(value = "users", key = "#id"),
-        @CacheEvict(value = "allUsers", allEntries = true)
+        @CacheEvict(value = "allUsers", allEntries = true),
+        @CacheEvict(value = "userSearch", allEntries = true)
     })
     public UserAccountResponse updateUserAccount(String id, UserAccountRequest request) {
         UserAccount userAccount = userAccountRepository.findById(id)
@@ -120,7 +148,7 @@ public class UserAccountServiceImpl implements UserAccountService {
 
     @Override
     @Transactional
-    @CacheEvict(value = {"users", "allUsers"}, key = "#id")
+    @CacheEvict(value = {"users", "allUsers", "userSearch"}, key = "#id")
     public void deleteUserAccount(String id) {
         if (!userAccountRepository.existsById(id)) {
             throw new RuntimeException("User account not found with id: " + id);
@@ -132,12 +160,14 @@ public class UserAccountServiceImpl implements UserAccountService {
     @Transactional
     @Caching(evict = {
         @CacheEvict(value = "users", key = "#id"),
-        @CacheEvict(value = "allUsers", allEntries = true)
+        @CacheEvict(value = "allUsers", allEntries = true),
+        @CacheEvict(value = "userSearch", allEntries = true)
     })
     public UserAccountResponse uploadAvatar(String id, MultipartFile file) {
         UserAccount userAccount = userAccountRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User account not found with id: " + id));
         String s3Key = s3Service.uploadFile(file, "avatars");
+        profileImageModerationService.assertSafeProfileImage(s3Key);
         String avatarUrl = s3Service.getFullUrl(s3Key);
         userAccount.setAvatarUrl(avatarUrl);
         UserAccount updated = userAccountRepository.saveAndFlush(userAccount);
@@ -158,12 +188,14 @@ public class UserAccountServiceImpl implements UserAccountService {
     @Transactional
     @Caching(evict = {
         @CacheEvict(value = "users", key = "#id"),
-        @CacheEvict(value = "allUsers", allEntries = true)
+        @CacheEvict(value = "allUsers", allEntries = true),
+        @CacheEvict(value = "userSearch", allEntries = true)
     })
     public UserAccountResponse uploadCover(String id, MultipartFile file) {
         UserAccount userAccount = userAccountRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User account not found with id: " + id));
         String s3Key = s3Service.uploadFile(file, "covers");
+        profileImageModerationService.assertSafeProfileImage(s3Key);
         String coverUrl = s3Service.getFullUrl(s3Key);
         userAccount.setCoverUrl(coverUrl);
         UserAccount updated = userAccountRepository.saveAndFlush(userAccount);
@@ -178,6 +210,14 @@ public class UserAccountServiceImpl implements UserAccountService {
                 .build());
 
         return userAccountMapper.toResponse(updated);
+    }
+
+    private String normalizeSearchQuery(String query) {
+        if (query == null) {
+            return null;
+        }
+        String trimmed = query.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }
 

@@ -5,6 +5,7 @@ const User = require("../models/User");
 const Relationship = require("../models/Relationship");
 const ConversationService = require("./conversationService");
 const messageCacheService = require("./messageCacheService");
+const chatSendCacheService = require("./chatSendCacheService");
 const {
   PutObjectCommand,
   GetObjectCommand,
@@ -14,13 +15,15 @@ const {
   HeadObjectCommand,
 } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
-const {
-  RekognitionClient,
-  DetectModerationLabelsCommand,
-} = require("@aws-sdk/client-rekognition");
 const { s3Client, bucketName } = require("../config/s3");
 const { publishMessageSentEvent } = require("./analyticsPublisher");
-const { publishMessageForReview } = require("./chatModerationPublisher");
+const {
+  publishMessageForReview,
+  publishMessageImageForReview,
+} = require("./chatModerationPublisher");
+const { publishNotification } = require("../events/notificationEvents");
+const accountStatusService = require("./accountStatusService");
+const { generateId } = require("../utils/snowflake");
 
 const fs = require("fs/promises");
 const path = require("path");
@@ -29,24 +32,186 @@ const { spawn } = require("child_process");
 const { pipeline } = require("stream/promises");
 const crypto = require("crypto");
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const findMessageForMutation = async ({ conversationId, msgId }) => {
+  const query = {
+    msg_id: msgId,
+    conversation_id: conversationId,
+  };
+
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const message = await Message.findOne(query);
+    if (message) return message;
+    await sleep(250);
+  }
+
+  return null;
+};
+
 const REVOKED_PLACEHOLDER = "Tin nhắn đã được thu hồi";
 const S3_CACHE_CONTROL = "public, max-age=31536000, immutable";
+const PUSH_NOTIFICATION_MESSAGE_TYPES = new Set([
+  "text",
+  "image",
+  "video",
+  "audio",
+  "file",
+  "link",
+  "poll",
+]);
 const S3_POLICY_SIGNAL_PATTERN =
   /(violation|moderation|unsafe|malware|virus|infected|blocked|denied|explicit.?deny|quarantine|sensitive|nsfw|adult|explicit)/i;
 const S3_POLICY_CLEAN_VALUE_PATTERN =
   /^(clean|ok|pass|passed|safe|allowed|false|0|no|none)$/i;
-const MODERATION_MIN_CONFIDENCE = Number(
-  process.env.REKOGNITION_MIN_CONFIDENCE || 65,
+const MEDIA_MESSAGE_TYPES = new Set(["image", "video", "file", "audio"]);
+const parsePositiveNumberEnv = (name, fallback) => {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+};
+const SEND_FAST_CACHE_TTL_MS = Math.max(
+  0,
+  parsePositiveNumberEnv("CHAT_SEND_FAST_CACHE_TTL_MS", 30000),
 );
-const MODERATION_FAIL_CLOSED =
-  String(process.env.MODERATION_FAIL_CLOSED || "false").toLowerCase() === "true";
-const rekognitionClient = new RekognitionClient({
-  region: process.env.AWS_REGION || "ap-southeast-1",
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  },
-});
+const SEND_FAST_CACHE_MAX_ENTRIES = Math.max(
+  100,
+  parsePositiveNumberEnv("CHAT_SEND_FAST_CACHE_MAX_ENTRIES", 5000),
+);
+const sendFastPathCache = new Map();
+const sendFastPathPendingLoads = new Map();
+
+const getSendCacheValue = (key) => {
+  if (!SEND_FAST_CACHE_TTL_MS) return undefined;
+
+  const entry = sendFastPathCache.get(key);
+  if (!entry) return undefined;
+
+  if (entry.expiresAt <= Date.now()) {
+    sendFastPathCache.delete(key);
+    return undefined;
+  }
+
+  return entry.value;
+};
+
+const setSendCacheValue = (key, value, ttlMs = SEND_FAST_CACHE_TTL_MS) => {
+  if (!ttlMs || value == null) return value;
+
+  while (sendFastPathCache.size >= SEND_FAST_CACHE_MAX_ENTRIES) {
+    const oldestKey = sendFastPathCache.keys().next().value;
+    if (!oldestKey) break;
+    sendFastPathCache.delete(oldestKey);
+  }
+
+  sendFastPathCache.set(key, {
+    value,
+    expiresAt: Date.now() + ttlMs,
+  });
+
+  return value;
+};
+
+const getOrLoadSendCacheValue = async (key, loader, ttlMs) => {
+  const cached = getSendCacheValue(key);
+  if (cached !== undefined) return cached;
+
+  const pending = sendFastPathPendingLoads.get(key);
+  if (pending) return pending;
+
+  const loadPromise = Promise.resolve()
+    .then(async () => {
+      const redisCached = await chatSendCacheService.getJson(key);
+      if (redisCached !== undefined) {
+        return redisCached;
+      }
+
+      const value = await loader();
+      if (value != null) {
+        await chatSendCacheService.setJson(
+          key,
+          value,
+          Math.ceil((ttlMs || SEND_FAST_CACHE_TTL_MS) / 1000),
+        );
+      }
+      return value;
+    })
+    .then((value) => setSendCacheValue(key, value, ttlMs))
+    .finally(() => {
+      sendFastPathPendingLoads.delete(key);
+    });
+
+  sendFastPathPendingLoads.set(key, loadPromise);
+  return loadPromise;
+};
+
+const runBestEffort = (label, task) => {
+  Promise.resolve()
+    .then(task)
+    .catch((error) => {
+      console.warn(
+        `[${label}] background task failed:`,
+        error?.message || error,
+      );
+    });
+};
+
+const getParticipantForSend = (conversationId, senderId) =>
+  getOrLoadSendCacheValue(
+    `participant:${conversationId}:${senderId}`,
+    () =>
+      Participant.findOne({
+        conversation_id: conversationId,
+        user_id: senderId,
+      })
+        .select("settings status deleted_msg_id")
+        .lean(),
+  );
+
+const getConversationForSend = (conversationId) =>
+  getOrLoadSendCacheValue(
+    `conversation:${conversationId}`,
+    () =>
+      Conversation.findById(conversationId)
+        .select(
+          "type name avatar member_count is_dissolved status blocked_user_ids",
+        )
+        .lean(),
+  );
+
+const getSenderForSend = (senderId) =>
+  getOrLoadSendCacheValue(
+    `sender:${senderId}`,
+    () => User.findOne({ user_id: senderId }).select("name avatar").lean(),
+    Math.max(SEND_FAST_CACHE_TTL_MS, 60000),
+  );
+
+const getOtherPrivateParticipantForSend = (conversationId, senderId) =>
+  getOrLoadSendCacheValue(
+    `private-other:${conversationId}:${senderId}`,
+    () =>
+      Participant.findOne({
+        conversation_id: conversationId,
+        user_id: { $ne: senderId },
+      })
+        .select("user_id")
+        .lean(),
+  );
+
+const getRelationshipForSend = (senderId, otherUserId) => {
+  const pairKey = [String(senderId), String(otherUserId)].sort().join(":");
+  return getOrLoadSendCacheValue(
+    `relationship:${pairKey}`,
+    () =>
+      Relationship.findOne({
+        $or: [
+          { requester_id: senderId, receiver_id: otherUserId },
+          { requester_id: otherUserId, receiver_id: senderId },
+        ],
+      })
+        .select("status requester_id")
+        .lean(),
+  );
+};
 
 const sanitizeS3FileName = (fileName) => {
   const baseName =
@@ -60,6 +225,215 @@ const sanitizeS3FileName = (fileName) => {
       .replace(/^_+|_+$/g, "") || "file";
 
   return baseName.slice(0, 160) || "file";
+};
+
+const hasPersistableMeta = (value) => {
+  if (value == null) return false;
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "object") {
+    if (Object.prototype.toString.call(value) !== "[object Object]") {
+      return true;
+    }
+    return Object.keys(value).length > 0;
+  }
+  return true;
+};
+
+const normalizePollOptionsForStorage = (pollOptions) => {
+  if (!Array.isArray(pollOptions)) return [];
+
+  return pollOptions
+    .map((option) => {
+      const normalizedOption = {
+        id: String(option?.id || "").trim(),
+        name: String(option?.name || "").trim(),
+      };
+
+      const voters = Array.isArray(option?.voters)
+        ? option.voters.filter(Boolean).map((voterId) => String(voterId))
+        : [];
+
+      if (voters.length > 0) {
+        normalizedOption.voters = voters;
+      }
+
+      return normalizedOption;
+    })
+    .filter((option) => option.id && option.name);
+};
+
+const buildMessageCreatePayload = ({
+  msgId,
+  conversationId,
+  senderId,
+  content,
+  type,
+  size,
+  replyToMsgId,
+  pollQuestion,
+  pollMultipleChoice,
+  pollOptions,
+  systemMeta,
+}) => {
+  const messageType = type || "text";
+  const payload = {
+    conversation_id: conversationId,
+    sender_id: senderId,
+    content,
+    type: messageType,
+  };
+
+  if (msgId) {
+    payload.msg_id = String(msgId);
+  }
+
+  if (replyToMsgId) {
+    payload.reply_to_msg_id = replyToMsgId;
+  }
+
+  const numericSize = Number(size);
+  if (
+    MEDIA_MESSAGE_TYPES.has(messageType) &&
+    Number.isFinite(numericSize) &&
+    numericSize > 0
+  ) {
+    payload.size = numericSize;
+  }
+
+  if (messageType === "poll") {
+    const normalizedQuestion = String(pollQuestion || "").trim();
+    if (normalizedQuestion) {
+      payload.poll_question = normalizedQuestion;
+    }
+
+    if (pollMultipleChoice === true) {
+      payload.poll_multiple_choice = true;
+    }
+
+    const normalizedOptions = normalizePollOptionsForStorage(pollOptions);
+    if (normalizedOptions.length > 0) {
+      payload.poll_options = normalizedOptions;
+    }
+  }
+
+  if (hasPersistableMeta(systemMeta)) {
+    payload.system_meta = systemMeta;
+  }
+
+  return payload;
+};
+
+const isParticipantNotificationEnabled = (participant) => {
+  const settings = participant?.settings || {};
+  const status = settings.notification_status || "on";
+
+  if (status === "off") return false;
+  if (status !== "mute") return true;
+
+  if (!settings.mute_until) return false;
+  const muteUntil = new Date(settings.mute_until).getTime();
+  return Number.isNaN(muteUntil) || muteUntil <= Date.now();
+};
+
+const resolvePublicMediaUrl = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw || /^data:image\//i.test(raw)) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (!bucketName) return "";
+
+  const region = process.env.AWS_REGION || "ap-southeast-1";
+  const key = raw
+    .replace(/^\/+/, "")
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+  return key ? `https://${bucketName}.s3.${region}.amazonaws.com/${key}` : "";
+};
+
+const getMessageNotificationPayload = ({ message, senderName, conversation }) => {
+  const senderLabel = senderName || "Ai đó";
+  const groupName = conversation?.type === "group" ? String(conversation?.name || "").trim() : "";
+  const content = Array.isArray(message.content)
+    ? message.content.filter(Boolean)
+    : [message.content].filter(Boolean);
+  const firstContent = String(content[0] || "");
+  const title = groupName ? `${senderLabel} trong ${groupName}` : senderLabel;
+
+  switch (message.type) {
+    case "image":
+      return {
+        title,
+        body: `Đã gửi ${content.length > 1 ? `${content.length} hình ảnh` : "một hình ảnh"}`,
+      };
+    case "video":
+      return { title, body: "Đã gửi một video" };
+    case "audio":
+      return { title, body: "Đã gửi một tin nhắn thoại" };
+    case "file":
+      return { title, body: "Đã gửi một tệp" };
+    case "poll":
+      return { title, body: "Đã tạo một cuộc bình chọn" };
+    default: {
+      const preview = firstContent.length > 90 ? `${firstContent.slice(0, 90)}...` : firstContent;
+      return {
+        title,
+        body: preview || "Tin nhắn mới",
+      };
+    }
+  }
+};
+
+const publishMessageNotificationsBestEffort = async ({
+  conversationId,
+  senderId,
+  message,
+  senderName,
+  conversation,
+}) => {
+  if (!PUSH_NOTIFICATION_MESSAGE_TYPES.has(String(message?.type || ""))) return;
+
+  try {
+    const recipients = await Participant.find({
+      conversation_id: conversationId,
+      user_id: { $ne: senderId },
+      status: "joined",
+      "settings.removed_from_group_at": null,
+    })
+      .select("user_id settings")
+      .lean();
+
+    const notificationPayload = getMessageNotificationPayload({
+      message,
+      senderName,
+      conversation,
+    });
+    const senderAvatarUrl = resolvePublicMediaUrl(message.sender_avatar);
+    const content = `${notificationPayload.title}: ${notificationPayload.body}`;
+
+    await Promise.allSettled(
+      recipients
+        .filter(isParticipantNotificationEnabled)
+        .map((recipient) =>
+          publishNotification({
+            recipientId: recipient.user_id,
+            senderId,
+            type: "CHAT_MESSAGE",
+            content,
+            title: notificationPayload.title,
+            body: notificationPayload.body,
+            imageUrl: senderAvatarUrl,
+            referenceId: String(conversationId),
+            pushOnly: true,
+          }),
+        ),
+    );
+  } catch (error) {
+    console.warn(
+      "[notification] publish chat message notification failed:",
+      error?.message || error,
+    );
+  }
 };
 
 const resolveS3ContentDisposition = (fileCategory, fileName) => {
@@ -136,65 +510,7 @@ const getS3MediaWarning = async (rawKey, index) => {
   }
 };
 
-const buildModerationWarning = ({
-  index,
-  key,
-  source,
-  reason,
-  confidence,
-  labels,
-}) => ({
-  index,
-  key,
-  source,
-  reason: String(reason || "moderation_required"),
-  ...(typeof confidence === "number" ? { confidence } : {}),
-  ...(Array.isArray(labels) ? { labels } : {}),
-});
-
-const getRekognitionMediaWarning = async (rawKey, index) => {
-  const key = extractS3ObjectKey(rawKey);
-  if (!key) return null;
-
-  try {
-    const result = await rekognitionClient.send(
-      new DetectModerationLabelsCommand({
-        Image: {
-          S3Object: {
-            Bucket: bucketName,
-            Name: key,
-          },
-        },
-        MinConfidence: MODERATION_MIN_CONFIDENCE,
-      }),
-    );
-
-    const labels = result.ModerationLabels || [];
-    if (!labels.length) return null;
-
-    const normalizedLabels = labels.map((label) => ({
-      name: label.Name,
-      parentName: label.ParentName,
-      confidence: label.Confidence,
-    }));
-
-    return buildModerationWarning({
-      index,
-      key,
-      source: "rekognition",
-      reason:
-        labels
-          .slice(0, 3)
-          .map((label) => label.Name)
-          .filter(Boolean)
-          .join(", ") || "moderation_label",
-      confidence: Math.max(
-        ...labels.map((label) => Number(label.Confidence || 0)),
-      ),
-      labels: normalizedLabels,
-    });
-  } catch (error) {
-    console.warn(
+/*
       "Không thể kiểm tra Rekognition moderation:",
       error?.message || error,
     );
@@ -210,6 +526,7 @@ const getRekognitionMediaWarning = async (rawKey, index) => {
   }
 };
 
+*/
 const buildMediaPolicyMeta = async (type, contentArray) => {
   if (!["image", "video"].includes(type)) return null;
 
@@ -218,10 +535,6 @@ const buildMediaPolicyMeta = async (type, contentArray) => {
       contentArray.map(async (key, index) => {
         const s3Warning = await getS3MediaWarning(key, index);
         if (s3Warning) return s3Warning;
-
-        if (type === "image") {
-          return getRekognitionMediaWarning(key, index);
-        }
 
         return null;
       }),
@@ -351,13 +664,81 @@ const copyS3Object = async (sourceKey) => {
   return newKey;
 };
 
-exports.getMessages = async (conversationId, { limit = 20, skip = 0 } = {}) => {
-  const messages = await Message.find({ conversation_id: conversationId })
+const normalizeMessageTypes = (types) => {
+  if (!types) return [];
+  const rawTypes = types instanceof Set ? Array.from(types) : types;
+  return (Array.isArray(rawTypes) ? rawTypes : [rawTypes])
+    .map((type) => String(type || "").trim())
+    .filter(Boolean);
+};
+
+const isMessageAfterDeletedMarker = (message, deletedMsgId = "0") => {
+  const marker = String(deletedMsgId || "0");
+  if (!marker || marker === "0") return true;
+
+  const messageId = String(message?.msg_id || "");
+  if (!messageId) return false;
+
+  try {
+    return BigInt(messageId) > BigInt(marker);
+  } catch {
+    return messageId > marker;
+  }
+};
+
+const getUserMessageVisibilityScope = async (conversationId, userId) => {
+  if (!userId) {
+    return { canRead: true, deletedMsgId: "0" };
+  }
+
+  const participant = await Participant.findOne({
+    conversation_id: conversationId,
+    user_id: userId,
+  })
+    .select("deleted_msg_id status")
+    .lean();
+
+  if (!participant || participant.status !== "joined") {
+    return { canRead: false, deletedMsgId: "0" };
+  }
+
+  return {
+    canRead: true,
+    deletedMsgId: String(participant.deleted_msg_id || "0"),
+  };
+};
+
+exports.getMessages = async (
+  conversationId,
+  { limit = 20, skip = 0, types, userId } = {},
+) => {
+  const messageTypes = normalizeMessageTypes(types);
+  const { canRead, deletedMsgId } = await getUserMessageVisibilityScope(
+    conversationId,
+    userId,
+  );
+
+  if (!canRead) return [];
+
+  const query = {
+    conversation_id: conversationId,
+    is_deleted: { $ne: true },
+    is_revoked: { $ne: true },
+    ...(userId ? { deleted_for: { $ne: userId } } : {}),
+    ...(deletedMsgId !== "0" ? { msg_id: { $gt: deletedMsgId } } : {}),
+    ...(messageTypes.length ? { type: { $in: messageTypes } } : {}),
+  };
+
+  const messages = await Message.find(query)
     .sort({ msg_id: -1 })
     .skip(skip)
     .limit(limit)
     .lean();
-  return messages;
+  return messages.filter(
+    (message) =>
+      !message.deleted_at &&
+      isMessageAfterDeletedMarker(message, deletedMsgId),
+  );
 };
 
 const maybeTranscodeVoiceKey = async (key) => {
@@ -552,7 +933,7 @@ exports.generatePresignedUrl = async (fileName, fileType) => {
   return { uploadUrl, fileCategory, key, fileUrl };
 };
 
-exports.sendMessage = async ({
+exports.prepareQueuedMessage = async ({
   conversationId,
   senderId,
   content,
@@ -563,7 +944,137 @@ exports.sendMessage = async ({
   pollMultipleChoice,
   pollOptions,
   systemMeta,
+  clientMessageId,
 }) => {
+  if (!conversationId || !senderId) {
+    throw new Error("Thiếu conversationId hoặc senderId");
+  }
+
+  const participant = await getParticipantForSend(conversationId, senderId);
+  if (!participant) {
+    throw new Error("Bạn không thuộc cuộc hội thoại này");
+  }
+
+  if (participant?.settings?.removed_from_group_at) {
+    throw new Error("Bạn đã bị đuổi khỏi nhóm");
+  }
+
+  if (participant?.settings?.group_dissolved_at) {
+    throw new Error("Nhóm đã được giải tán");
+  }
+
+  const conversation = await getConversationForSend(conversationId);
+  if (!conversation) {
+    throw new Error("Cuộc hội thoại không tồn tại");
+  }
+
+  if (conversation.is_dissolved || conversation.status === "dissolved") {
+    throw new Error("Nhóm đã được giải tán");
+  }
+
+  if (conversation.type === "private") {
+    const otherParticipant = await getOtherPrivateParticipantForSend(
+      conversationId,
+      senderId,
+    );
+
+    if (otherParticipant) {
+      const relationship = await getRelationshipForSend(
+        senderId,
+        otherParticipant.user_id,
+      );
+
+      if (relationship?.status === "BLOCKED") {
+        if (relationship.requester_id === senderId) {
+          throw new Error("Bạn đã chặn người này. Hãy bỏ chặn để tiếp tục trò chuyện.");
+        }
+        throw new Error("Bạn đã bị người này chặn.");
+      }
+    }
+  }
+
+  const contentArray = Array.isArray(content) ? content : [content];
+  const normalizedContent = [...contentArray];
+  const msgId = generateId();
+  const now = new Date();
+  const messageType = type || "text";
+  const numericSize = Number(size);
+
+  const command = {
+    msgId,
+    conversationId,
+    senderId,
+    content: normalizedContent,
+    type: messageType,
+    size,
+    replyToMsgId,
+    pollQuestion,
+    pollMultipleChoice,
+    pollOptions,
+    systemMeta,
+    clientMessageId,
+    queuedAt: now.toISOString(),
+  };
+
+  const acceptedMessage = {
+    _id: msgId,
+    msg_id: msgId,
+    conversation_id: conversationId,
+    sender_id: senderId,
+    content: normalizedContent,
+    type: messageType,
+    pending: true,
+    delivery_status: "queued",
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  if (clientMessageId) {
+    acceptedMessage.client_message_id = String(clientMessageId);
+  }
+
+  if (
+    MEDIA_MESSAGE_TYPES.has(messageType) &&
+    Number.isFinite(numericSize) &&
+    numericSize > 0
+  ) {
+    acceptedMessage.size = numericSize;
+  }
+
+  if (replyToMsgId) {
+    acceptedMessage.reply_to_msg_id = replyToMsgId;
+  }
+
+  if (messageType === "poll") {
+    acceptedMessage.poll_question = pollQuestion;
+    acceptedMessage.poll_multiple_choice = pollMultipleChoice === true;
+    acceptedMessage.poll_options = normalizePollOptionsForStorage(pollOptions);
+  }
+
+  return {
+    command,
+    acceptedMessage,
+  };
+};
+
+exports.sendMessage = async ({
+  msgId,
+  conversationId,
+  senderId,
+  content,
+  type,
+  size,
+  replyToMsgId,
+  pollQuestion,
+  pollMultipleChoice,
+  pollOptions,
+  systemMeta,
+  skipAccountStatusCheck = false,
+}) => {
+  if (!skipAccountStatusCheck) {
+    await accountStatusService.assertUserCanSendMessage(senderId);
+  }
+
   // Nếu content đã là array (image keys) thì dùng trực tiếp, không thì wrap
   const contentArray = Array.isArray(content) ? content : [content];
   const normalizedContent = [...contentArray];
@@ -574,7 +1085,8 @@ exports.sendMessage = async ({
     );
   }
 
-  const mediaPolicyMeta = await buildMediaPolicyMeta(type, normalizedContent);
+  const mediaPolicyMeta =
+    type === "image" ? null : await buildMediaPolicyMeta(type, normalizedContent);
 
   let replyMessage = null;
   let replySender = null;
@@ -593,30 +1105,28 @@ exports.sendMessage = async ({
       .lean();
   }
 
-  const participant = await Participant.findOne({
-    conversation_id: conversationId,
-    user_id: senderId,
-  }).lean();
+  const [participant, conversation, sender] = await Promise.all([
+    getParticipantForSend(conversationId, senderId),
+    getConversationForSend(conversationId),
+    getSenderForSend(senderId),
+  ]);
 
   if (!participant) {
     throw new Error("Bạn không thuộc cuộc hội thoại này");
   }
 
   // Check for blocking in private conversations
-  const conversation = await Conversation.findById(conversationId).lean();
   if (conversation && conversation.type === "private") {
-    const otherParticipant = await Participant.findOne({
-      conversation_id: conversationId,
-      user_id: { $ne: senderId },
-    }).lean();
+    const otherParticipant = await getOtherPrivateParticipantForSend(
+      conversationId,
+      senderId,
+    );
 
     if (otherParticipant) {
-      const relationship = await Relationship.findOne({
-        $or: [
-          { requester_id: senderId, receiver_id: otherParticipant.user_id },
-          { requester_id: otherParticipant.user_id, receiver_id: senderId },
-        ],
-      }).lean();
+      const relationship = await getRelationshipForSend(
+        senderId,
+        otherParticipant.user_id,
+      );
 
       if (relationship && relationship.status === "BLOCKED") {
         if (relationship.requester_id === senderId) {
@@ -636,18 +1146,21 @@ exports.sendMessage = async ({
     throw new Error("Nhóm đã được giải tán");
   }
 
-  const newMessage = new Message({
-    conversation_id: conversationId,
-    sender_id: senderId,
-    content: normalizedContent,
-    type: type,
-    size: size,
-    reply_to_msg_id: replyToMsgId || null,
-    poll_question: pollQuestion || null,
-    poll_multiple_choice: pollMultipleChoice || false,
-    poll_options: pollOptions || [],
-    system_meta: systemMeta !== undefined ? systemMeta : mediaPolicyMeta,
-  });
+  const newMessage = new Message(
+    buildMessageCreatePayload({
+      conversationId,
+      senderId,
+      msgId,
+      content: normalizedContent,
+      type,
+      size,
+      replyToMsgId,
+      pollQuestion,
+      pollMultipleChoice,
+      pollOptions,
+      systemMeta: systemMeta !== undefined ? systemMeta : mediaPolicyMeta,
+    }),
+  );
 
   const savedMessage = await newMessage.save();
 
@@ -660,38 +1173,55 @@ exports.sendMessage = async ({
     );
   }
 
+  if (type === "image") {
+    normalizedContent.forEach((objectKey, imageIndex) => {
+      publishMessageImageForReview({
+        messageId: savedMessage.msg_id,
+        senderId,
+        objectKey,
+        imageIndex,
+        conversationId,
+        bucketName,
+      });
+    });
+  }
+
+  const senderName = sender?.name || "";
+  const senderAvatar = sanitizeAvatarValue(sender?.avatar || "");
   const updatedConversation = await ConversationService.updateLastMessage(
     conversationId,
     savedMessage,
+    { senderName },
   );
 
-  try {
-    await publishMessageSentEvent({
+  runBestEffort("analytics", () =>
+    publishMessageSentEvent({
       messageId: savedMessage.msg_id,
       userId: senderId,
       messageType: type,
-    });
-  } catch (error) {
-    // Do not block chat delivery when analytics pipeline is unavailable
-    console.warn(
-      "[analytics] publish message.sent failed:",
-      error?.message || error,
-    );
-  }
+    }),
+  );
 
-  // Add message to Redis cache (last 20 messages)
-  const sender = await User.findOne({ user_id: senderId })
-    .select("name avatar")
-    .lean();
   const enrichedMessage = {
     ...savedMessage.toObject(),
     sender_name:
-      sender?.name || updatedConversation?.last_message?.sender_name || "",
-    sender_avatar: sanitizeAvatarValue(sender?.avatar || ""),
+      senderName || updatedConversation?.last_message?.sender_name || "",
+    sender_avatar: senderAvatar,
     reply_to: buildReplyPreview(replyMessage, replySender?.name || ""),
   };
 
-  await messageCacheService.addMessage(conversationId, enrichedMessage);
+  runBestEffort("message-cache", () =>
+    messageCacheService.addMessage(conversationId, enrichedMessage),
+  );
+  runBestEffort("notification", () =>
+    publishMessageNotificationsBestEffort({
+      conversationId,
+      senderId,
+      message: enrichedMessage,
+      senderName: enrichedMessage.sender_name,
+      conversation,
+    }),
+  );
 
   // Gửi kèm sender_name để FE cập nhật conversation list mà không cần query thêm
   return enrichedMessage;
@@ -868,9 +1398,9 @@ exports.getMessageHistory = async (
 };
 
 exports.revokeMessage = async ({ conversationId, msgId, userId }) => {
-  const message = await Message.findOne({
-    msg_id: msgId,
-    conversation_id: conversationId,
+  const message = await findMessageForMutation({
+    conversationId,
+    msgId,
   });
 
   if (!message || message.is_deleted) {
@@ -945,7 +1475,6 @@ exports.revokeMessage = async ({ conversationId, msgId, userId }) => {
       sender_id: userId,
       type: "system_unpin",
       content: [`${actorName} đã gỡ ghim một tin nhắn`],
-      size: 0,
     });
 
     const savedSystemMessage = await systemDoc.save();
@@ -1000,9 +1529,9 @@ exports.deleteMessage = async ({ conversationId, msgId, userId }) => {
     throw new Error("Bạn không thuộc cuộc hội thoại này");
   }
 
-  const message = await Message.findOne({
-    msg_id: msgId,
-    conversation_id: conversationId,
+  const message = await findMessageForMutation({
+    conversationId,
+    msgId,
   });
 
   if (!message || message.is_deleted) {
@@ -1089,6 +1618,9 @@ exports.reactToMessage = async ({
     .lean();
   const cachedMessage = {
     ...updatedMessage.toObject(),
+    reactions: Array.isArray(updatedMessage.reactions)
+      ? updatedMessage.reactions
+      : [],
     sender_name: sender?.name || updatedMessage.sender_name || "",
     sender_avatar: sanitizeAvatarValue(
       sender?.avatar || updatedMessage.sender_avatar || "",
@@ -1101,7 +1633,9 @@ exports.reactToMessage = async ({
     _id: updatedMessage._id,
     msg_id: updatedMessage.msg_id,
     conversation_id: updatedMessage.conversation_id,
-    reactions: updatedMessage.reactions,
+    reactions: Array.isArray(updatedMessage.reactions)
+      ? updatedMessage.reactions
+      : [],
     sender_name: cachedMessage.sender_name,
     sender_avatar: cachedMessage.sender_avatar,
   };
@@ -1157,7 +1691,6 @@ exports.pinMessage = async ({ conversationId, msgId, userId, isPinned }) => {
       sender_id: userId,
       type: systemType,
       content: systemContent,
-      size: 0,
     });
 
     const savedSystemMessage = await systemDoc.save();
@@ -1188,9 +1721,9 @@ exports.pinMessage = async ({ conversationId, msgId, userId, isPinned }) => {
     _id: updatedMessage._id,
     msg_id: updatedMessage.msg_id,
     conversation_id: updatedMessage.conversation_id,
-    is_pinned: updatedMessage.is_pinned,
-    pinned_at: updatedMessage.pinned_at,
-    pinned_by: updatedMessage.pinned_by,
+    is_pinned: Boolean(updatedMessage.is_pinned),
+    pinned_at: updatedMessage.pinned_at || null,
+    pinned_by: updatedMessage.pinned_by || null,
     type: updatedMessage.type,
     content: updatedMessage.content,
     sender_id: updatedMessage.sender_id,
@@ -1250,8 +1783,8 @@ exports.getMediaMessages = async (conversationId, limit = 20, skip = 0) => {
   const messages = await Message.find({
     conversation_id: conversationId,
     type: { $in: ["image", "video"] },
-    is_deleted: false,
-    is_revoked: false,
+    is_deleted: { $ne: true },
+    is_revoked: { $ne: true },
   })
     .sort({ createdAt: -1 })
     .skip(skip)
@@ -1281,8 +1814,8 @@ exports.getMediaGallery = async (conversationId, limit = 20, skip = 0) => {
     const messages = await Message.find({
       conversation_id: conversationId,
       type: { $in: ["image", "video"] },
-      is_deleted: false,
-      is_revoked: false,
+      is_deleted: { $ne: true },
+      is_revoked: { $ne: true },
     })
       .sort({ createdAt: -1 })
       .skip(messageSkip)
@@ -1395,8 +1928,8 @@ exports.getMediaAroundTarget = async (
   const baseQuery = {
     conversation_id: conversationId,
     type: { $in: ["image", "video"] },
-    is_deleted: false,
-    is_revoked: false,
+    is_deleted: { $ne: true },
+    is_revoked: { $ne: true },
   };
 
   const target = await Message.findOne({
@@ -1433,8 +1966,8 @@ exports.getFileMessages = async (conversationId, limit = 20, skip = 0) => {
   const messages = await Message.find({
     conversation_id: conversationId,
     type: "file",
-    is_deleted: false,
-    is_revoked: false,
+    is_deleted: { $ne: true },
+    is_revoked: { $ne: true },
   })
     .sort({ createdAt: -1 })
     .skip(skip)
@@ -1451,8 +1984,8 @@ exports.getLinkMessages = async (conversationId, limit = 20, skip = 0) => {
   const messages = await Message.find({
     conversation_id: conversationId,
     type: { $in: ["text", "link"] },
-    is_deleted: false,
-    is_revoked: false,
+    is_deleted: { $ne: true },
+    is_revoked: { $ne: true },
   }).sort({ createdAt: -1 });
 
   // Filter messages that contain links
@@ -1636,8 +2169,8 @@ exports.searchEverything = async ({
 
   const messageFilter = {
     conversation_id: { $in: conversationIds },
-    is_deleted: false,
-    is_revoked: false,
+    is_deleted: { $ne: true },
+    is_revoked: { $ne: true },
     deleted_for: { $ne: userId },
   };
 
@@ -1794,17 +2327,28 @@ exports.votePoll = async ({ conversationId, msgId, userId, optionIds }) => {
     throw new Error("Khảo sát đã bị xóa hoặc thu hồi");
   }
 
+  if (message.poll_locked) {
+    throw new Error("Khảo sát đã bị khóa");
+  }
+
   const voter = await User.findOne({ user_id: userId }).select("name").lean();
   const voterName = voter?.name || "Một thành viên";
+  const pollOptions = Array.isArray(message.poll_options)
+    ? message.poll_options
+    : [];
 
   // Check if they were already in any option
-  const wasVoted = message.poll_options.some((opt) =>
-    opt.voters.some((v) => String(v) === String(userId))
+  const wasVoted = pollOptions.some((opt) =>
+    (Array.isArray(opt.voters) ? opt.voters : []).some(
+      (v) => String(v) === String(userId),
+    ),
   );
 
   // Remove user from all options first
-  message.poll_options.forEach((opt) => {
-    opt.voters = opt.voters.filter((voterId) => String(voterId) !== String(userId));
+  pollOptions.forEach((opt) => {
+    opt.voters = (Array.isArray(opt.voters) ? opt.voters : []).filter(
+      (voterId) => String(voterId) !== String(userId),
+    );
   });
 
   // Then add user to selected options
@@ -1814,8 +2358,11 @@ exports.votePoll = async ({ conversationId, msgId, userId, optionIds }) => {
       throw new Error("Khảo sát này chỉ cho phép chọn 1 đáp án");
     }
 
-    message.poll_options.forEach((opt) => {
+    pollOptions.forEach((opt) => {
       if (optionIds.includes(String(opt.id))) {
+        if (!Array.isArray(opt.voters)) {
+          opt.voters = [];
+        }
         opt.voters.push(userId);
         selectedOptionNames.push(opt.name);
       }
@@ -1836,7 +2383,6 @@ exports.votePoll = async ({ conversationId, msgId, userId, optionIds }) => {
       sender_id: userId,
       type: "system_poll",
       content: [actionText],
-      size: 0,
     });
 
     const savedSystemMessage = await systemDoc.save();
@@ -1870,4 +2416,53 @@ exports.votePoll = async ({ conversationId, msgId, userId, optionIds }) => {
     ...cachedMessage,
     systemMessage,
   };
+};
+
+// Lock a poll so nobody can vote or change their vote anymore
+exports.lockPoll = async ({ conversationId, msgId, userId }) => {
+  const message = await Message.findOne({
+    msg_id: msgId,
+    conversation_id: conversationId,
+  });
+
+  if (!message) {
+    throw new Error("Tin nhắn không tồn tại");
+  }
+
+  if (message.type !== "poll") {
+    throw new Error("Tin nhắn không phải là khảo sát");
+  }
+
+  if (message.is_deleted || message.is_revoked) {
+    throw new Error("Khảo sát đã bị xóa hoặc thu hồi");
+  }
+
+  if (String(message.sender_id) !== String(userId)) {
+    throw new Error("Chỉ người tạo khảo sát mới có thể khóa bình chọn");
+  }
+
+  if (message.poll_locked) {
+    throw new Error("Khảo sát đã bị khóa");
+  }
+
+  message.poll_locked = true;
+  message.poll_locked_at = new Date();
+  message.poll_locked_by = userId;
+
+  const updatedMessage = await message.save();
+  const sender = await User.findOne({ user_id: updatedMessage.sender_id })
+    .select("name avatar")
+    .lean();
+
+  const cachedMessage = {
+    ...updatedMessage.toObject(),
+    sender_name: sender?.name || updatedMessage.sender_name || "",
+    sender_avatar: sanitizeAvatarValue(
+      sender?.avatar || updatedMessage.sender_avatar || "",
+    ),
+  };
+
+  await messageCacheService.updateMessage(conversationId, msgId, cachedMessage);
+
+  return cachedMessage;
 };

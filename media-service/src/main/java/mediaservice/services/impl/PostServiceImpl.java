@@ -42,11 +42,15 @@ import mediaservice.models.enums.RuleType;
 import mediaservice.models.enums.VisibilityType;
 import mediaservice.realtime.MediaRealtimePublisher;
 import mediaservice.realtime.MediaRealtimeUpdate;
+import mediaservice.realtime.PostActivityPublisher;
 import mediaservice.repositories.CommentRepository;
 import mediaservice.repositories.ContentAccessControlRepository;
+import mediaservice.repositories.ContentViewHistoryRepository;
 import mediaservice.repositories.MediaRepository;
 import mediaservice.repositories.PostRepository;
 import mediaservice.repositories.ReactionRepository;
+import mediaservice.repositories.RelationshipRepository;
+import mediaservice.repositories.SavedContentRepository;
 import mediaservice.repositories.UserAccountRepository;
 import mediaservice.services.AnalyticsEventPublisher;
 import mediaservice.services.MediaCompressionJobPublisher;
@@ -56,6 +60,10 @@ import mediaservice.services.PostService;
 import mediaservice.services.S3Service;
 import mediaservice.utils.MediaTempFileStore;
 import mediaservice.utils.MediaUrlBuilder;
+import mediaservice.utils.TextTagParser;
+import mediaservice.models.HashTag;
+import mediaservice.repositories.HashTagRepository;
+import mediaservice.realtime.NotificationPublisher;
 
 @Slf4j
 @Service
@@ -66,6 +74,7 @@ public class PostServiceImpl implements PostService {
     private final PostMapper postMapper;
     private final ReactionRepository reactionRepository;
     private final CommentRepository commentRepository;
+    private final RelationshipRepository relationshipRepository;
     private final UserAccountRepository userAccountRepository;
     private final MediaRepository mediaRepository;
     private final S3Service s3Service;
@@ -76,9 +85,14 @@ public class PostServiceImpl implements PostService {
     private final MediaDeleteJobPublisher mediaDeleteJobPublisher;
     private final MediaUploadJobPublisher mediaUploadJobPublisher;
     private final MediaRealtimePublisher mediaRealtimePublisher;
+    private final PostActivityPublisher postActivityPublisher;
+    private final ContentViewHistoryRepository contentViewHistoryRepository;
+    private final SavedContentRepository savedContentRepository;
+    private final HashTagRepository hashTagRepository;
 
     private final mediaservice.services.UserSyncService userSyncService;
     private final mediaservice.mappers.ContentAccessControlMapper contentAccessControlMapper;
+    private final NotificationPublisher notificationPublisher;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -91,12 +105,86 @@ public class PostServiceImpl implements PostService {
 
     /* ─── helper: fill totalReactions / totalComments from DB ─ */
     private PostResponse enrichCounts(PostResponse response, String postId) {
+        return enrichCounts(response, postId, null);
+    }
+
+    private PostResponse enrichCounts(PostResponse response, String postId, String viewerAccountId) {
+        if (response == null) return null;
         response.setTotalReactions(
                 (int) reactionRepository.countByTargetIdAndTargetType(postId, ReactionTargetType.POST));
         response.setTotalComments(
-                (int) commentRepository.countByContent_Id(postId));
-        // totalShares has no backing model yet → stays 0
+                (int) commentRepository.countByContent_IdAndIsDeletedFalse(postId));
+        response.setTotalShares(
+                (int) postRepository.countBySharedPost_Id(postId));
+        
+        if (response.getSharedPost() != null) {
+            Post originalPost = postRepository.findById(response.getSharedPost().getId()).orElse(null);
+            if (originalPost == null || originalPost.getStatus() == ContentStatusType.DELETED) {
+                response.setSharedPostDeleted(true);
+                response.setSharedPost(null);
+            } else if (!canUserViewPost(originalPost, viewerAccountId)) {
+                response.setSharedPostRestricted(true);
+                response.setSharedPost(null);
+            } else {
+                enrichCounts(response.getSharedPost(), originalPost.getId(), viewerAccountId);
+            }
+        }
         return response;
+    }
+
+    private boolean canUserViewPost(Post post, String viewerAccountId) {
+        if (post == null) return false;
+        if (post.getStatus() == ContentStatusType.DELETED) return false;
+
+        String authorId = post.getAccount() != null ? post.getAccount().getId() : null;
+        if (authorId == null) return false;
+
+        // If viewer is anonymous/null, only public posts are visible
+        if (viewerAccountId == null || viewerAccountId.isBlank()) {
+            return post.getVisibility() == VisibilityType.PUBLIC;
+        }
+
+        // 1. Check if user is blocked
+        boolean isBlocked = relationshipRepository.existsBlockBetween(authorId, viewerAccountId);
+        if (isBlocked) return false;
+
+        // 2. Author can always see their own posts
+        if (authorId.equals(viewerAccountId)) return true;
+
+        // 3. Check visibility rules
+        if (post.getVisibility() == VisibilityType.PUBLIC) {
+            return true;
+        }
+
+        if (post.getVisibility() == VisibilityType.PRIVATE) {
+            return authorId.equals(viewerAccountId);
+        }
+
+        if (post.getVisibility() == VisibilityType.FRIENDS) {
+            return relationshipRepository.isFriend(authorId, viewerAccountId);
+        }
+
+        if (post.getVisibility() == VisibilityType.CUSTOM) {
+            List<ContentAccessControl> controls = contentAccessControlRepository.findByContent(post);
+            if (controls == null || controls.isEmpty()) {
+                return false;
+            }
+
+            boolean hasIncludeRules = controls.stream().anyMatch(c -> c.getRuleType() == RuleType.INCLUDE);
+            if (hasIncludeRules) {
+                return controls.stream()
+                        .anyMatch(c -> c.getRuleType() == RuleType.INCLUDE && 
+                                       c.getAccount() != null && 
+                                       c.getAccount().getId().equals(viewerAccountId));
+            }
+
+            return controls.stream()
+                    .noneMatch(c -> c.getRuleType() == RuleType.EXCLUDE && 
+                                    c.getAccount() != null && 
+                                    c.getAccount().getId().equals(viewerAccountId));
+        }
+
+        return false;
     }
 
     @Override
@@ -111,8 +199,14 @@ public class PostServiceImpl implements PostService {
         }
         
         Post savedPost = postRepository.save(post);
+        // Process hashtags and @mentions in caption
+        processTagsAndMentions(savedPost);
         String userId = savedPost.getAccount() != null ? savedPost.getAccount().getId() : null;
-        analyticsEventPublisher.publishPostCreated(savedPost.getId(), userId);
+        publishPostCreatedAnalyticsAfterCommit(savedPost.getId(), userId);
+        publishAfterCommit(savedPost.getId(), "POST", "CREATE");
+        if (userId != null) {
+            publishNotificationToFriendsAfterCommit(userId, savedPost.getId(), "NEW_POST", "Vừa thêm bài viết mới");
+        }
         return enrichCounts(postMapper.toResponse(savedPost), savedPost.getId());
     }
 
@@ -204,10 +298,16 @@ public class PostServiceImpl implements PostService {
         entityManager.flush();
         entityManager.refresh(savedPost);
 
-        analyticsEventPublisher.publishPostCreated(savedPost.getId(), accountId);
+        publishPostCreatedAnalyticsAfterCommit(savedPost.getId(), accountId);
         if (!hasAsyncJobs) {
             publishAfterCommit(savedPost.getId(), "POST", "CREATE");
         }
+        if (accountId != null) {
+            publishNotificationToFriendsAfterCommit(accountId, savedPost.getId(), "NEW_POST", "Vừa thêm bài viết mới");
+        }
+
+        // Process hashtags and @mentions in caption (after media saved and refresh)
+        processTagsAndMentions(savedPost);
 
         return enrichCounts(postMapper.toResponse(savedPost), savedPost.getId());
     }
@@ -223,7 +323,14 @@ public class PostServiceImpl implements PostService {
 
     @Override
     @Transactional(readOnly = true)
-    @Cacheable(value = "allPosts", unless = "#result == null || #result.isEmpty()")
+    public PostResponse getPostById(String id, String viewerId) {
+        Post post = postRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Post not found with id: " + id));
+        return enrichCounts(postMapper.toResponse(post), post.getId(), viewerId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<PostResponse> getAllPosts() {
         return postRepository.findAll().stream()
                 .map(p -> enrichCounts(postMapper.toResponse(p), p.getId()))
@@ -253,7 +360,7 @@ public class PostServiceImpl implements PostService {
                         RuleType.EXCLUDE,
                         accountId,
                         pageable
-                ).map(p -> enrichCounts(postMapper.toResponse(p), p.getId()));
+                ).map(p -> enrichCounts(postMapper.toResponse(p), p.getId(), accountId));
     }
 
 
@@ -265,6 +372,11 @@ public class PostServiceImpl implements PostService {
                 .orElseThrow(() -> new RuntimeException("Post not found with id: " + id));
         postMapper.updateEntity(request, post);
         Post updatedPost = postRepository.save(post);
+        publishAfterCommit(updatedPost.getId(), "POST", "UPDATE");
+        String userId = updatedPost.getAccount() != null ? updatedPost.getAccount().getId() : null;
+        if (userId != null) {
+            publishNotificationToFriendsAfterCommit(userId, updatedPost.getId(), "UPDATE_POST", "Vừa cập nhật bài viết");
+        }
         return enrichCounts(postMapper.toResponse(updatedPost), updatedPost.getId());
     }
 
@@ -296,15 +408,15 @@ public class PostServiceImpl implements PostService {
             post.setStatus(ContentStatusType.ACTIVE);
         }
 
-        // Update access controls
-        List<ContentAccessControl> existingControls =
-                contentAccessControlRepository.findByContent(post);
-        if (existingControls != null && !existingControls.isEmpty()) {
-            contentAccessControlRepository.deleteAll(existingControls);
+        // Update access controls (mutate managed collection to keep orphanRemoval happy)
+        java.util.Set<ContentAccessControl> controls = post.getAccessControls();
+        if (controls == null) {
+            controls = new java.util.HashSet<>();
+            post.setAccessControls(controls);
         }
+        controls.clear();
 
         if (visibility == VisibilityType.CUSTOM && accessControls != null && !accessControls.isEmpty()) {
-            List<ContentAccessControl> controls = new java.util.ArrayList<>();
             for (AccessControlRequest req : accessControls) {
                 if (req == null || req.getAccountId() == null || req.getRuleType() == null) continue;
                 if (ownerId != null && req.getAccountId().equals(ownerId)) continue;
@@ -316,12 +428,6 @@ public class PostServiceImpl implements PostService {
                 control.setRuleType(req.getRuleType());
                 controls.add(control);
             }
-            if (!controls.isEmpty()) {
-                contentAccessControlRepository.saveAll(controls);
-                post.setAccessControls(new java.util.HashSet<>(controls));
-            }
-        } else {
-            post.setAccessControls(new java.util.HashSet<>());
         }
 
         // 3. Process Media items in the unified list (preserving order)
@@ -483,6 +589,10 @@ public class PostServiceImpl implements PostService {
         if (!hasUpdateAsyncJobs && !hasDeleteJobs) {
             publishAfterCommit(post.getId(), "POST", "UPDATE");
         }
+        String updateUserId = post.getAccount() != null ? post.getAccount().getId() : null;
+        if (updateUserId != null) {
+            publishNotificationToFriendsAfterCommit(updateUserId, post.getId(), "UPDATE_POST", "Vừa cập nhật bài viết");
+        }
 
         return enrichCounts(postMapper.toResponse(updatedPost), updatedPost.getId());
     }
@@ -547,7 +657,13 @@ public class PostServiceImpl implements PostService {
                 .orElseThrow(() -> new RuntimeException("Post not found with id: " + id));
 
         List<String> deleteKeys = collectPostMediaKeys(post);
-        postRepository.delete(post);
+
+        // Always soft delete so history/saved entries can still render the deleted state.
+        post.setStatus(ContentStatusType.DELETED);
+        if (post.getMedias() != null) {
+            post.getMedias().clear();
+        }
+        postRepository.save(post);
 
         if (deleteKeys.isEmpty()) {
             publishAfterCommit(post.getId(), "POST", "DELETE");
@@ -600,6 +716,84 @@ public class PostServiceImpl implements PostService {
         });
     }
 
+    private void publishPostCreatedAnalyticsAfterCommit(String postId, String userId) {
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            analyticsEventPublisher.publishPostCreated(postId, userId);
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                analyticsEventPublisher.publishPostCreated(postId, userId);
+            }
+        });
+    }
+
+    private void publishNotificationToFriendsAfterCommit(String authorId, String postId, String type, String message) {
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            notifyFriends(authorId, postId, type, message);
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                notifyFriends(authorId, postId, type, message);
+            }
+        });
+    }
+
+    private void notifyFriends(String authorId, String postId, String type, String message) {
+        if (authorId == null || postId == null) return;
+        List<mediaservice.models.Relationship> friends = relationshipRepository.findFriendsByUserId(authorId, RelationshipStatusType.ACCEPTED);
+        for (mediaservice.models.Relationship r : friends) {
+            if (r.getRequester() != null && r.getReceiver() != null) {
+                String friendId = r.getRequester().getId().equals(authorId) ? r.getReceiver().getId() : r.getRequester().getId();
+                notificationPublisher.publishNotification(friendId, authorId, type, message, postId);
+            }
+        }
+    }
+
+    private void processTagsAndMentions(Post post) {
+        if (post == null) return;
+        String caption = post.getCaption();
+        if (caption == null) caption = "";
+
+        // 1) Process hashtags
+        java.util.List<String> tags = TextTagParser.extractHashTags(caption);
+        if (tags != null && !tags.isEmpty()) {
+            java.util.Set<HashTag> tagEntities = post.getHashTags() != null ? new java.util.HashSet<>(post.getHashTags()) : new java.util.HashSet<>();
+            for (String t : tags) {
+                if (t == null || t.isBlank()) continue;
+                HashTag hashTag = hashTagRepository.findByName(t).orElseGet(() -> {
+                    HashTag h = new HashTag();
+                    h.setName(t);
+                    return hashTagRepository.save(h);
+                });
+                tagEntities.add(hashTag);
+            }
+            post.setHashTags(tagEntities);
+            postRepository.save(post);
+        }
+
+        // 2) Process mentions
+        java.util.List<String> mentions = TextTagParser.extractMentions(caption);
+        if (mentions != null && !mentions.isEmpty()) {
+            String senderId = post.getAccount() != null ? post.getAccount().getId() : null;
+            for (String uname : mentions) {
+                if (uname == null || uname.isBlank()) continue;
+                java.util.Optional<mediaservice.models.UserAccount> optAccount = userAccountRepository.findById(uname);
+                if (optAccount.isEmpty()) {
+                    optAccount = userAccountRepository.findByUsername(uname);
+                }
+                optAccount.ifPresent(target -> {
+                    notificationPublisher.publishNotification(target.getId(), senderId, "MENTION", "You were mentioned", post.getId());
+                });
+            }
+        }
+    }
+
     private void addKey(java.util.Collection<String> keys, String key) {
         if (key == null || key.isBlank()) {
             return;
@@ -647,5 +841,72 @@ public class PostServiceImpl implements PostService {
         return postRepository.findByAccount_Id(userId).stream()
                 .map(p -> enrichCounts(postMapper.toResponse(p), p.getId()))
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PostResponse> getPostsByUserId(String userId, String viewerId) {
+        return postRepository.findByAccount_Id(userId).stream()
+                .map(p -> enrichCounts(postMapper.toResponse(p), p.getId(), viewerId))
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<PostResponse> searchPosts(String query, String viewerId, Pageable pageable) {
+        boolean isHashtag = query != null && query.startsWith("#");
+        return postRepository.searchPostsWithAuthorized(
+                query,
+                isHashtag,
+                ContentStatusType.ACTIVE,
+                VisibilityType.PUBLIC,
+                VisibilityType.PRIVATE,
+                VisibilityType.FRIENDS,
+                RelationshipStatusType.ACCEPTED,
+                VisibilityType.CUSTOM,
+                RuleType.INCLUDE,
+                RuleType.EXCLUDE,
+                RelationshipStatusType.BLOCKED,
+                viewerId,
+                pageable
+        ).map(p -> enrichCounts(postMapper.toResponse(p), p.getId(), viewerId));
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = {"posts", "allPosts", "userPosts"}, allEntries = true)
+    public PostResponse sharePost(String postId, String accountId, String caption, VisibilityType visibility) {
+        Post originalPost = postRepository.findById(postId)
+                .orElseThrow(() -> new RuntimeException("Original post not found with id: " + postId));
+
+        // If sharing a shared post, always point to the root/original post.
+        Post rootPost = originalPost;
+        while (rootPost.getSharedPost() != null) {
+            rootPost = rootPost.getSharedPost();
+        }
+
+        UserAccount account = ensureUserSynced(accountId);
+        if (account == null) {
+            throw new RuntimeException("User not found or sync failed for id: " + accountId);
+        }
+
+        Post share = new Post();
+        share.setAccount(account);
+        share.setCaption(caption);
+        share.setVisibility(visibility != null ? visibility : VisibilityType.PUBLIC);
+        share.setStatus(ContentStatusType.ACTIVE);
+        share.setSharedPost(rootPost);
+
+        Post savedShare = postRepository.save(share);
+
+        // Publish events for realtime socket updates:
+        // 1. For the new share post
+        publishAfterCommit(savedShare.getId(), "POST", "CREATE");
+
+        // 2. For the original post (to broadcast that its share count has updated)
+        postActivityPublisher.publish(rootPost.getId(), "SHARE", "CREATE", 
+            java.util.Map.of("shares", postRepository.countBySharedPost_Id(rootPost.getId())));
+
+        return enrichCounts(postMapper.toResponse(savedShare), savedShare.getId());
     }
 }

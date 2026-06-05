@@ -9,6 +9,20 @@ RUNTIME_ENV_FILE="$APP_DIR/.env"
 IMAGES_FILE="$APP_DIR/.env.images"
 AWS_REGION="${AWS_REGION:-ap-southeast-1}"
 LOCK_FILE="/tmp/ott-deploy.lock"
+DOCKER_IMAGE_PRUNE_UNTIL="${DOCKER_IMAGE_PRUNE_UNTIL:-72h}"
+DOCKER_BUILDER_PRUNE_UNTIL="${DOCKER_BUILDER_PRUNE_UNTIL:-72h}"
+DOCKER_LOG_TRUNCATE_OVER="${DOCKER_LOG_TRUNCATE_OVER:-200M}"
+
+declare -A IMAGE_REPOS=(
+  [API_GATEWAY_IMAGE]=ott-api-gateway
+  [AUTH_SERVICE_IMAGE]=ott-auth-service
+  [USER_SERVICE_IMAGE]=ott-user-service
+  [NOTIFICATION_SERVICE_IMAGE]=ott-notification-service
+  [MEDIA_SERVICE_IMAGE]=ott-media-service
+  [CHAT_SERVICE_IMAGE]=ott-chat-service
+  [ANALYTIC_SERVICE_IMAGE]=ott-analytic-service
+  [MODERATION_SERVICE_IMAGE]=ott-moderation-service
+)
 
 case "$SERVICE" in
   api-gateway) IMAGE_KEY="API_GATEWAY_IMAGE" ;;
@@ -18,6 +32,7 @@ case "$SERVICE" in
   media-service) IMAGE_KEY="MEDIA_SERVICE_IMAGE" ;;
   chat-service) IMAGE_KEY="CHAT_SERVICE_IMAGE" ;;
   analytic-service) IMAGE_KEY="ANALYTIC_SERVICE_IMAGE" ;;
+  moderation-service) IMAGE_KEY="MODERATION_SERVICE_IMAGE" ;;
   *)
     echo "Unknown service: $SERVICE" >&2
     exit 1
@@ -42,6 +57,13 @@ touch "$IMAGES_FILE"
   cd "$APP_DIR"
 
   PREVIOUS_IMAGE="$(grep -E "^${IMAGE_KEY}=" "$IMAGES_FILE" | cut -d= -f2- || true)"
+  ECR_REGISTRY="${IMAGE_URI%%/*}"
+
+  for key in "${!IMAGE_REPOS[@]}"; do
+    if ! grep -q "^${key}=" "$IMAGES_FILE"; then
+      echo "${key}=${ECR_REGISTRY}/${IMAGE_REPOS[$key]}:latest" >> "$IMAGES_FILE"
+    fi
+  done
 
   if grep -q "^${IMAGE_KEY}=" "$IMAGES_FILE"; then
     sed -i "s|^${IMAGE_KEY}=.*|${IMAGE_KEY}=${IMAGE_URI}|" "$IMAGES_FILE"
@@ -49,7 +71,6 @@ touch "$IMAGES_FILE"
     echo "${IMAGE_KEY}=${IMAGE_URI}" >> "$IMAGES_FILE"
   fi
 
-  ECR_REGISTRY="${IMAGE_URI%%/*}"
   aws ecr get-login-password --region "$AWS_REGION" \
     | docker login --username AWS --password-stdin "$ECR_REGISTRY"
 
@@ -58,13 +79,17 @@ touch "$IMAGES_FILE"
       echo "Ensuring shared dependencies are running: redis rabbitmq"
       docker compose --env-file "$RUNTIME_ENV_FILE" --env-file "$IMAGES_FILE" -f "$COMPOSE_FILE" up -d redis rabbitmq
       ;;
+    moderation-service)
+      echo "Ensuring shared dependency is running: rabbitmq"
+      docker compose --env-file "$RUNTIME_ENV_FILE" --env-file "$IMAGES_FILE" -f "$COMPOSE_FILE" up -d rabbitmq
+      ;;
     auth-service)
       echo "Ensuring shared dependency is running: rabbitmq"
       docker compose --env-file "$RUNTIME_ENV_FILE" --env-file "$IMAGES_FILE" -f "$COMPOSE_FILE" up -d rabbitmq
       ;;
     analytic-service)
-      echo "Ensuring shared dependencies are running: analytic-postgres rabbitmq"
-      docker compose --env-file "$RUNTIME_ENV_FILE" --env-file "$IMAGES_FILE" -f "$COMPOSE_FILE" up -d analytic-postgres rabbitmq
+      echo "Ensuring shared dependency is running: rabbitmq"
+      docker compose --env-file "$RUNTIME_ENV_FILE" --env-file "$IMAGES_FILE" -f "$COMPOSE_FILE" up -d rabbitmq
       ;;
   esac
 
@@ -82,6 +107,27 @@ touch "$IMAGES_FILE"
     exit 1
   fi
 
-  docker image prune -f
-  docker compose --env-file "$RUNTIME_ENV_FILE" --env-file "$IMAGES_FILE" -f "$COMPOSE_FILE" ps "$SERVICE"
+  echo "Disk usage before Docker cleanup:"
+  df -h / || true
+  docker system df || true
+
+  echo "Pruning unused Docker images and build cache older than ${DOCKER_IMAGE_PRUNE_UNTIL}. Volumes are kept."
+  docker image prune -af --filter "until=${DOCKER_IMAGE_PRUNE_UNTIL}" || true
+  docker builder prune -af --filter "until=${DOCKER_BUILDER_PRUNE_UNTIL}" || true
+  docker container prune -f --filter "until=24h" || true
+  if [[ -d /var/lib/docker/containers ]]; then
+    find /var/lib/docker/containers -type f -name "*-json.log" -size +"${DOCKER_LOG_TRUNCATE_OVER}" -exec truncate -s 0 {} \; || true
+  fi
+
+  if command -v journalctl >/dev/null 2>&1; then
+    journalctl --vacuum-time=7d || true
+  fi
+
+  echo "Disk usage after Docker cleanup:"
+  df -h / || true
+  docker system df || true
+
+  docker ps \
+    --filter "label=com.docker.compose.service=${SERVICE}" \
+    --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
 ) 200>"$LOCK_FILE"

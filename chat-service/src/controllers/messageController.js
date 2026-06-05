@@ -1,6 +1,33 @@
 const MessageService = require("../services/messageService");
 const ParticipantService = require("../services/participantService");
+const messageRepository = require("../repositories/messageRepository");
 const { publishMessageCreated } = require("../events/chatEvents");
+const { publishMessageCommand } = require("../events/chatCommandEvents");
+
+const ASYNC_SEND_ENABLED =
+  String(process.env.CHAT_ASYNC_SEND_ENABLED || "true").toLowerCase() !==
+  "false";
+const ASYNC_SEND_RESPONSE_STATUS = Number(
+  process.env.CHAT_ASYNC_SEND_RESPONSE_STATUS || 202,
+);
+const getAsyncSendResponseStatus = () =>
+  Number.isInteger(ASYNC_SEND_RESPONSE_STATUS) &&
+  ASYNC_SEND_RESPONSE_STATUS >= 200 &&
+  ASYNC_SEND_RESPONSE_STATUS < 300
+    ? ASYNC_SEND_RESPONSE_STATUS
+    : 202;
+const accountStatusService = require("../services/accountStatusService");
+
+const runControllerBestEffort = (label, task) => {
+  Promise.resolve()
+    .then(task)
+    .catch((error) => {
+      console.warn(
+        `[${label}] background task failed:`,
+        error?.message || error,
+      );
+    });
+};
 
 const emitMessageToParticipants = async (io, conversationId, message) => {
   if (!io || !conversationId || !message) return;
@@ -60,7 +87,28 @@ exports.sendMessage = async (req, res) => {
       pollQuestion,
       pollMultipleChoice,
       pollOptions,
+      clientMessageId,
     } = req.body;
+
+    if (ASYNC_SEND_ENABLED) {
+      const { command, acceptedMessage } =
+        await MessageService.prepareQueuedMessage({
+          conversationId,
+          senderId,
+          content,
+          type,
+          size,
+          replyToMsgId,
+          pollQuestion,
+          pollMultipleChoice,
+          pollOptions,
+          clientMessageId,
+        });
+
+      await publishMessageCommand(command);
+
+      return res.status(getAsyncSendResponseStatus()).json(acceptedMessage);
+    }
 
     const savedMessage = await MessageService.sendMessage({
       conversationId,
@@ -74,22 +122,24 @@ exports.sendMessage = async (req, res) => {
       pollOptions,
     });
 
-    await publishMessageCreatedBestEffort(req, {
-      conversationId,
-      msgId: savedMessage.msg_id,
-      senderId,
-      createdAt: savedMessage.createdAt || new Date().toISOString(),
-    }, savedMessage);
+    runControllerBestEffort("chat-events", () =>
+      publishMessageCreatedBestEffort(req, {
+        conversationId,
+        msgId: savedMessage.msg_id,
+        senderId,
+        createdAt: savedMessage.createdAt || new Date().toISOString(),
+      }, savedMessage),
+    );
 
     // Nếu là poll, tự động tạo thêm 1 tin system thông báo
     if (type === "poll" && pollQuestion) {
-      try {
+      runControllerBestEffort("poll-system-message", async () => {
         const sysMsg = await MessageService.sendMessage({
           conversationId,
           senderId,
           content: `${savedMessage.sender_name} đã tạo cuộc bình chọn: ${pollQuestion}`,
           type: "system_poll",
-          size: 0,
+          skipAccountStatusCheck: true,
         });
         await publishMessageCreatedBestEffort(req, {
           conversationId,
@@ -97,15 +147,19 @@ exports.sendMessage = async (req, res) => {
           senderId,
           createdAt: sysMsg.createdAt || new Date().toISOString(),
         }, sysMsg);
-      } catch (sysErr) {
-        console.warn("Không thể tạo thông báo poll:", sysErr.message);
-      }
+      });
     }
 
     res.status(201).json(savedMessage);
   } catch (error) {
     if (error.message === "Tin nhắn trả lời không hợp lệ") {
       return res.status(400).json({ error: error.message });
+    }
+    if (accountStatusService.isAccountRestrictionError(error)) {
+      return res.status(error.statusCode || 403).json({
+        error: error.message,
+        code: error.code,
+      });
     }
     res.status(500).json({ error: error.message });
   }
@@ -138,6 +192,40 @@ exports.votePoll = async (req, res) => {
       error.message === "Tin nhắn không tồn tại" ||
       error.message === "Tin nhắn không phải là khảo sát" ||
       error.message === "Khảo sát này chỉ cho phép chọn 1 đáp án" ||
+      error.message === "Khảo sát đã bị khóa" ||
+      error.message === "Khảo sát đã bị xóa hoặc thu hồi"
+    ) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.lockPoll = async (req, res) => {
+  try {
+    const { msgId } = req.params;
+    const { conversationId, userId } = req.body;
+
+    const result = await MessageService.lockPoll({
+      conversationId,
+      msgId,
+      userId,
+    });
+
+    const participants =
+      await ParticipantService.getParticipants(conversationId);
+    participants.forEach((p) => {
+      req.io.to(`user:${p.user_id}`).emit("tin_nhan_cap_nhat", result);
+    });
+
+    res.status(200).json(result);
+  } catch (error) {
+    if (
+      error.message === "Tin nhắn không tồn tại" ||
+      error.message === "Tin nhắn không phải là khảo sát" ||
+      error.message === "Chỉ người tạo khảo sát mới có thể khóa bình chọn" ||
+      error.message === "Khảo sát đã bị khóa" ||
       error.message === "Khảo sát đã bị xóa hoặc thu hồi"
     ) {
       return res.status(400).json({ error: error.message });
@@ -191,7 +279,12 @@ exports.forwardMessage = async (req, res) => {
 exports.getMessages = async (req, res) => {
   try {
     const { conversationId } = req.params;
-    const { userId } = req.query;
+    const { userId, limit } = req.query;
+    const parsedLimit = Number.parseInt(limit, 10);
+    const safeLimit =
+      Number.isFinite(parsedLimit) && parsedLimit > 0
+        ? Math.min(parsedLimit, 50)
+        : 20;
 
     let deletedMsgId = "0";
     if (userId) {
@@ -199,15 +292,19 @@ exports.getMessages = async (req, res) => {
         conversationId,
         userId,
       );
-      if (participant) {
-        deletedMsgId = participant.deleted_msg_id || "0";
+
+      if (!participant || participant.status !== "joined") {
+        return res.status(200).json([]);
       }
+
+      deletedMsgId = participant.deleted_msg_id || "0";
     }
 
-    const messages = await MessageService.getMessageHistory(
+    const messages = await messageRepository.getConversationMessages(
       conversationId,
-      deletedMsgId,
+      safeLimit,
       userId,
+      { deletedMsgId },
     );
 
     res.status(200).json(messages);

@@ -98,7 +98,7 @@ Vi sao chon cach nay:
 | `chat-service` | `chat-service` | 5000 | `ott-chat-service` | Node 20, Socket.IO, AI, MongoDB |
 | `analytic-service` | `analytic-service` | 8092 | `ott-analytic-service` | Java 21 |
 | `redis` | Docker image public | 6379 | Khong can ECR | Chi noi bo Docker network |
-| `rabbitmq` | Docker image public | 5672/15672 | Khong can ECR | Khong mo public |
+| `rabbitmq` | Docker image public | 5672/15672 | Khong can ECR | 5672 chi noi bo; 15672 chi mo tam thoi va gioi han IP neu can xem UI |
 | `analytic-postgres` | Docker image public | 5432 | Khong can ECR | Chi cho analytics, can backup volume |
 
 Trong code hien tai, `auth`, `user`, `notification`, `media` dang dung DB URL qua bien moi truong. `chat-service` dung `MONGO_URI`. Nghia la EC2 khong nhat thiet phai chay tat ca database, tru `analytic-postgres` trong compose hien tai.
@@ -166,7 +166,28 @@ Neu bat buoc dung instance Free Tier nho:
 
 ### 4.4 EBS
 
-Dung volume `gp3` 30GB de bat dau. 30GB EBS thuong vua du cho OS, Docker images, logs va volumes nho. Neu upload file local vao EC2 thi khong du; nen dung S3 cho media.
+Dung volume `gp3` 60GB de bat dau cho stack hien tai. 30GB chi du luc moi deploy, nhung neu CI/CD push nhieu tag Docker thi `/var/lib/docker` se phinh rat nhanh. Media van nen nam tren S3, khong luu file upload truc tiep tren EC2.
+
+Sau khi modify EBS tren AWS Console, Ubuntu chua tu mo rong filesystem ngay. Chay:
+
+```bash
+cd ~/ott-backend
+sudo bash deploy/aws/grow-root-volume-ubuntu.sh
+```
+
+Neu repo tren EC2 la repo cha `ott-project`, chay trong thu muc `ott-backend` ben trong:
+
+```bash
+cd ~/ott-backend/ott-backend
+sudo bash deploy/aws/grow-root-volume-ubuntu.sh
+```
+
+Neu OS chua nhan size moi, chay:
+
+```bash
+sudo partprobe /dev/nvme0n1 || true
+sudo reboot
+```
 
 ### 4.5 Security Group
 
@@ -178,13 +199,14 @@ Inbound:
 | 443 | `0.0.0.0/0`, `::/0` | HTTPS public |
 | 22 | IP nha ban/khong mo | Chi can neu dung SSH; neu dung SSM thi khong can |
 | 8080 | IP cua ban tam thoi | Chi mo khi test gateway truc tiep, sau do dong |
+| 15672 | IP nha ban/32 tam thoi | RabbitMQ Management UI neu can vao `http://EC2_IP:15672` |
 
 Khong mo public:
 
 - `5432` Postgres.
 - `6379` Redis.
 - `5672` RabbitMQ.
-- `15672` RabbitMQ management.
+- `15672` RabbitMQ management cho `0.0.0.0/0`. Neu can dung truc tiep, chi mo Source la IP nha ban `/32`.
 - `5000` chat-service.
 - `8090`, `8091`, `8092` neu da proxy qua gateway/Nginx.
 
@@ -560,6 +582,7 @@ NOTIFICATION_SERVICE_IMAGE=<aws-account-id>.dkr.ecr.ap-southeast-1.amazonaws.com
 MEDIA_SERVICE_IMAGE=<aws-account-id>.dkr.ecr.ap-southeast-1.amazonaws.com/ott-media-service:latest
 CHAT_SERVICE_IMAGE=<aws-account-id>.dkr.ecr.ap-southeast-1.amazonaws.com/ott-chat-service:latest
 ANALYTIC_SERVICE_IMAGE=<aws-account-id>.dkr.ecr.ap-southeast-1.amazonaws.com/ott-analytic-service:latest
+MODERATION_SERVICE_IMAGE=<aws-account-id>.dkr.ecr.ap-southeast-1.amazonaws.com/ott-moderation-service:latest
 ```
 
 ---
@@ -612,6 +635,8 @@ services:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    ports:
+      - "${RABBITMQ_MANAGEMENT_BIND:-127.0.0.1}:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
       interval: 10s
@@ -886,6 +911,29 @@ EXPO_PUBLIC_WEB_URL=https://app.example.com
 
 Voi web hien tai, `SOCKET_CHAT_SERVER_URL` duoc tinh tu `VITE_API_URL.replace("/riff/api", "")`, nen neu dat `VITE_API_URL=https://api.example.com/riff/api` thi chat socket se di vao `https://api.example.com/socket.io`, dung voi route gateway hien co.
 
+Neu deploy web len Vercel khi backend chua co HTTPS/domain rieng, dung proxy same-origin trong `ott-frontend-web/vercel.json`:
+
+```properties
+VITE_API_URL=/riff/api
+VITE_FRONTEND_URL=https://your-vercel-project.vercel.app
+VITE_LIVEKIT_URL=wss://chat-service-wplw6oap.livekit.cloud
+```
+
+Gateway/chat-service can cho phep origin local va Vercel:
+
+```properties
+FRONTEND_URL=http://localhost:5173
+FRONTEND_URL_ALT=http://127.0.0.1:5173
+FRONTEND_URL_DEPLOYED=https://*.vercel.app
+CHAT_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,https://*.vercel.app
+```
+
+Khi da co domain HTTPS that cho backend, nen doi web ve cau hinh truc tiep:
+
+```properties
+VITE_API_URL=https://api.example.com/riff/api
+```
+
 ---
 
 ## 11. Tao script deploy tung service tren EC2
@@ -1088,12 +1136,17 @@ jobs:
               - "docker-compose.yml"
               - ".dockerignore"
               - ".github/workflows/backend-ci-cd.yml"
+            moderation-service:
+              - "moderation-service/**"
+              - "docker-compose.yml"
+              - ".dockerignore"
+              - ".github/workflows/backend-ci-cd.yml"
 
       - id: matrix
         shell: bash
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.force_all }}" == "true" ]]; then
-            echo 'services=["api-gateway","auth-service","user-service","notification-service","media-service","chat-service","analytic-service"]' >> "$GITHUB_OUTPUT"
+            echo 'services=["api-gateway","auth-service","user-service","notification-service","media-service","chat-service","analytic-service","moderation-service"]' >> "$GITHUB_OUTPUT"
           else
             echo 'services=${{ steps.filter.outputs.changes }}' >> "$GITHUB_OUTPUT"
           fi
@@ -1388,6 +1441,8 @@ Trong repo nay da co san cac file de trien khai:
 .github/workflows/backend-ci-cd.yml
 deploy/docker-compose.prod.yml
 deploy/deploy-service.sh
+deploy/aws/configure-ec2-disk-guardrails.sh
+deploy/aws/grow-root-volume-ubuntu.sh
 deploy/all-variables.env.example
 deploy/env.example
 deploy/env.images.example
@@ -1413,7 +1468,10 @@ Sau khi launch EC2, copy cac file production len may:
 sudo mkdir -p /opt/ott
 sudo cp deploy/docker-compose.prod.yml /opt/ott/docker-compose.prod.yml
 sudo cp deploy/deploy-service.sh /opt/ott/deploy-service.sh
+sudo cp deploy/aws/configure-ec2-disk-guardrails.sh /opt/ott/configure-ec2-disk-guardrails.sh
+sudo cp deploy/aws/grow-root-volume-ubuntu.sh /opt/ott/grow-root-volume-ubuntu.sh
 sudo chmod +x /opt/ott/deploy-service.sh
+sudo chmod +x /opt/ott/configure-ec2-disk-guardrails.sh /opt/ott/grow-root-volume-ubuntu.sh
 sudo cp deploy/env.example /opt/ott/.env
 sudo cp deploy/env.images.example /opt/ott/.env.images
 sudo nano /opt/ott/.env
@@ -1807,6 +1865,7 @@ NOTIFICATION_SERVICE_IMAGE=642058032746.dkr.ecr.ap-southeast-1.amazonaws.com/ott
 MEDIA_SERVICE_IMAGE=642058032746.dkr.ecr.ap-southeast-1.amazonaws.com/ott-media-service:latest
 CHAT_SERVICE_IMAGE=642058032746.dkr.ecr.ap-southeast-1.amazonaws.com/ott-chat-service:latest
 ANALYTIC_SERVICE_IMAGE=642058032746.dkr.ecr.ap-southeast-1.amazonaws.com/ott-analytic-service:latest
+MODERATION_SERVICE_IMAGE=642058032746.dkr.ecr.ap-southeast-1.amazonaws.com/ott-moderation-service:latest
 ```
 
 Sau workflow deploy lan dau, file nay se tu dong duoc update sang tag commit SHA cua tung service.
@@ -1973,13 +2032,15 @@ Luu y: 5 dong tren la **GitHub Variables**, khong phai file `.env` trong source 
 
 Buoc nay chi lam sau khi Docker da cai xong va ECR/GitHub role da tao xong.
 
-Can dua 4 file production vao `/opt/ott`:
+Can dua cac file production vao `/opt/ott`:
 
 ```text
-deploy/docker-compose.prod.yml -> /opt/ott/docker-compose.prod.yml
-deploy/deploy-service.sh       -> /opt/ott/deploy-service.sh
-deploy/env.example             -> /opt/ott/.env
-deploy/env.images.example      -> /opt/ott/.env.images
+deploy/docker-compose.prod.yml              -> /opt/ott/docker-compose.prod.yml
+deploy/deploy-service.sh                    -> /opt/ott/deploy-service.sh
+deploy/aws/configure-ec2-disk-guardrails.sh -> /opt/ott/configure-ec2-disk-guardrails.sh
+deploy/aws/grow-root-volume-ubuntu.sh       -> /opt/ott/grow-root-volume-ubuntu.sh
+deploy/env.example                          -> /opt/ott/.env
+deploy/env.images.example                   -> /opt/ott/.env.images
 ```
 
 Neu da co file local da dien san secret tu `.env`:
@@ -2042,6 +2103,8 @@ Sau khi clone xong, copy 4 file:
 cd ~/ott-backend
 cp deploy/docker-compose.prod.yml /opt/ott/docker-compose.prod.yml
 cp deploy/deploy-service.sh /opt/ott/deploy-service.sh
+cp deploy/aws/configure-ec2-disk-guardrails.sh /opt/ott/configure-ec2-disk-guardrails.sh
+cp deploy/aws/grow-root-volume-ubuntu.sh /opt/ott/grow-root-volume-ubuntu.sh
 cp deploy/env.ec2.local /opt/ott/.env
 cp deploy/env.images.local /opt/ott/.env.images
 ```
@@ -2052,6 +2115,8 @@ Neu GitHub repo cua ban la repo cha `ott-project` va `ott-backend` nam ben trong
 cd ~/ott-backend/ott-backend
 cp deploy/docker-compose.prod.yml /opt/ott/docker-compose.prod.yml
 cp deploy/deploy-service.sh /opt/ott/deploy-service.sh
+cp deploy/aws/configure-ec2-disk-guardrails.sh /opt/ott/configure-ec2-disk-guardrails.sh
+cp deploy/aws/grow-root-volume-ubuntu.sh /opt/ott/grow-root-volume-ubuntu.sh
 cp deploy/env.ec2.local /opt/ott/.env
 cp deploy/env.images.local /opt/ott/.env.images
 ```
@@ -2069,6 +2134,8 @@ Chi dung cach nay neu ban co key pair va SSH vao duoc EC2:
 ```bash
 scp -i your-key.pem deploy/docker-compose.prod.yml ubuntu@<EC2_PUBLIC_IP>:/opt/ott/docker-compose.prod.yml
 scp -i your-key.pem deploy/deploy-service.sh ubuntu@<EC2_PUBLIC_IP>:/opt/ott/deploy-service.sh
+scp -i your-key.pem deploy/aws/configure-ec2-disk-guardrails.sh ubuntu@<EC2_PUBLIC_IP>:/opt/ott/configure-ec2-disk-guardrails.sh
+scp -i your-key.pem deploy/aws/grow-root-volume-ubuntu.sh ubuntu@<EC2_PUBLIC_IP>:/opt/ott/grow-root-volume-ubuntu.sh
 scp -i your-key.pem deploy/env.example ubuntu@<EC2_PUBLIC_IP>:/opt/ott/.env
 scp -i your-key.pem deploy/env.images.example ubuntu@<EC2_PUBLIC_IP>:/opt/ott/.env.images
 ```
@@ -2079,6 +2146,7 @@ Cap quyen script deploy:
 
 ```bash
 chmod +x /opt/ott/deploy-service.sh
+chmod +x /opt/ott/configure-ec2-disk-guardrails.sh /opt/ott/grow-root-volume-ubuntu.sh
 ```
 
 Sua `/opt/ott/.env`. Day la file secret that cua server:
@@ -2131,7 +2199,98 @@ docker compose --env-file .env --env-file .env.images -f docker-compose.prod.yml
 docker compose --env-file .env --env-file .env.images -f docker-compose.prod.yml logs -f --tail=200 api-gateway
 ```
 
-### 21.10 Cach bat/tat EC2 de tiet kiem credits
+### 21.10 Chua loi full disk Docker tren EC2
+
+Neu `df -h` bao `/` day 100%, hay kiem tra:
+
+```bash
+sudo du -h --max-depth=1 /var/lib | sort -h
+sudo docker system df
+sudo journalctl --disk-usage
+```
+
+Neu ket qua giong truong hop hien tai:
+
+```text
+/var/lib/docker 49G
+/var/lib/containerd 5.9G
+journal 136M
+```
+
+thi thu pham la Docker image/layer cu, khong phai RabbitMQ. RabbitMQ data volume cua compose la volume that, nen **khong auto chay `docker volume prune`** vi co the xoa data cua `rabbitmq_data`, `redis_data`, `analytic_postgres_data`.
+
+Chay mot lan de mo rong partition sau khi da modify EBS tren AWS Console:
+
+```bash
+cd ~/ott-backend
+sudo bash deploy/aws/grow-root-volume-ubuntu.sh
+```
+
+Neu repo tren EC2 la repo cha:
+
+```bash
+cd ~/ott-backend/ott-backend
+sudo bash deploy/aws/grow-root-volume-ubuntu.sh
+```
+
+Chay mot lan de cai guardrail Docker/log va tao timer don rac moi ngay:
+
+```bash
+cd ~/ott-backend
+sudo bash deploy/aws/configure-ec2-disk-guardrails.sh
+```
+
+Neu repo tren EC2 la repo cha:
+
+```bash
+cd ~/ott-backend/ott-backend
+sudo bash deploy/aws/configure-ec2-disk-guardrails.sh
+```
+
+Sau khi cai guardrail, moi container moi se bi gioi han log theo:
+
+```properties
+DOCKER_LOG_MAX_SIZE=20m
+DOCKER_LOG_MAX_FILE=3
+```
+
+Neu muon tat ca container hien co nhan logging config moi ngay lap tuc, chay luc chap nhan downtime ngan:
+
+```bash
+cd /opt/ott
+sudo docker compose --env-file .env --env-file .env.images -f docker-compose.prod.yml up -d --force-recreate
+```
+
+Moi lan deploy thanh cong, `/opt/ott/deploy-service.sh` cung se tu don:
+
+```bash
+docker image prune -af --filter "until=72h"
+docker builder prune -af --filter "until=72h"
+docker container prune -f --filter "until=24h"
+find /var/lib/docker/containers -type f -name "*-json.log" -size +200M -exec truncate -s 0 {} \;
+journalctl --vacuum-time=7d
+```
+
+Lenh don khan cap khi sap het dung luong:
+
+```bash
+sudo docker image prune -af --filter "until=24h"
+sudo docker builder prune -af --filter "until=24h"
+sudo docker container prune -f --filter "until=24h"
+sudo find /var/lib/docker/containers -type f -name "*-json.log" -exec truncate -s 0 {} \;
+df -h
+sudo docker system df
+```
+
+Chi chay lenh nay neu da hieu rui ro xoa volume:
+
+```bash
+sudo docker volume prune -f
+```
+
+Voi compose hien tai, khong nen dua `docker volume prune` vao CI/CD vi RabbitMQ, Redis va analytic Postgres dang dung Docker volumes.
+
+### 21.11 Cach bat/tat EC2 de tiet kiem credits
 
 Khi khong demo/test nua, stop EC2:
 

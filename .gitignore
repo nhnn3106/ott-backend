@@ -35,6 +35,8 @@ media-service/src/main/resources/application-seed.properties
 ### VS Code ###
 .vscode/
 
+/load-tests
+
 .env
 deploy/*.local
 deploy/*.local.*
@@ -44,3 +46,5 @@ deploy/*.secret
 *.mermaid
 *.map
 /scripts
+media_logs.txt
+ARCHITECTURE_MODERATION_ANALYTICS.html

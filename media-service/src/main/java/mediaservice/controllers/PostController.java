@@ -60,6 +60,17 @@ public class PostController {
         return ResponseEntity.ok(postService.createPost(accountId, caption, vis, files, captions, accessControls));
     }
 
+    /** POST /posts/{postId}/share – chia sẻ bài post */
+    @PostMapping("/{postId}/share")
+    public ResponseEntity<PostResponse> sharePost(
+            @PathVariable String postId,
+            @RequestParam String accountId,
+            @RequestParam(required = false) String caption,
+            @RequestParam(defaultValue = "PUBLIC") String visibility) {
+        VisibilityType vis = VisibilityType.valueOf(visibility.toUpperCase());
+        return ResponseEntity.ok(postService.sharePost(postId, accountId, caption, vis));
+    }
+
     /** GET /posts – tất cả bài post */
     @GetMapping
     public ResponseEntity<List<PostResponse>> getAllPosts() {
@@ -76,21 +87,44 @@ public class PostController {
     /** GET /posts/page/{userId} */
     @GetMapping("/page/{userId}")
     public ResponseEntity<Page<PostResponse>> findAllPostsWithAuthorized(
-            @PageableDefault(size = 4, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
+            @RequestParam(required = false, defaultValue = "recent") String sortBy,
+            @PageableDefault(size = 4) Pageable pageable,
             @PathVariable String userId) {
-        return ResponseEntity.ok(postService.findAllPostsWithAuthorized(pageable, userId));
+        Sort sort = "viral".equalsIgnoreCase(sortBy)
+                ? Sort.by(Sort.Direction.DESC, "viralScore").and(Sort.by(Sort.Direction.DESC, "createdAt"))
+                : Sort.by(Sort.Direction.DESC, "createdAt");
+        org.springframework.data.domain.PageRequest pageRequest = org.springframework.data.domain.PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort);
+        return ResponseEntity.ok(postService.findAllPostsWithAuthorized(pageRequest, userId));
     }
 
     /** GET /posts/{id} */
     @GetMapping("/{id}")
-    public ResponseEntity<PostResponse> getPostById(@PathVariable String id) {
-        return ResponseEntity.ok(postService.getPostById(id));
+    public ResponseEntity<PostResponse> getPostById(
+            @PathVariable String id,
+            @RequestParam(required = false) String viewerId) {
+        return ResponseEntity.ok(postService.getPostById(id, viewerId));
     }
 
     /** GET /posts/user/{userId} */
     @GetMapping("/user/{userId}")
-    public ResponseEntity<List<PostResponse>> getPostsByUser(@PathVariable String userId) {
-        return ResponseEntity.ok(postService.getPostsByUserId(userId));
+    public ResponseEntity<List<PostResponse>> getPostsByUser(
+            @PathVariable String userId,
+            @RequestParam(required = false) String viewerId) {
+        return ResponseEntity.ok(postService.getPostsByUserId(userId, viewerId));
+    }
+
+    /** GET /posts/search */
+    @GetMapping("/search")
+    public ResponseEntity<Page<PostResponse>> searchPosts(
+            @RequestParam String q,
+            @RequestParam String viewerId,
+            @RequestParam(required = false, defaultValue = "recent") String sortBy,
+            @PageableDefault(size = 10) org.springframework.data.domain.Pageable pageable) {
+        Sort sort = "viral".equalsIgnoreCase(sortBy)
+                ? Sort.by(Sort.Direction.DESC, "viralScore").and(Sort.by(Sort.Direction.DESC, "createdAt"))
+                : Sort.by(Sort.Direction.DESC, "createdAt");
+        org.springframework.data.domain.PageRequest pageRequest = org.springframework.data.domain.PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort);
+        return ResponseEntity.ok(postService.searchPosts(q, viewerId, pageRequest));
     }
 
     /** PUT /posts/{id} – cập nhật bài post */

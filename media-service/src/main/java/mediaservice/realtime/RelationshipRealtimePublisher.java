@@ -42,6 +42,13 @@ public class RelationshipRealtimePublisher {
             targets.add(relationship.getReceiver().getId());
         }
 
+        if ("BLOCKED".equals(type) || "USER_BLOCKED".equals(type)) {
+            targets.clear();
+            if (actorId != null) {
+                targets.add(actorId);
+            }
+        }
+
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("type", type);
         payload.put("relationshipId", relationship.getId());
@@ -53,17 +60,15 @@ public class RelationshipRealtimePublisher {
         payload.put("targetUserIds", targets.stream().toList());
 
         RelationshipSocketServer socketServer = socketServerProvider.getIfAvailable();
-        if (socketServer == null) {
-            return;
-        }
-
-        SocketIOServer server = socketServer.getServer();
-        if (server != null) {
-            server.getBroadcastOperations().sendEvent(EVENT_NAME, payload);
+        if (socketServer != null) {
+            SocketIOServer server = socketServer.getServer();
+            if (server != null) {
+                server.getBroadcastOperations().sendEvent(EVENT_NAME, payload);
+            }
         }
 
         // Publish to RabbitMQ for cross-service sync
-        eventPublisher.publish(type, relationship);
+        eventPublisher.publish(type, relationship, actorId);
     }
 
     public void publishToSocketOnly(String type, Relationship relationship, String actorId) {
@@ -71,7 +76,12 @@ public class RelationshipRealtimePublisher {
 
         Set<String> targets = new LinkedHashSet<>();
         if (relationship.getRequester() != null) targets.add(relationship.getRequester().getId());
-        if (relationship.getReceiver() != null) targets.add(relationship.getReceiver().getId());
+        if ("BLOCKED".equals(type) || "USER_BLOCKED".equals(type)) {
+            targets.clear();
+            if (actorId != null) {
+                targets.add(actorId);
+            }
+        }
 
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("type", type);

@@ -9,10 +9,11 @@ import org.springframework.amqp.rabbit.annotation.EnableRabbit;
 import mediaservice.configs.MediaCompressionProperties;
 import mediaservice.configs.MediaDeleteProperties;
 import mediaservice.configs.MediaUploadProperties;
-import jakarta.annotation.PostConstruct;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import java.util.TimeZone;
 
 @SpringBootApplication
+@EnableScheduling
 @EnableRabbit
 @EnableJpaRepositories(basePackages = "mediaservice.repositories")
 @EnableConfigurationProperties({
@@ -23,13 +24,7 @@ import java.util.TimeZone;
 //@EnableRedisRepositories(basePackages = "mediaservice.repositories")
 public class MediaServiceSpringApplication {
     public static void main(String[] args) {
+        TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
         SpringApplication.run(MediaServiceSpringApplication.class, args);
     }
-
-    @PostConstruct
-    public void init() {
-        // Set default timezone to Vietnam (GMT+7)
-        TimeZone.setDefault(TimeZone.getTimeZone("Asia/Ho_Chi_Minh"));
-    }
-
 }

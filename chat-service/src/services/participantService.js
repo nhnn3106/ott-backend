@@ -1,5 +1,26 @@
 const Participant = require("../models/Participant");
 const Conversation = require("../models/Conversation");
+const mongoose = require("mongoose");
+
+const normalizeMessageId = (value) => {
+  const normalized = String(value || "0").trim();
+  return /^\d+$/.test(normalized) ? normalized : "0";
+};
+
+const isMessageIdAfter = (left, right) => {
+  const safeLeft = normalizeMessageId(left);
+  const safeRight = normalizeMessageId(right);
+  try {
+    return BigInt(safeLeft) > BigInt(safeRight);
+  } catch {
+    return safeLeft > safeRight;
+  }
+};
+
+const isObjectIdLike = (value) => {
+  const normalized = String(value || "").trim();
+  return mongoose.Types.ObjectId.isValid(normalized);
+};
 
 const assertGroupManager = async (conversationId, requesterId) => {
   const conversation = await Conversation.findById(conversationId);
@@ -121,7 +142,8 @@ exports.addParticipant = async ({ conversationId, userId, role, addedBy, lastMsg
 exports.getConversationsByUserId = async (userId) => {
   const participants = await Participant.find({ user_id: userId })
     .populate("conversation_id")
-    .sort({ updatedAt: -1 });
+    .sort({ updatedAt: -1 })
+    .lean();
 
   return participants.filter((p) => {
     const conversation = p.conversation_id;
@@ -135,7 +157,7 @@ exports.getConversationsByUserId = async (userId) => {
 
     // Có tin nhắn mới hơn thời điểm xóa → hiển thị lại
     if (lastMsgId) {
-      return BigInt(lastMsgId) > BigInt(deletedMsgId);
+      return isMessageIdAfter(lastMsgId, deletedMsgId);
     }
 
     // Đã xóa, cuộc hội thoại không còn tin nhắn mới → ẩn
@@ -193,9 +215,14 @@ exports.updateLastDelivered = async (conversationId, userId, msgId) => {
   if (shouldAdvanceMessageId(participant.last_delivered_message_id, msgId)) {
     participant.last_delivered_message_id = String(msgId || "0");
     participant.last_delivered_at = new Date();
-    return await participant.save();
+    const saved = await participant.save();
+    saved.$locals = saved.$locals || {};
+    saved.$locals.cursorChanged = true;
+    return saved;
   }
 
+  participant.$locals = participant.$locals || {};
+  participant.$locals.cursorChanged = false;
   return participant;
 };
 
@@ -209,6 +236,7 @@ exports.updateLastRead = async (conversationId, userId, msgId) => {
 
   const now = new Date();
   const nextMsgId = String(msgId || "0");
+  const hadDeliveredAt = !!participant.last_delivered_at;
   const readAdvanced = shouldAdvanceMessageId(
     participant.last_read_message_id,
     nextMsgId,
@@ -233,7 +261,18 @@ exports.updateLastRead = async (conversationId, userId, msgId) => {
     participant.last_delivered_at = now;
   }
 
-  return await participant.save();
+  const cursorChanged = readAdvanced || deliveredAdvanced || !hadDeliveredAt;
+
+  if (!cursorChanged) {
+    participant.$locals = participant.$locals || {};
+    participant.$locals.cursorChanged = false;
+    return participant;
+  }
+
+  const saved = await participant.save();
+  saved.$locals = saved.$locals || {};
+  saved.$locals.cursorChanged = true;
+  return saved;
 };
 
 exports.updateConversationCategory = async (conversationId, userId, categoryId) => {
@@ -245,15 +284,14 @@ exports.updateConversationCategory = async (conversationId, userId, categoryId) 
 };
 
 exports.updateNotificationStatus = async (conversationId, userId, status, muteUntil) => {
-  const updateData = { "settings.notification_status": status };
-
-  if (muteUntil) {
-    updateData["settings.mute_until"] = muteUntil;
-  }
+  const updateData = {
+    "settings.notification_status": status,
+    "settings.mute_until": status === "mute" ? (muteUntil || null) : null,
+  };
 
   return await Participant.findOneAndUpdate(
     { conversation_id: conversationId, user_id: userId },
-    updateData,
+    { $set: updateData },
     { new: true }
   );
 };
@@ -349,7 +387,7 @@ exports.getConversationMembers = async (conversationId) => {
     participants.map(async (p) => {
       // Try to find by UUID first, then by ObjectId
       let user = await User.findOne({ user_id: p.user_id }).lean();
-      if (!user) {
+      if (!user && isObjectIdLike(p.user_id)) {
         user = await User.findById(p.user_id).lean();
       }
       return {

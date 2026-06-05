@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -151,6 +152,30 @@ public class RelationshipServiceImpl implements RelationshipService {
 
     @Override
     @Transactional
+    public RelationshipResponse blockUserDirectly(String requesterId, String receiverId) {
+        if (requesterId.equals(receiverId)) {
+            throw new IllegalArgumentException("Không thể tự chặn chính mình.");
+        }
+
+        UserAccount requester = findUserOrThrow(requesterId);
+        UserAccount receiver = findUserOrThrow(receiverId);
+
+        Relationship rel = relationshipRepository.findBetweenUsers(requesterId, receiverId)
+                .orElse(new Relationship());
+
+        rel.setRequester(requester);
+        rel.setReceiver(receiver);
+        rel.setStatus(RelationshipStatusType.BLOCKED);
+        rel.setType(RelationshipType.FRIEND);
+        rel.setBlockedBy(requester);
+
+        Relationship saved = relationshipRepository.save(rel);
+        relationshipRealtimePublisher.publishAfterCommit("BLOCKED", saved, requesterId);
+        return relationshipMapper.toResponse(saved);
+    }
+
+    @Override
+    @Transactional
     public void rejectFriendRequest(String relationshipId) {
         Relationship rel = findOrThrow(relationshipId);
         if (rel.getStatus() != RelationshipStatusType.PENDING) {
@@ -204,9 +229,23 @@ public class RelationshipServiceImpl implements RelationshipService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<RelationshipResponse> getFriends(String userId, Pageable pageable) {
+        return relationshipMapper.toResponseList(
+                relationshipRepository.findFriendsByUserId(userId, RelationshipStatusType.ACCEPTED, pageable));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<RelationshipResponse> getPendingRequests(String userId) {
         return relationshipMapper.toResponseList(
                 relationshipRepository.findByReceiverIdAndStatus(userId, RelationshipStatusType.PENDING));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<RelationshipResponse> getPendingRequests(String userId, Pageable pageable) {
+        return relationshipMapper.toResponseList(
+                relationshipRepository.findByReceiverIdAndStatus(userId, RelationshipStatusType.PENDING, pageable));
     }
 
     @Override
@@ -268,11 +307,36 @@ public class RelationshipServiceImpl implements RelationshipService {
         rel.setReceiver(receiver);
         rel.setStatus(RelationshipStatusType.valueOf(status));
         rel.setType(RelationshipType.FRIEND);
+        rel.setBlockedBy(
+                RelationshipStatusType.BLOCKED.name().equals(status)
+                        ? requester
+                        : null
+        );
         
         Relationship saved = relationshipRepository.save(rel);
         
         // Phát Socket.IO với đúng type (ví dụ: REQUEST_ACCEPTED) để Frontend xử lý switch-case
         relationshipRealtimePublisher.publishToSocketOnly(type, saved, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<RelationshipResponse> getBlockedUsers(String userId) {
+        List<Relationship> blockedRels = relationshipRepository.findByBlockedByIdAndStatus(userId, RelationshipStatusType.BLOCKED);
+        return blockedRels.stream()
+                .map(relationshipMapper::toResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public void unblockRelationship(String relationshipId) {
+        Relationship rel = relationshipRepository.findById(relationshipId)
+                .orElseThrow(() -> new RuntimeException("Relationship not found with id: " + relationshipId));
+        if (rel.getStatus() != RelationshipStatusType.BLOCKED) {
+            throw new IllegalStateException("Không thể bỏ chặn mối quan hệ không bị chặn.");
+        }
+        relationshipRepository.delete(rel);
     }
 
     private Relationship buildRelationshipFromRequest(RelationshipRequest request) {
